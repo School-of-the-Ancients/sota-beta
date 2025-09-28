@@ -7,6 +7,10 @@ export interface Character {
   bio: string;
   systemInstruction: string;
   voiceName: string;
+  timeframe: string;
+  expertise: string;
+  passion: string;
+  suggestedPrompts: string[];
 }
 
 export enum ConnectionState {
