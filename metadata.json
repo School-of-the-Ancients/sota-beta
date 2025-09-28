@@ -1,0 +1,7 @@
+{
+  "name": "School of the Ancients",
+  "description": "Engage in real-time voice conversations with legendary scientific minds like Galileo, Leonardo da Vinci, and Isaac Newton, powered by the Gemini Live API.",
+  "requestFramePermissions": [
+    "microphone"
+  ]
+}
