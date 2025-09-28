@@ -49,14 +49,14 @@ const Stepper: React.FC<{ currentStep: Step }> = ({ currentStep }) => {
     <div className="flex items-center justify-between mb-8 w-full">
       {steps.map((step, index) => (
         <React.Fragment key={step.id}>
-          <div className="flex items-center gap-3">
-            <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold ${index <= currentStepIndex ? 'bg-amber-400 text-black' : 'bg-gray-700 text-gray-400'}`}>
+          <div className="flex flex-col sm:flex-row items-center gap-2 sm:gap-3">
+            <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold flex-shrink-0 ${index <= currentStepIndex ? 'bg-amber-400 text-black' : 'bg-gray-700 text-gray-400'}`}>
               {index + 1}
             </div>
-            <span className={`font-semibold ${index <= currentStepIndex ? 'text-amber-300' : 'text-gray-500'}`}>{step.title}</span>
+            <span className={`font-semibold text-center sm:text-left text-sm sm:text-base ${index <= currentStepIndex ? 'text-amber-300' : 'text-gray-500'}`}>{step.title}</span>
           </div>
           {index < steps.length - 1 && (
-            <div className={`flex-1 h-1 mx-4 ${index < currentStepIndex ? 'bg-amber-400' : 'bg-gray-700'}`} />
+            <div className={`flex-1 h-1 mx-2 sm:mx-4 ${index < currentStepIndex ? 'bg-amber-400' : 'bg-gray-700'}`} />
           )}
         </React.Fragment>
       ))}
@@ -154,8 +154,8 @@ const CharacterCreator: React.FC<CharacterCreatorProps> = ({ onCharacterCreated,
         - timeframe: The centuries they were active in (e.g., 17th and 18th centuries).
         - expertise: A comma-separated list of their key areas of expertise.
         - passion: A short phrase describing their core motivation or passion.
-        - systemInstruction: A detailed prompt for an AI voice model. This should make the character act as a mentor who uses the Socratic method, never giving direct answers but asking probing questions. It must also specify a distinct, authentic-sounding accent based on their origin. The tone should match their personality.
-        - suggestedPrompts: Three engaging, open-ended questions a user could ask this character.
+        - systemInstruction: A detailed prompt for an AI voice model. This must instruct the character to act as a mentor who uses the Socratic method, never giving direct answers but asking probing questions. It must also instruct them to periodically check the student's understanding. Crucially, it must inform them of two special abilities: changeEnvironment(description) to change the scene, and displayArtifact(name, description) to show an image, and encourage them to use these proactively to enhance the lesson. It must also specify a distinct, authentic-sounding accent based on their origin. The tone should match their personality.
+        - suggestedPrompts: Three engaging, open-ended questions a user could ask this character. At least one should suggest using a visual ability (e.g., "Take me to...", "Show me...").
         - voiceName: Based on their personality and historical context, suggest the most suitable voice from this list: ${AVAILABLE_VOICES.join(', ')}. Return only the name of the voice.`;
 
       const response = await ai.models.generateContent({
@@ -306,7 +306,7 @@ const CharacterCreator: React.FC<CharacterCreatorProps> = ({ onCharacterCreated,
                     ))}
                 </div>
             </div>
-            <div className="flex gap-4 pt-4">
+            <div className="flex flex-col sm:flex-row gap-4 pt-4">
                 <button onClick={handlePersonaGeneration} className="w-full bg-gray-600 hover:bg-gray-500 text-white font-bold py-3 px-6 rounded-lg transition-colors text-lg">
                     Regenerate Persona
                 </button>
@@ -362,7 +362,7 @@ const CharacterCreator: React.FC<CharacterCreatorProps> = ({ onCharacterCreated,
   };
 
   return (
-    <div className="max-w-3xl mx-auto bg-[#202020] p-8 rounded-2xl shadow-2xl border border-gray-700 relative">
+    <div className="max-w-3xl w-full mx-auto bg-[#202020] p-4 sm:p-6 md:p-8 rounded-2xl shadow-2xl border border-gray-700 relative">
       {isLoading && <LoadingOverlay message={loadingMessage} />}
       <div className={`transition-opacity duration-300 ${isLoading ? 'opacity-20 blur-sm' : 'opacity-100'}`}>
         <div className="flex justify-between items-start mb-4">

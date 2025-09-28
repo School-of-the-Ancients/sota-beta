@@ -1,6 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-// FIX: `LiveSession` is not an exported member of '@google/genai' and has been removed.
-import { GoogleGenAI, LiveServerMessage, Modality, Blob } from '@google/genai';
+import { GoogleGenAI, LiveServerMessage, Modality, Blob, FunctionDeclaration, Type } from '@google/genai';
 import { ConnectionState } from '../types';
 
 // Audio Encoding & Decoding functions
@@ -54,10 +53,46 @@ function createBlob(data: Float32Array): Blob {
     };
 }
 
+const changeEnvironmentFunctionDeclaration: FunctionDeclaration = {
+    name: 'changeEnvironment',
+    parameters: {
+      type: Type.OBJECT,
+      description: "Changes the user's visual environment to a specified location or scene. Use this when the user says 'take me to', 'show me', 'go to', or similar phrases requesting a scene change.",
+      properties: {
+        description: {
+          type: Type.STRING,
+          description: 'A detailed description of the environment, e.g., "the Egyptian pyramids at sunset" or "Leonardo da Vinci\'s workshop".',
+        },
+      },
+      required: ['description'],
+    },
+  };
+  
+  const displayArtifactFunctionDeclaration: FunctionDeclaration = {
+    name: 'displayArtifact',
+    parameters: {
+      type: Type.OBJECT,
+      description: "Generates and displays an image of a specific object, artifact, or concept being discussed. Use this when the character wants to 'show' something to the user.",
+      properties: {
+        name: {
+          type: Type.STRING,
+          description: 'The name of the artifact, e.g., "flying machine" or "Mona Lisa".',
+        },
+        description: {
+          type: Type.STRING,
+          description: 'A detailed prompt for the image generation model to create a visual representation of the artifact.',
+        },
+      },
+      required: ['name', 'description'],
+    },
+  };
+
 export const useGeminiLive = (
     systemInstruction: string,
     voiceName: string,
-    onTurnComplete: (turn: { user: string; model: string }) => void
+    onTurnComplete: (turn: { user: string; model: string }) => void,
+    onEnvironmentChangeRequest: (description: string) => void,
+    onArtifactDisplayRequest: (name: string, description: string) => void,
 ) => {
     const [connectionState, setConnectionState] = useState<ConnectionState>(ConnectionState.IDLE);
     const [userTranscription, setUserTranscription] = useState<string>('');
@@ -81,8 +116,13 @@ export const useGeminiLive = (
     
     const nextStartTimeRef = useRef(0);
     const audioBufferSources = useRef<Set<AudioBufferSourceNode>>(new Set());
+    
     const onTurnCompleteRef = useRef(onTurnComplete);
     onTurnCompleteRef.current = onTurnComplete;
+    const onEnvironmentChangeRequestRef = useRef(onEnvironmentChangeRequest);
+    onEnvironmentChangeRequestRef.current = onEnvironmentChangeRequest;
+    const onArtifactDisplayRequestRef = useRef(onArtifactDisplayRequest);
+    onArtifactDisplayRequestRef.current = onArtifactDisplayRequest;
 
     const toggleMicrophone = useCallback(() => {
         setIsMicActive(prevIsActive => {
@@ -114,21 +154,19 @@ export const useGeminiLive = (
 
     const sendTextMessage = useCallback((text: string) => {
         if (!text.trim()) return;
-        userTranscriptionRef.current = text;
-        setUserTranscription(text);
-
+        
+        onTurnCompleteRef.current({ user: text, model: '' });
+        userTranscriptionRef.current = ''; // Clear after adding to transcript
+        
         setConnectionState(ConnectionState.THINKING);
         sessionPromiseRef.current?.then((session) => {
             try {
-                // The Live API docs do not specify a method for sending text.
-                // This is an undocumented call and may throw a synchronous error.
                 session.sendRealtimeInput({ text });
             } catch (e) {
                 console.error("Error sending text message (sync):", e);
                 setConnectionState(ConnectionState.ERROR);
             }
         }).catch(e => {
-            // This will catch promise rejections from the API call.
             console.error("Error sending text message (async):", e);
             setConnectionState(ConnectionState.ERROR);
         });
@@ -169,7 +207,6 @@ export const useGeminiLive = (
                             sessionPromiseRef.current?.then((session) => {
                                 session.sendRealtimeInput({ media: pcmBlob });
                             }).catch(err => {
-                                // This can happen during disconnection, so we log it as a warning.
                                 console.warn('Error sending audio data; session may be closing.', err);
                             });
                         };
@@ -195,6 +232,26 @@ export const useGeminiLive = (
                                 setModelTranscription(currentOutput);
                                 modelTranscriptionRef.current = currentOutput;
                             }
+
+                            if (message.toolCall) {
+                                for (const fc of message.toolCall.functionCalls) {
+                                  if (fc.name === 'changeEnvironment' && fc.args && typeof fc.args.description === 'string') {
+                                    onEnvironmentChangeRequestRef.current(fc.args.description);
+                                  } else if (fc.name === 'displayArtifact' && fc.args && typeof fc.args.name === 'string' && typeof fc.args.description === 'string') {
+                                    onArtifactDisplayRequestRef.current(fc.args.name, fc.args.description);
+                                  }
+                        
+                                  sessionPromiseRef.current?.then((session) => {
+                                    session.sendToolResponse({
+                                      functionResponses: {
+                                        id: fc.id,
+                                        name: fc.name,
+                                        response: { result: "ok, action started" },
+                                      }
+                                    });
+                                  });
+                                }
+                              }
 
                             if (message.serverContent?.turnComplete) {
                                 if (userTranscriptionRef.current.trim() || modelTranscriptionRef.current.trim()) {
@@ -266,10 +323,10 @@ export const useGeminiLive = (
                         voiceConfig: { prebuiltVoiceConfig: { voiceName: voiceName } },
                     },
                     systemInstruction: systemInstruction,
+                    tools: [{functionDeclarations: [changeEnvironmentFunctionDeclaration, displayArtifactFunctionDeclaration]}],
                 },
             });
 
-            // Catch errors during the connection process itself.
             sessionPromise.catch(err => {
                 console.error('Failed to establish Gemini Live session:', err);
                 setConnectionState(ConnectionState.ERROR);

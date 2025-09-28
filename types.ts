@@ -6,7 +6,7 @@ export interface Character {
   portraitUrl: string;
   bio: string;
   systemInstruction: string;
-  voiceName: string;
+  voiceName:string;
   timeframe: string;
   expertise: string;
   passion: string;
@@ -28,6 +28,12 @@ export interface ConversationTurn {
   speaker: 'user' | 'model';
   speakerName: string;
   text: string;
+  artifact?: {
+    id: string;
+    name: string;
+    imageUrl: string;
+    loading?: boolean;
+  };
 }
 
 export interface SavedConversation {
@@ -37,4 +43,5 @@ export interface SavedConversation {
   portraitUrl: string;
   timestamp: number;
   transcript: ConversationTurn[];
+  environmentImageUrl?: string;
 }

@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useRef, useEffect } from 'react';
+import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { GoogleGenAI, Type } from '@google/genai';
 import type { Character, ConversationTurn, SavedConversation } from '../types';
 import { useGeminiLive } from '../hooks/useGeminiLive';
@@ -10,6 +10,13 @@ import ThinkingIcon from './icons/ThinkingIcon';
 import SendIcon from './icons/SendIcon';
 
 const HISTORY_KEY = 'school-of-the-ancients-history';
+
+interface ConversationViewProps {
+  character: Character;
+  onEndConversation: () => void;
+  environmentImageUrl: string | null;
+  onEnvironmentUpdate: (url: string | null) => void;
+}
 
 const loadConversations = (): SavedConversation[] => {
   try {
@@ -35,11 +42,6 @@ const saveConversationToLocalStorage = (conversation: SavedConversation) => {
     console.error("Failed to save conversation:", error);
   }
 };
-
-interface ConversationViewProps {
-  character: Character;
-  onEndConversation: () => void;
-}
 
 const StatusIndicator: React.FC<{ state: ConnectionState; isMicActive: boolean }> = ({ state, isMicActive }) => {
   let statusText = 'Ready';
@@ -75,11 +77,39 @@ const StatusIndicator: React.FC<{ state: ConnectionState; isMicActive: boolean }
   );
 };
 
-const ConversationView: React.FC<ConversationViewProps> = ({ character, onEndConversation }) => {
+const ArtifactDisplay: React.FC<{ artifact: NonNullable<ConversationTurn['artifact']> }> = ({ artifact }) => {
+    return (
+      <div className="mt-2 border-t border-teal-800/50 pt-3">
+        <p className="text-sm font-semibold text-teal-300 mb-2">{artifact.name}</p>
+        {artifact.loading && (
+          <div className="w-full aspect-[4/3] bg-gray-800 rounded-lg flex items-center justify-center">
+            <div className="w-8 h-8 border-2 border-teal-400 border-t-transparent rounded-full animate-spin"></div>
+          </div>
+        )}
+        {artifact.imageUrl && !artifact.loading && (
+          <img src={artifact.imageUrl} alt={artifact.name} className="w-full rounded-lg" />
+        )}
+      </div>
+    );
+  };
+
+const ConversationView: React.FC<ConversationViewProps> = ({ character, onEndConversation, environmentImageUrl, onEnvironmentUpdate }) => {
   const [transcript, setTranscript] = useState<ConversationTurn[]>([]);
   const [textInput, setTextInput] = useState('');
   const [dynamicSuggestions, setDynamicSuggestions] = useState<string[]>([]);
   const [isFetchingSuggestions, setIsFetchingSuggestions] = useState(false);
+  const [isGeneratingVisual, setIsGeneratingVisual] = useState(false);
+  const [generationMessage, setGenerationMessage] = useState('');
+
+  const placeholders = useMemo(() => [
+    "Or type a message...",
+    "Try saying: 'Take me to your workshop'",
+    `What would you like to ask ${character.name}?`,
+    "Try saying: 'Show me the Vitruvian Man'",
+  ], [character.name]);
+  
+  const [placeholder, setPlaceholder] = useState(placeholders[0]);
+
   const sessionIdRef = useRef(`conv_${character.id}_${Date.now()}`);
 
   // Load existing conversation on mount
@@ -87,24 +117,179 @@ const ConversationView: React.FC<ConversationViewProps> = ({ character, onEndCon
     const history = loadConversations();
     const existingConversation = history.find(c => c.characterId === character.id);
     if (existingConversation) {
-      setTranscript(existingConversation.transcript);
-      sessionIdRef.current = existingConversation.id; // Use existing ID to update record
+        setTranscript(existingConversation.transcript);
+        onEnvironmentUpdate(existingConversation.environmentImageUrl || null);
+        sessionIdRef.current = existingConversation.id; 
     } else {
-        // If no conversation exists, create a persistent ID based on character
-        sessionIdRef.current = `conv_${character.id}`;
+        onEnvironmentUpdate(null);
     }
-  }, [character.id]);
+  }, [character.id, onEnvironmentUpdate]);
+
+    // Cycle through placeholders for text input
+    useEffect(() => {
+        const interval = setInterval(() => {
+            setPlaceholder(prev => {
+                const currentIndex = placeholders.indexOf(prev);
+                return placeholders[(currentIndex + 1) % placeholders.length];
+            });
+        }, 4000);
+        return () => clearInterval(interval);
+    }, [placeholders]);
 
 
   const handleTurnComplete = useCallback(({ user, model }: { user: string; model: string }) => {
     if (user.trim() || model.trim()) {
-      setTranscript(prev => [
-        ...prev,
-        { speaker: 'user', speakerName: 'You', text: user },
-        { speaker: 'model', speakerName: character.name, text: model },
-      ]);
+      let turns: ConversationTurn[] = [];
+      if (user.trim()) {
+        turns.push({ speaker: 'user', speakerName: 'You', text: user });
+      }
+      if (model.trim()) {
+        turns.push({ speaker: 'model', speakerName: character.name, text: model });
+      }
+      setTranscript(prev => [...prev, ...turns]);
     }
   }, [character.name]);
+
+  const handleEnvironmentChange = useCallback(async (description: string) => {
+    const environmentArtifactId = `env_${Date.now()}`;
+    
+    setTranscript(prev => [...prev, {
+      speaker: 'model',
+      speakerName: 'Matrix Operator',
+      text: `Loading Environment: ${description}`,
+      artifact: {
+        id: environmentArtifactId,
+        name: description,
+        imageUrl: '',
+        loading: true,
+      }
+    }]);
+
+    setIsGeneratingVisual(true);
+    setGenerationMessage(`Entering ${description}...`);
+    try {
+      if (!process.env.API_KEY) throw new Error("API_KEY not set.");
+      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+      const response = await ai.models.generateImages({
+        model: 'imagen-4.0-generate-001',
+        prompt: `A photorealistic, atmospheric, wide-angle background of: ${description}, depicted authentically for the era of ${character.name} (${character.timeframe}). Cinematic and dramatic lighting. The scene should be evocative and immersive, without people or text.`,
+        config: { numberOfImages: 1, outputMimeType: 'image/jpeg', aspectRatio: '16:9' },
+      });
+      if (response.generatedImages && response.generatedImages.length > 0) {
+        const url = `data:image/jpeg;base64,${response.generatedImages[0].image.imageBytes}`;
+        onEnvironmentUpdate(url);
+        setTranscript(prev => prev.map(turn => {
+          if (turn.artifact?.id === environmentArtifactId) {
+            return {
+              ...turn,
+              text: `Environment Set: ${description}`,
+              artifact: { ...turn.artifact, imageUrl: url, loading: false }
+            };
+          }
+          return turn;
+        }));
+      } else {
+        console.error("Environment generation returned no images.");
+        setTranscript(prev => prev.map(turn => {
+            if (turn.artifact?.id === environmentArtifactId) {
+                const newTurn = { ...turn };
+                delete newTurn.artifact;
+                newTurn.text = `Failed to load environment: ${description}`;
+                return newTurn;
+            }
+            return turn;
+        }));
+      }
+    } catch (err) {
+      console.error("Failed to generate environment:", err);
+      setTranscript(prev => prev.map(turn => {
+        if (turn.artifact?.id === environmentArtifactId) {
+            const newTurn = { ...turn };
+            delete newTurn.artifact;
+            newTurn.text = `Error loading environment: ${description}`;
+            return newTurn;
+        }
+        return turn;
+    }));
+    } finally {
+      setIsGeneratingVisual(false);
+    }
+  }, [onEnvironmentUpdate, character]);
+
+  const handleArtifactDisplay = useCallback(async (name: string, description: string) => {
+    const artifactId = `artifact_${Date.now()}`;
+    
+    setTranscript(prev => {
+        let lastModelTurnIndex = -1;
+        for (let i = prev.length - 1; i >= 0; i--) {
+          if (prev[i].speaker === 'model' && !prev[i].artifact) {
+            lastModelTurnIndex = i;
+            break;
+          }
+        }
+        
+        if (lastModelTurnIndex > -1) {
+            const newTranscript = [...prev];
+            newTranscript[lastModelTurnIndex] = {
+                ...newTranscript[lastModelTurnIndex],
+                artifact: { id: artifactId, name, imageUrl: '', loading: true }
+            };
+            return newTranscript;
+        }
+        return [...prev, {
+            speaker: 'model', speakerName: character.name, text: `Of course, here is the ${name}.`,
+            artifact: { id: artifactId, name, imageUrl: '', loading: true }
+        }];
+    });
+
+    setIsGeneratingVisual(true);
+    setGenerationMessage(`Creating ${name}...`);
+
+    try {
+        if (!process.env.API_KEY) throw new Error("API_KEY not set.");
+        const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+        const response = await ai.models.generateImages({
+            model: 'imagen-4.0-generate-001',
+            prompt: `A detailed, clear image of: a "${name}". ${description}. The artifact should be rendered in a style authentic to ${character.name}'s era and work (e.g., a da Vinci sketch, a 19th-century diagram, a classical Greek sculpture). Present it on a simple, non-distracting background like aged parchment or a museum display.`,
+            config: { numberOfImages: 1, outputMimeType: 'image/jpeg', aspectRatio: '4:3' },
+        });
+
+        if (response.generatedImages && response.generatedImages.length > 0) {
+            const url = `data:image/jpeg;base64,${response.generatedImages[0].image.imageBytes}`;
+            setTranscript(prev => prev.map(turn => {
+                if (turn.artifact?.id === artifactId) {
+                    return { ...turn, artifact: { ...turn.artifact, imageUrl: url, loading: false } };
+                }
+                return turn;
+            }));
+        } else {
+            console.error("Artifact generation returned no images.");
+            setTranscript(prev => prev.map(turn => {
+                if (turn.artifact?.id === artifactId) {
+                  const newTurn = { ...turn };
+                  delete newTurn.artifact;
+                  newTurn.text = `${newTurn.text} (Failed to create visual for ${name})`;
+                  return newTurn;
+                }
+                return turn;
+            }));
+        }
+    } catch (err) {
+      console.error("Failed to generate artifact:", err);
+      setTranscript(prev => prev.map(turn => {
+        if (turn.artifact?.id === artifactId) {
+          const newTurn = { ...turn };
+          delete newTurn.artifact;
+          newTurn.text = `${newTurn.text} (Error creating visual for ${name})`;
+          return newTurn;
+        }
+        return turn;
+      }));
+    } finally {
+        setIsGeneratingVisual(false);
+    }
+  }, [character]);
+
 
   const {
     connectionState,
@@ -113,7 +298,7 @@ const ConversationView: React.FC<ConversationViewProps> = ({ character, onEndCon
     isMicActive,
     toggleMicrophone,
     sendTextMessage
-  } = useGeminiLive(character.systemInstruction, character.voiceName, handleTurnComplete);
+  } = useGeminiLive(character.systemInstruction, character.voiceName, handleTurnComplete, handleEnvironmentChange, handleArtifactDisplay);
 
   const updateDynamicSuggestions = useCallback(async (currentTranscript: ConversationTurn[]) => {
     if (currentTranscript.length === 0) return;
@@ -124,11 +309,15 @@ const ConversationView: React.FC<ConversationViewProps> = ({ character, onEndCon
 
         const contextTranscript = currentTranscript.slice(-4).map(turn => `${turn.speakerName}: ${turn.text}`).join('\n');
 
-        const prompt = `Based on the following conversation transcript with ${character.name}, suggest three concise, open-ended questions the user could ask next to dive deeper into the topic. The user is a student, and ${character.name} is a mentor. The questions should be intellectually curious and relevant to the last thing ${character.name} said.
+        const prompt = `You are an AI assistant helping a student engaged in a Socratic dialogue with ${character.name}. Based on the last part of the conversation below, generate three distinct prompts for the student to say next. The prompts should adhere to these pedagogical goals:
+1. One prompt should challenge an assumption or ask for a deeper explanation (e.g., 'But what if...?', 'How is that different from...?').
+2. One prompt should encourage personal reflection or application (e.g., 'How can I apply that idea today?', 'What's the biggest misconception about that?').
+3. One prompt must be a visual or environmental command relevant to the topic (e.g., 'Show me a diagram of that,' 'Take us to the place where that happened.').
+Ensure prompts are concise and intellectually stimulating.
 
-        Transcript:
-        ${contextTranscript}
-        `;
+Transcript:
+${contextTranscript}
+`;
 
         const response = await ai.models.generateContent({
             model: "gemini-2.5-flash",
@@ -168,9 +357,7 @@ const ConversationView: React.FC<ConversationViewProps> = ({ character, onEndCon
 
   // Auto-save conversation on transcript change
   useEffect(() => {
-    // We only save if there's content, to avoid creating empty history entries
-    // just by visiting a character.
-    if (transcript.length === 0) return;
+    if (transcript.length === 0 && !environmentImageUrl) return;
 
     const conversation: SavedConversation = {
       id: sessionIdRef.current,
@@ -179,17 +366,18 @@ const ConversationView: React.FC<ConversationViewProps> = ({ character, onEndCon
       portraitUrl: character.portraitUrl,
       timestamp: Date.now(),
       transcript,
+      environmentImageUrl: environmentImageUrl || undefined,
     };
     saveConversationToLocalStorage(conversation);
-  }, [transcript, character]);
+  }, [transcript, character, environmentImageUrl]);
 
   const handleReset = () => {
-    if (transcript.length === 0) return;
-    if (window.confirm('Are you sure you want to reset this conversation? The current transcript will be cleared.')) {
+    if (transcript.length === 0 && !environmentImageUrl) return;
+    if (window.confirm('Are you sure you want to reset this conversation? The current transcript and environment will be cleared.')) {
         setTranscript([]);
         setDynamicSuggestions([]);
+        onEnvironmentUpdate(null);
         
-        // Explicitly save the cleared transcript state
         const clearedConversation: SavedConversation = {
             id: sessionIdRef.current,
             characterId: character.id,
@@ -197,6 +385,7 @@ const ConversationView: React.FC<ConversationViewProps> = ({ character, onEndCon
             portraitUrl: character.portraitUrl,
             timestamp: Date.now(),
             transcript: [],
+            environmentImageUrl: undefined,
         };
         saveConversationToLocalStorage(clearedConversation);
     }
@@ -210,136 +399,164 @@ const ConversationView: React.FC<ConversationViewProps> = ({ character, onEndCon
     }
   };
 
-
   return (
-    <div className="flex flex-col lg:flex-row gap-8 max-w-5xl mx-auto bg-[#202020] p-6 rounded-2xl shadow-2xl border border-gray-700">
-      <div className="lg:w-1/3 flex flex-col items-center text-center">
-        <div className="relative w-64 h-64">
-          <img
-            src={character.portraitUrl}
-            alt={character.name}
-            className={`w-full h-full object-cover rounded-full border-4 ${connectionState === ConnectionState.SPEAKING ? 'border-teal-400' : 'border-amber-400'} shadow-lg filter grayscale sepia-[0.2] transition-all duration-300`}
-          />
-          <div className="absolute -bottom-4 left-1/2 -translate-x-1/2">
-             <StatusIndicator state={connectionState} isMicActive={isMicActive} />
-          </div>
+    <div 
+        className="relative flex flex-col md:flex-row gap-4 md:gap-8 max-w-6xl mx-auto w-full flex-grow rounded-lg md:rounded-2xl shadow-2xl border border-gray-700 overflow-hidden bg-gray-900/60 backdrop-blur-lg transition-all duration-1000"
+    >
+      {isGeneratingVisual && (
+         <div className="absolute inset-0 bg-black/80 flex flex-col items-center justify-center z-30 rounded-lg md:rounded-2xl">
+            <div className="w-12 h-12 border-4 border-amber-400 border-t-transparent rounded-full animate-spin"></div>
+            <p className="mt-4 text-amber-200 text-lg">{generationMessage}</p>
         </div>
-        <h2 className="text-3xl font-bold text-amber-200 mt-8">{character.name}</h2>
-        <p className="text-gray-400 italic">{character.title}</p>
-        
-        <div className="mt-6 text-left w-full max-w-xs min-h-[12rem]">
-          {transcript.length === 0 ? (
-            <div className="animate-fade-in">
-              <h4 className="text-md font-bold text-amber-200 mb-2 text-center">Conversation Starters</h4>
-              <div className="space-y-2">
-                {character.suggestedPrompts.map((prompt, i) => (
-                  <button
-                    key={i}
-                    onClick={() => sendTextMessage(prompt)}
-                    className="w-full text-sm text-left bg-gray-800/60 hover:bg-gray-700/80 p-3 rounded-lg transition-colors duration-200 border border-gray-700 text-gray-300 disabled:opacity-50"
-                    disabled={connectionState !== ConnectionState.LISTENING && connectionState !== ConnectionState.CONNECTED}
-                  >
-                    <span className="text-amber-300 mr-2">»</span>
-                    {prompt}
-                  </button>
-                ))}
-              </div>
-            </div>
-          ) : (
-            <div className="animate-fade-in">
-              <h4 className="text-md font-bold text-amber-200 mb-2 text-center">Topics to Explore</h4>
-              {isFetchingSuggestions ? (
-                <div className="space-y-2">
-                  <div className="w-full bg-gray-800/60 p-3 rounded-lg h-[44px] animate-pulse"></div>
-                  <div className="w-full bg-gray-800/60 p-3 rounded-lg h-[44px] animate-pulse" style={{ animationDelay: '75ms' }}></div>
-                  <div className="w-full bg-gray-800/60 p-3 rounded-lg h-[44px] animate-pulse" style={{ animationDelay: '150ms' }}></div>
+      )}
+      
+      <div className="relative z-10 flex flex-col md:flex-row gap-4 md:gap-8 w-full p-2 sm:p-4 md:p-6">
+        <div className="w-full md:w-1/3 md:max-w-sm flex flex-col items-center text-center">
+            <div className="relative w-40 h-40 sm:w-48 sm:h-48 md:w-64 md:h-64 flex-shrink-0">
+                <img
+                    src={character.portraitUrl}
+                    alt={character.name}
+                    className={`w-full h-full object-cover rounded-full border-4 ${connectionState === ConnectionState.SPEAKING ? 'border-teal-400' : 'border-amber-400'} shadow-lg filter grayscale sepia-[0.2] transition-all duration-300`}
+                />
+                <div className="absolute -bottom-4 left-1/2 -translate-x-1/2">
+                    <StatusIndicator state={connectionState} isMicActive={isMicActive} />
                 </div>
-              ) : (
+            </div>
+            <h2 className="text-2xl sm:text-3xl font-bold text-amber-200 mt-8">{character.name}</h2>
+            <p className="text-gray-400 italic">{character.title}</p>
+            
+            <div className="mt-6 text-left w-full max-w-xs">
+            {transcript.length === 0 ? (
+                <div className="animate-fade-in">
+                <h4 className="text-md font-bold text-amber-200 mb-2 text-center">Conversation Starters</h4>
                 <div className="space-y-2">
-                  {(dynamicSuggestions.length > 0 ? dynamicSuggestions : character.suggestedPrompts).map((prompt, i) => (
+                    {character.suggestedPrompts.map((prompt, i) => (
                     <button
-                      key={i}
-                      onClick={() => sendTextMessage(prompt)}
-                      className="w-full text-sm text-left bg-gray-800/60 hover:bg-gray-700/80 p-3 rounded-lg transition-colors duration-200 border border-gray-700 text-gray-300 disabled:opacity-50"
-                      disabled={connectionState !== ConnectionState.LISTENING && connectionState !== ConnectionState.CONNECTED}
+                        key={i}
+                        onClick={() => sendTextMessage(prompt)}
+                        className="w-full text-sm text-left bg-gray-800/60 hover:bg-gray-700/80 p-3 rounded-lg transition-colors duration-200 border border-gray-700 text-gray-300 disabled:opacity-50"
+                        disabled={connectionState !== ConnectionState.LISTENING && connectionState !== ConnectionState.CONNECTED}
                     >
-                      <span className="text-amber-300 mr-2">»</span>
-                      {prompt}
+                        <span className="text-amber-300 mr-2">»</span>
+                        {prompt}
                     </button>
-                  ))}
+                    ))}
                 </div>
-              )}
-            </div>
-          )}
-        </div>
-
-        <div className="flex items-center justify-center gap-2 mt-auto">
-          <button
-            onClick={onEndConversation}
-            className="bg-red-800/70 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg transition-colors duration-300 border border-red-700"
-          >
-            End
-          </button>
-          <button
-            onClick={handleReset}
-            disabled={transcript.length === 0}
-            className="bg-amber-800/70 hover:bg-amber-700 text-white font-bold py-2 px-4 rounded-lg transition-colors duration-300 border border-amber-700 disabled:opacity-50"
-          >
-            Reset
-          </button>
-          <button
-            onClick={() => toggleMicrophone()}
-            aria-label={isMicActive ? "Mute microphone" : "Unmute microphone"}
-            className={`p-2 rounded-full transition-colors duration-300 border ${isMicActive ? 'bg-blue-800/70 hover:bg-blue-700 border-blue-700' : 'bg-gray-700 hover:bg-gray-600 border-gray-600'}`}
-          >
-            {isMicActive ? <MicrophoneIcon className="w-6 h-6 text-white" /> : <MicrophoneOffIcon className="w-6 h-6 text-white" />}
-          </button>
-        </div>
-      </div>
-      <div className="lg:w-2/3 bg-gray-900/50 p-6 rounded-lg border border-gray-700 min-h-[24rem] flex flex-col">
-        <h3 className="text-xl font-semibold mb-4 text-gray-300 border-b border-gray-700 pb-2 flex-shrink-0">Conversation Transcript</h3>
-        <div className="flex-grow space-y-4 overflow-y-auto pr-2">
-            {transcript.map((turn, index) => (
-              <div key={index} className={`p-3 rounded-lg border ${turn.speaker === 'user' ? 'bg-blue-900/20 border-blue-800/50' : 'bg-teal-900/20 border-teal-800/50'}`}>
-                <p className={`font-bold text-sm mb-1 ${turn.speaker === 'user' ? 'text-blue-300' : 'text-teal-300'}`}>{turn.speakerName}</p>
-                <p className="text-gray-300">{turn.text}</p>
-              </div>
-            ))}
-            {(userTranscription || modelTranscription) && (
-              <>
-                {userTranscription && (
-                    <div className="p-3 rounded-lg bg-blue-900/20 border border-blue-800/50 opacity-75">
-                        <p className="font-bold text-sm mb-1 text-blue-300">You</p>
-                        <p className="text-gray-300 min-h-[1.5rem]">{userTranscription}</p>
+                </div>
+            ) : (
+                <div className="animate-fade-in">
+                <h4 className="text-md font-bold text-amber-200 mb-2 text-center">Topics to Explore</h4>
+                {isFetchingSuggestions ? (
+                    <div className="space-y-2">
+                    <div className="w-full bg-gray-800/60 p-3 rounded-lg h-[44px] animate-pulse"></div>
+                    <div className="w-full bg-gray-800/60 p-3 rounded-lg h-[44px] animate-pulse" style={{ animationDelay: '75ms' }}></div>
+                    <div className="w-full bg-gray-800/60 p-3 rounded-lg h-[44px] animate-pulse" style={{ animationDelay: '150ms' }}></div>
+                    </div>
+                ) : (
+                    <div className="space-y-2">
+                    {(dynamicSuggestions.length > 0 ? dynamicSuggestions : character.suggestedPrompts).map((prompt, i) => (
+                        <button
+                        key={i}
+                        onClick={() => sendTextMessage(prompt)}
+                        className="w-full text-sm text-left bg-gray-800/60 hover:bg-gray-700/80 p-3 rounded-lg transition-colors duration-200 border border-gray-700 text-gray-300 disabled:opacity-50"
+                        disabled={connectionState !== ConnectionState.LISTENING && connectionState !== ConnectionState.CONNECTED}
+                        >
+                        <span className="text-amber-300 mr-2">»</span>
+                        {prompt}
+                        </button>
+                    ))}
                     </div>
                 )}
-                {modelTranscription && (
-                    <div className="p-3 rounded-lg bg-teal-900/20 border border-teal-800/50 opacity-75">
-                        <p className="font-bold text-sm mb-1 text-teal-300">{character.name}</p>
-                        <p className="text-gray-300 min-h-[1.5rem]">{modelTranscription}</p>
-                    </div>
-                )}
-              </>
+                </div>
             )}
-        </div>
-        <form onSubmit={handleSendText} className="mt-4 flex gap-2 flex-shrink-0">
-            <input
-                type="text"
-                value={textInput}
-                onChange={(e) => setTextInput(e.target.value)}
-                placeholder={isMicActive ? "Or type a message..." : "Type a message..."}
-                className="flex-grow bg-gray-800 border border-gray-600 rounded-lg px-4 py-2 text-white focus:outline-none focus:ring-2 focus:ring-amber-400 disabled:opacity-50"
-                disabled={connectionState === ConnectionState.CONNECTING || connectionState === ConnectionState.SPEAKING || connectionState === ConnectionState.THINKING }
-            />
+            </div>
+
+            <div className="flex items-center justify-center gap-4 mt-auto pt-6 flex-wrap">
             <button
-                type="submit"
-                className="bg-amber-600 hover:bg-amber-500 text-black font-bold p-3 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                disabled={!textInput.trim() || connectionState === ConnectionState.CONNECTING || connectionState === ConnectionState.SPEAKING || connectionState === ConnectionState.THINKING }
-                aria-label="Send message"
+                onClick={onEndConversation}
+                className="bg-red-800/70 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg transition-colors duration-300 border border-red-700"
             >
-                <SendIcon className="w-5 h-5" />
+                End
             </button>
-        </form>
+            <button
+                onClick={handleReset}
+                disabled={transcript.length === 0 && !environmentImageUrl}
+                className="bg-amber-800/70 hover:bg-amber-700 text-white font-bold py-2 px-4 rounded-lg transition-colors duration-300 border border-amber-700 disabled:opacity-50"
+            >
+                Reset
+            </button>
+            <button
+                onClick={() => toggleMicrophone()}
+                aria-label={isMicActive ? "Mute microphone" : "Unmute microphone"}
+                className={`p-2 rounded-full transition-colors duration-300 border ${isMicActive ? 'bg-blue-800/70 hover:bg-blue-700 border-blue-700' : 'bg-gray-700 hover:bg-gray-600 border-gray-600'}`}
+            >
+                {isMicActive ? <MicrophoneIcon className="w-6 h-6 text-white" /> : <MicrophoneOffIcon className="w-6 h-6 text-white" />}
+            </button>
+            </div>
+        </div>
+        <div className="w-full md:w-2/3 bg-gray-900/50 p-4 rounded-lg border border-gray-700 h-[60vh] md:h-auto flex flex-col">
+            <h3 className="text-xl font-semibold mb-4 text-gray-300 border-b border-gray-700 pb-2 flex-shrink-0">Conversation Transcript</h3>
+            <div className="flex-grow space-y-4 overflow-y-auto pr-2">
+                {transcript.map((turn, index) => {
+                    const isUser = turn.speaker === 'user';
+                    const isOperator = turn.speakerName === 'Matrix Operator';
+                    
+                    const containerClasses = isUser 
+                        ? 'bg-blue-900/20 border-blue-800/50' 
+                        : isOperator
+                            ? 'bg-gray-700/20 border-gray-600/50'
+                            : 'bg-teal-900/20 border-teal-800/50';
+
+                    const speakerNameClasses = isUser
+                        ? 'text-blue-300'
+                        : isOperator
+                            ? 'text-amber-300'
+                            : 'text-teal-300';
+
+                    return (
+                        <div key={index} className={`p-3 rounded-lg border ${containerClasses}`}>
+                            <p className={`font-bold text-sm mb-1 ${speakerNameClasses}`}>{turn.speakerName}</p>
+                            <p className="text-gray-300">{turn.text}</p>
+                            {turn.artifact && <ArtifactDisplay artifact={turn.artifact} />}
+                        </div>
+                    );
+                })}
+                {(userTranscription || modelTranscription) && (
+                <>
+                    {userTranscription && (
+                        <div className="p-3 rounded-lg bg-blue-900/20 border border-blue-800/50 opacity-75">
+                            <p className="font-bold text-sm mb-1 text-blue-300">You</p>
+                            <p className="text-gray-300 min-h-[1.5rem]">{userTranscription}</p>
+                        </div>
+                    )}
+                    {modelTranscription && (
+                        <div className="p-3 rounded-lg bg-teal-900/20 border border-teal-800/50 opacity-75">
+                            <p className="font-bold text-sm mb-1 text-teal-300">{character.name}</p>
+                            <p className="text-gray-300 min-h-[1.5rem]">{modelTranscription}</p>
+                        </div>
+                    )}
+                </>
+                )}
+            </div>
+            <form onSubmit={handleSendText} className="mt-4 flex gap-2 flex-shrink-0">
+                <input
+                    type="text"
+                    value={textInput}
+                    onChange={(e) => setTextInput(e.target.value)}
+                    placeholder={isMicActive ? placeholder : "Type a message..."}
+                    className="flex-grow bg-gray-800 border border-gray-600 rounded-lg px-4 py-2 text-white focus:outline-none focus:ring-2 focus:ring-amber-400 disabled:opacity-50"
+                    disabled={connectionState === ConnectionState.CONNECTING || connectionState === ConnectionState.SPEAKING || connectionState === ConnectionState.THINKING }
+                />
+                <button
+                    type="submit"
+                    className="bg-amber-600 hover:bg-amber-500 text-black font-bold p-3 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    disabled={!textInput.trim() || connectionState === ConnectionState.CONNECTING || connectionState === ConnectionState.SPEAKING || connectionState === ConnectionState.THINKING }
+                    aria-label="Send message"
+                >
+                    <SendIcon className="w-5 h-5" />
+                </button>
+            </form>
+        </div>
       </div>
     </div>
   );

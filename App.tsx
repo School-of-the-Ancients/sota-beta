@@ -13,6 +13,7 @@ const App: React.FC = () => {
   const [selectedCharacter, setSelectedCharacter] = useState<Character | null>(null);
   const [view, setView] = useState<'selector' | 'conversation' | 'history' | 'creator'>('selector');
   const [customCharacters, setCustomCharacters] = useState<Character[]>([]);
+  const [environmentImageUrl, setEnvironmentImageUrl] = useState<string | null>(null);
 
   useEffect(() => {
     // Load custom characters from local storage
@@ -71,6 +72,7 @@ const App: React.FC = () => {
   const handleEndConversation = () => {
     setSelectedCharacter(null);
     setView('selector');
+    setEnvironmentImageUrl(null);
     window.history.pushState({}, '', window.location.pathname);
   };
 
@@ -78,7 +80,12 @@ const App: React.FC = () => {
     switch (view) {
       case 'conversation':
         return selectedCharacter ? (
-          <ConversationView character={selectedCharacter} onEndConversation={handleEndConversation} />
+          <ConversationView 
+            character={selectedCharacter} 
+            onEndConversation={handleEndConversation} 
+            environmentImageUrl={environmentImageUrl}
+            onEnvironmentUpdate={setEnvironmentImageUrl}
+          />
         ) : null;
       case 'history':
         return <HistoryView onBack={() => setView('selector')} />;
@@ -106,16 +113,27 @@ const App: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-[#1a1a1a] to-[#2b2b2b] text-gray-200 font-serif p-4 sm:p-6 lg:p-8">
-      <header className="text-center mb-8">
-        <h1 className="text-4xl sm:text-5xl font-bold text-amber-300 tracking-wider" style={{ textShadow: '0 0 10px rgba(252, 211, 77, 0.5)' }}>
-          School of the Ancients
-        </h1>
-        <p className="text-gray-400 mt-2 text-lg">Learn something.</p>
-      </header>
-      <main className="max-w-7xl mx-auto">
-        {renderContent()}
-      </main>
+    <div className="relative min-h-screen bg-[#1a1a1a]">
+      <div
+        className="absolute inset-0 bg-cover bg-center transition-opacity duration-1000 z-0"
+        style={{ backgroundImage: environmentImageUrl ? `url(${environmentImageUrl})` : 'none' }}
+      />
+      {environmentImageUrl && <div className="absolute inset-0 bg-black/50 z-0" />}
+
+      <div 
+        className="relative z-10 min-h-screen flex flex-col text-gray-200 font-serif p-4 sm:p-6 lg:p-8"
+        style={{ background: environmentImageUrl ? 'transparent' : 'linear-gradient(to bottom right, #1a1a1a, #2b2b2b)' }}
+      >
+        <header className="text-center mb-8">
+          <h1 className="text-4xl sm:text-5xl md:text-6xl font-bold text-amber-300 tracking-wider" style={{ textShadow: '0 0 10px rgba(252, 211, 77, 0.5)' }}>
+            School of the Ancients
+          </h1>
+          <p className="text-gray-400 mt-2 text-lg">Learn something.</p>
+        </header>
+        <main className="max-w-7xl w-full mx-auto flex-grow flex flex-col">
+          {renderContent()}
+        </main>
+      </div>
     </div>
   );
 };

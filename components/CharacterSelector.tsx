@@ -18,14 +18,14 @@ const CharacterSelector: React.FC<CharacterSelectorProps> = ({ characters, onSel
   };
   
   return (
-    <div className="flex flex-wrap justify-center gap-8">
+    <div className="flex flex-wrap justify-center gap-4 md:gap-8">
       <AddCharacterCard onClick={onStartCreation} />
       {characters.map((character) => {
         const isCustom = character.id.startsWith('custom_');
         return (
           <div
             key={character.id}
-            className="group relative w-72 h-96 cursor-pointer overflow-hidden rounded-lg shadow-lg bg-gray-800 border-2 border-transparent hover:border-amber-400 transition-all duration-300 transform hover:scale-105"
+            className="group relative w-full max-w-sm sm:w-72 h-96 cursor-pointer overflow-hidden rounded-lg shadow-lg bg-gray-800 border-2 border-transparent hover:border-amber-400 transition-all duration-300 transform hover:scale-105"
             onClick={() => onSelectCharacter(character)}
           >
             {isCustom && (
@@ -43,8 +43,8 @@ const CharacterSelector: React.FC<CharacterSelectorProps> = ({ characters, onSel
               className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-110 filter grayscale group-hover:grayscale-0"
             />
             <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent" />
-            <div className="absolute bottom-0 left-0 p-4 text-white w-full">
-              <h3 className="text-2xl font-bold text-amber-200">{character.name}</h3>
+            <div className="absolute bottom-0 left-0 p-3 sm:p-4 text-white w-full">
+              <h3 className="text-xl sm:text-2xl font-bold text-amber-200">{character.name}</h3>
               <p className="text-sm text-gray-300 italic mb-2">{character.title}</p>
               
               <div className="overflow-hidden transition-all duration-500 ease-in-out max-h-0 group-hover:max-h-64">
