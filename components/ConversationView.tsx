@@ -1,5 +1,5 @@
-
-import React, { useState, useCallback, useRef } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
+import { GoogleGenAI, Type } from '@google/genai';
 import type { Character, ConversationTurn, SavedConversation } from '../types';
 import { useGeminiLive } from '../hooks/useGeminiLive';
 import { ConnectionState } from '../types';
@@ -35,7 +35,6 @@ const saveConversationToLocalStorage = (conversation: SavedConversation) => {
     console.error("Failed to save conversation:", error);
   }
 };
-
 
 interface ConversationViewProps {
   character: Character;
@@ -78,9 +77,24 @@ const StatusIndicator: React.FC<{ state: ConnectionState; isMicActive: boolean }
 
 const ConversationView: React.FC<ConversationViewProps> = ({ character, onEndConversation }) => {
   const [transcript, setTranscript] = useState<ConversationTurn[]>([]);
-  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
   const [textInput, setTextInput] = useState('');
-  const sessionIdRef = useRef(`conv_${Date.now()}`);
+  const [dynamicSuggestions, setDynamicSuggestions] = useState<string[]>([]);
+  const [isFetchingSuggestions, setIsFetchingSuggestions] = useState(false);
+  const sessionIdRef = useRef(`conv_${character.id}_${Date.now()}`);
+
+  // Load existing conversation on mount
+  useEffect(() => {
+    const history = loadConversations();
+    const existingConversation = history.find(c => c.characterId === character.id);
+    if (existingConversation) {
+      setTranscript(existingConversation.transcript);
+      sessionIdRef.current = existingConversation.id; // Use existing ID to update record
+    } else {
+        // If no conversation exists, create a persistent ID based on character
+        sessionIdRef.current = `conv_${character.id}`;
+    }
+  }, [character.id]);
+
 
   const handleTurnComplete = useCallback(({ user, model }: { user: string; model: string }) => {
     if (user.trim() || model.trim()) {
@@ -101,9 +115,63 @@ const ConversationView: React.FC<ConversationViewProps> = ({ character, onEndCon
     sendTextMessage
   } = useGeminiLive(character.systemInstruction, character.voiceName, handleTurnComplete);
 
-  const handleSave = () => {
+  const updateDynamicSuggestions = useCallback(async (currentTranscript: ConversationTurn[]) => {
+    if (currentTranscript.length === 0) return;
+    setIsFetchingSuggestions(true);
+    try {
+        if (!process.env.API_KEY) throw new Error("API_KEY not set.");
+        const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+
+        const contextTranscript = currentTranscript.slice(-4).map(turn => `${turn.speakerName}: ${turn.text}`).join('\n');
+
+        const prompt = `Based on the following conversation transcript with ${character.name}, suggest three concise, open-ended questions the user could ask next to dive deeper into the topic. The user is a student, and ${character.name} is a mentor. The questions should be intellectually curious and relevant to the last thing ${character.name} said.
+
+        Transcript:
+        ${contextTranscript}
+        `;
+
+        const response = await ai.models.generateContent({
+            model: "gemini-2.5-flash",
+            contents: prompt,
+            config: {
+                responseMimeType: "application/json",
+                responseSchema: {
+                    type: Type.OBJECT,
+                    properties: {
+                        suggestions: {
+                            type: Type.ARRAY,
+                            items: { type: Type.STRING }
+                        }
+                    },
+                    required: ["suggestions"]
+                },
+            },
+        });
+
+        const data = JSON.parse(response.text);
+        if (data.suggestions && Array.isArray(data.suggestions) && data.suggestions.length > 0) {
+            setDynamicSuggestions(data.suggestions.slice(0, 3));
+        }
+
+    } catch (err) {
+        console.error("Failed to fetch dynamic suggestions:", err);
+    } finally {
+        setIsFetchingSuggestions(false);
+    }
+  }, [character.name]);
+
+  useEffect(() => {
+    if (transcript.length > 0 && transcript[transcript.length - 1].speaker === 'model') {
+      updateDynamicSuggestions(transcript);
+    }
+  }, [transcript, updateDynamicSuggestions]);
+
+  // Auto-save conversation on transcript change
+  useEffect(() => {
+    // We only save if there's content, to avoid creating empty history entries
+    // just by visiting a character.
     if (transcript.length === 0) return;
-    setSaveStatus('saving');
+
     const conversation: SavedConversation = {
       id: sessionIdRef.current,
       characterId: character.id,
@@ -113,10 +181,25 @@ const ConversationView: React.FC<ConversationViewProps> = ({ character, onEndCon
       transcript,
     };
     saveConversationToLocalStorage(conversation);
-    setTimeout(() => {
-      setSaveStatus('saved');
-      setTimeout(() => setSaveStatus('idle'), 2000);
-    }, 500);
+  }, [transcript, character]);
+
+  const handleReset = () => {
+    if (transcript.length === 0) return;
+    if (window.confirm('Are you sure you want to reset this conversation? The current transcript will be cleared.')) {
+        setTranscript([]);
+        setDynamicSuggestions([]);
+        
+        // Explicitly save the cleared transcript state
+        const clearedConversation: SavedConversation = {
+            id: sessionIdRef.current,
+            characterId: character.id,
+            characterName: character.name,
+            portraitUrl: character.portraitUrl,
+            timestamp: Date.now(),
+            transcript: [],
+        };
+        saveConversationToLocalStorage(clearedConversation);
+    }
   };
 
   const handleSendText = (e: React.FormEvent) => {
@@ -144,26 +227,53 @@ const ConversationView: React.FC<ConversationViewProps> = ({ character, onEndCon
         <h2 className="text-3xl font-bold text-amber-200 mt-8">{character.name}</h2>
         <p className="text-gray-400 italic">{character.title}</p>
         
-        {transcript.length === 0 && (
-          <div className="mt-6 text-left w-full max-w-xs animate-fade-in">
-            <h4 className="text-md font-bold text-amber-200 mb-2 text-center">Conversation Starters</h4>
-            <div className="space-y-2">
-              {character.suggestedPrompts.map((prompt, i) => (
-                <button
-                  key={i}
-                  onClick={() => sendTextMessage(prompt)}
-                  className="w-full text-sm text-left bg-gray-800/60 hover:bg-gray-700/80 p-3 rounded-lg transition-colors duration-200 border border-gray-700 text-gray-300 disabled:opacity-50"
-                  disabled={connectionState !== ConnectionState.LISTENING && connectionState !== ConnectionState.CONNECTED}
-                >
-                  <span className="text-amber-300 mr-2">»</span>
-                  {prompt}
-                </button>
-              ))}
+        <div className="mt-6 text-left w-full max-w-xs min-h-[12rem]">
+          {transcript.length === 0 ? (
+            <div className="animate-fade-in">
+              <h4 className="text-md font-bold text-amber-200 mb-2 text-center">Conversation Starters</h4>
+              <div className="space-y-2">
+                {character.suggestedPrompts.map((prompt, i) => (
+                  <button
+                    key={i}
+                    onClick={() => sendTextMessage(prompt)}
+                    className="w-full text-sm text-left bg-gray-800/60 hover:bg-gray-700/80 p-3 rounded-lg transition-colors duration-200 border border-gray-700 text-gray-300 disabled:opacity-50"
+                    disabled={connectionState !== ConnectionState.LISTENING && connectionState !== ConnectionState.CONNECTED}
+                  >
+                    <span className="text-amber-300 mr-2">»</span>
+                    {prompt}
+                  </button>
+                ))}
+              </div>
             </div>
-          </div>
-        )}
+          ) : (
+            <div className="animate-fade-in">
+              <h4 className="text-md font-bold text-amber-200 mb-2 text-center">Topics to Explore</h4>
+              {isFetchingSuggestions ? (
+                <div className="space-y-2">
+                  <div className="w-full bg-gray-800/60 p-3 rounded-lg h-[44px] animate-pulse"></div>
+                  <div className="w-full bg-gray-800/60 p-3 rounded-lg h-[44px] animate-pulse" style={{ animationDelay: '75ms' }}></div>
+                  <div className="w-full bg-gray-800/60 p-3 rounded-lg h-[44px] animate-pulse" style={{ animationDelay: '150ms' }}></div>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {(dynamicSuggestions.length > 0 ? dynamicSuggestions : character.suggestedPrompts).map((prompt, i) => (
+                    <button
+                      key={i}
+                      onClick={() => sendTextMessage(prompt)}
+                      className="w-full text-sm text-left bg-gray-800/60 hover:bg-gray-700/80 p-3 rounded-lg transition-colors duration-200 border border-gray-700 text-gray-300 disabled:opacity-50"
+                      disabled={connectionState !== ConnectionState.LISTENING && connectionState !== ConnectionState.CONNECTED}
+                    >
+                      <span className="text-amber-300 mr-2">»</span>
+                      {prompt}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
 
-        <div className="flex items-center justify-center gap-2 mt-6">
+        <div className="flex items-center justify-center gap-2 mt-auto">
           <button
             onClick={onEndConversation}
             className="bg-red-800/70 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg transition-colors duration-300 border border-red-700"
@@ -171,11 +281,11 @@ const ConversationView: React.FC<ConversationViewProps> = ({ character, onEndCon
             End
           </button>
           <button
-            onClick={handleSave}
-            disabled={transcript.length === 0 || saveStatus !== 'idle'}
-            className="bg-green-800/70 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg transition-colors duration-300 border border-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
+            onClick={handleReset}
+            disabled={transcript.length === 0}
+            className="bg-amber-800/70 hover:bg-amber-700 text-white font-bold py-2 px-4 rounded-lg transition-colors duration-300 border border-amber-700 disabled:opacity-50"
           >
-            {saveStatus === 'idle' ? 'Save' : 'Saved!'}
+            Reset
           </button>
           <button
             onClick={() => toggleMicrophone()}
