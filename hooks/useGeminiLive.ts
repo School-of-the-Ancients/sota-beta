@@ -57,7 +57,7 @@ const changeEnvironmentFunctionDeclaration: FunctionDeclaration = {
     name: 'changeEnvironment',
     parameters: {
       type: Type.OBJECT,
-      description: "Changes the user's visual environment to a specified location or scene. Use this when the user says 'take me to', 'show me', 'go to', or similar phrases requesting a scene change.",
+      description: "Changes the user's visual environment to a specified location or scene. Use this when the user says 'take me to', 'show me', 'go to', or similar phrases requesting a scene change, or when addressing the 'Operator' (e.g., 'Operator, take me to the Roman Forum').",
       properties: {
         description: {
           type: Type.STRING,
@@ -72,7 +72,7 @@ const changeEnvironmentFunctionDeclaration: FunctionDeclaration = {
     name: 'displayArtifact',
     parameters: {
       type: Type.OBJECT,
-      description: "Generates and displays an image of a specific object, artifact, or concept being discussed. Use this when the character wants to 'show' something to the user.",
+      description: "Generates and displays an image of a specific object, artifact, or concept being discussed. Use this when the character wants to 'show' something to the user, when the user asks to see something (e.g. 'show me the artifact'), or when addressing the 'Operator' (e.g., 'Operator, show me a diagram').",
       properties: {
         name: {
           type: Type.STRING,
