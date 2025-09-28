@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import type { SavedConversation } from '../types';
 
-const HISTORY_KEY = 'sages-of-science-history';
+const HISTORY_KEY = 'school-of-the-ancients-history';
 
 const loadConversations = (): SavedConversation[] => {
   try {
@@ -80,7 +80,7 @@ const HistoryView: React.FC<HistoryViewProps> = ({ onBack }) => {
       <div className="flex justify-between items-center mb-6">
         <h2 className="text-3xl font-bold text-amber-200">Conversation History</h2>
         <button onClick={onBack} className="bg-gray-700 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded-lg transition-colors">
-          Back to Sages
+          Back to Ancients
         </button>
       </div>
       {sortedHistory.length === 0 ? (

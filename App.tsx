@@ -4,23 +4,38 @@ import type { Character } from './types';
 import CharacterSelector from './components/CharacterSelector';
 import ConversationView from './components/ConversationView';
 import HistoryView from './components/HistoryView';
+import CharacterCreator from './components/CharacterCreator';
 import { CHARACTERS } from './constants';
+
+const CUSTOM_CHARACTERS_KEY = 'school-of-the-ancients-custom-characters';
 
 const App: React.FC = () => {
   const [selectedCharacter, setSelectedCharacter] = useState<Character | null>(null);
-  const [view, setView] = useState<'selector' | 'conversation' | 'history'>('selector');
+  const [view, setView] = useState<'selector' | 'conversation' | 'history' | 'creator'>('selector');
+  const [customCharacters, setCustomCharacters] = useState<Character[]>([]);
 
   useEffect(() => {
+    // Load custom characters from local storage
+    try {
+      const storedCharacters = localStorage.getItem(CUSTOM_CHARACTERS_KEY);
+      if (storedCharacters) {
+        setCustomCharacters(JSON.parse(storedCharacters));
+      }
+    } catch (e) {
+      console.error("Failed to load custom characters:", e);
+    }
+
     const urlParams = new URLSearchParams(window.location.search);
     const characterId = urlParams.get('character');
     if (characterId) {
-      const characterFromUrl = CHARACTERS.find(c => c.id === characterId);
+      const allCharacters = [...customCharacters, ...CHARACTERS];
+      const characterFromUrl = allCharacters.find(c => c.id === characterId);
       if (characterFromUrl) {
         setSelectedCharacter(characterFromUrl);
         setView('conversation');
       }
     }
-  }, []);
+  }, []); // customCharacters dependency is intentionally omitted to avoid re-running on delete
 
   const handleSelectCharacter = (character: Character) => {
     setSelectedCharacter(character);
@@ -28,6 +43,29 @@ const App: React.FC = () => {
     const url = new URL(window.location.href);
     url.searchParams.set('character', character.id);
     window.history.pushState({}, '', url);
+  };
+
+  const handleCharacterCreated = (newCharacter: Character) => {
+    const updatedCharacters = [newCharacter, ...customCharacters];
+    setCustomCharacters(updatedCharacters);
+    try {
+      localStorage.setItem(CUSTOM_CHARACTERS_KEY, JSON.stringify(updatedCharacters));
+    } catch (e) {
+      console.error("Failed to save custom character:", e);
+    }
+    handleSelectCharacter(newCharacter);
+  };
+
+  const handleDeleteCharacter = (characterId: string) => {
+    if (window.confirm('Are you sure you want to permanently delete this ancient?')) {
+      const updatedCharacters = customCharacters.filter(c => c.id !== characterId);
+      setCustomCharacters(updatedCharacters);
+      try {
+        localStorage.setItem(CUSTOM_CHARACTERS_KEY, JSON.stringify(updatedCharacters));
+      } catch (e) {
+        console.error("Failed to delete custom character:", e);
+      }
+    }
   };
 
   const handleEndConversation = () => {
@@ -44,11 +82,18 @@ const App: React.FC = () => {
         ) : null;
       case 'history':
         return <HistoryView onBack={() => setView('selector')} />;
+      case 'creator':
+        return <CharacterCreator onCharacterCreated={handleCharacterCreated} onBack={() => setView('selector')} />;
       case 'selector':
       default:
         return (
           <div className="text-center">
-            <CharacterSelector characters={CHARACTERS} onSelectCharacter={handleSelectCharacter} />
+            <CharacterSelector
+              characters={[...customCharacters, ...CHARACTERS]}
+              onSelectCharacter={handleSelectCharacter}
+              onStartCreation={() => setView('creator')}
+              onDeleteCharacter={handleDeleteCharacter}
+            />
             <button
               onClick={() => setView('history')}
               className="mt-12 bg-gray-700 hover:bg-gray-600 text-amber-300 font-bold py-3 px-8 rounded-lg transition-colors duration-300 border border-gray-600"
@@ -66,7 +111,7 @@ const App: React.FC = () => {
         <h1 className="text-4xl sm:text-5xl font-bold text-amber-300 tracking-wider" style={{ textShadow: '0 0 10px rgba(252, 211, 77, 0.5)' }}>
           School of the Ancients
         </h1>
-        <p className="text-gray-400 mt-2 text-lg">Learn something today.</p>
+        <p className="text-gray-400 mt-2 text-lg">Learn something.</p>
       </header>
       <main className="max-w-7xl mx-auto">
         {renderContent()}

@@ -1,4 +1,7 @@
+
 import type { Character } from './types';
+
+export const AVAILABLE_VOICES = ['Zephyr', 'Puck', 'Charon', 'Kore', 'Fenrir'];
 
 export const CHARACTERS: Character[] = [
   {

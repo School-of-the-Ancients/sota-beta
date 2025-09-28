@@ -9,7 +9,7 @@ import WaveformIcon from './icons/WaveformIcon';
 import ThinkingIcon from './icons/ThinkingIcon';
 import SendIcon from './icons/SendIcon';
 
-const HISTORY_KEY = 'sages-of-science-history';
+const HISTORY_KEY = 'school-of-the-ancients-history';
 
 const loadConversations = (): SavedConversation[] => {
   try {
