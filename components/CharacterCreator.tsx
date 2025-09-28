@@ -27,7 +27,6 @@ const IDENTITY_PROMPTS = [
   "Whom shall we invite to the academy?",
   "Which great mind will you awaken?",
   "Whose wisdom will you seek?",
-  "Call forth an ancient spirit.",
   "Name the legend you wish to consult.",
 ];
 
