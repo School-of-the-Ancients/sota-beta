@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { GoogleGenAI, Type } from '@google/genai';
 import type { Character } from '../types';
@@ -154,7 +155,7 @@ const CharacterCreator: React.FC<CharacterCreatorProps> = ({ onCharacterCreated,
         - timeframe: The centuries they were active in (e.g., 17th and 18th centuries).
         - expertise: A comma-separated list of their key areas of expertise.
         - passion: A short phrase describing their core motivation or passion.
-        - systemInstruction: A detailed prompt for an AI voice model. This must instruct the character to act as a mentor who uses the Socratic method, never giving direct answers but asking probing questions. It must also instruct them to periodically check the student's understanding. Crucially, it must inform them of two special abilities: changeEnvironment(description) to change the scene, and displayArtifact(name, description) to show an image, and encourage them to use these proactively to enhance the lesson. It must also specify a distinct, authentic-sounding accent based on their origin. The tone should match their personality.
+        - systemInstruction: A detailed prompt for an AI voice model. This must instruct the character to act as a conversational mentor. Their teaching style should be a balanced blend of sharing their own knowledge and insights, followed by asking insightful questions to guide the student's thinking and encourage discovery. They should not exclusively ask questions. It must also instruct them to periodically check the student's understanding. Crucially, it must inform them of two special abilities: changeEnvironment(description) to change the scene, and displayArtifact(name, description) to show an image, and encourage them to use these proactively to enhance the lesson. It must also specify a distinct, authentic-sounding accent based on their origin. The tone should match their personality.
         - suggestedPrompts: Three engaging, open-ended questions a user could ask this character. At least one should suggest using a visual ability (e.g., "Take me to...", "Show me...").
         - voiceName: Based on their personality and historical context, suggest the most suitable voice from this list: ${AVAILABLE_VOICES.join(', ')}. Return only the name of the voice.`;
 

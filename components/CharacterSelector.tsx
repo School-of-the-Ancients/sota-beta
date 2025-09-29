@@ -42,7 +42,7 @@ const CharacterSelector: React.FC<CharacterSelectorProps> = ({ characters, onSel
               alt={character.name}
               className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-110 filter grayscale group-hover:grayscale-0"
             />
-            <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent" />
+            <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent transition-colors duration-300 group-hover:bg-black/70" />
             <div className="absolute bottom-0 left-0 p-3 sm:p-4 text-white w-full">
               <h3 className="text-xl sm:text-2xl font-bold text-amber-200">{character.name}</h3>
               <p className="text-sm text-gray-300 italic mb-2">{character.title}</p>
