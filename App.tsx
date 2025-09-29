@@ -1,6 +1,8 @@
 
 import React, { useState, useEffect } from 'react';
-import type { Character, Quest } from './types';
+// Fix: Add necessary imports for summary generation and conversation saving.
+import { GoogleGenAI, Type } from '@google/genai';
+import type { Character, Quest, ConversationTurn, SavedConversation, Summary } from './types';
 import CharacterSelector from './components/CharacterSelector';
 import ConversationView from './components/ConversationView';
 import HistoryView from './components/HistoryView';
@@ -11,6 +13,34 @@ import { CHARACTERS, QUESTS } from './constants';
 import QuestIcon from './components/icons/QuestIcon';
 
 const CUSTOM_CHARACTERS_KEY = 'school-of-the-ancients-custom-characters';
+// Fix: Add history key constant for conversation management.
+const HISTORY_KEY = 'school-of-the-ancients-history';
+
+// Fix: Add helper functions to manage conversation history in localStorage.
+const loadConversations = (): SavedConversation[] => {
+  try {
+    const rawHistory = localStorage.getItem(HISTORY_KEY);
+    return rawHistory ? JSON.parse(rawHistory) : [];
+  } catch (error) {
+    console.error("Failed to load conversation history:", error);
+    return [];
+  }
+};
+
+const saveConversationToLocalStorage = (conversation: SavedConversation) => {
+  try {
+    const history = loadConversations();
+    const existingIndex = history.findIndex(c => c.id === conversation.id);
+    if (existingIndex > -1) {
+      history[existingIndex] = conversation;
+    } else {
+      history.unshift(conversation);
+    }
+    localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
+  } catch (error) {
+    console.error("Failed to save conversation:", error);
+  }
+};
 
 const App: React.FC = () => {
   const [selectedCharacter, setSelectedCharacter] = useState<Character | null>(null);
@@ -18,6 +48,8 @@ const App: React.FC = () => {
   const [customCharacters, setCustomCharacters] = useState<Character[]>([]);
   const [environmentImageUrl, setEnvironmentImageUrl] = useState<string | null>(null);
   const [activeQuest, setActiveQuest] = useState<Quest | null>(null);
+  // Fix: Add isSaving state to manage the end conversation flow.
+  const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
     // Load custom characters from local storage
@@ -89,24 +121,85 @@ const App: React.FC = () => {
     }
   };
 
-  const handleEndConversation = () => {
-    setSelectedCharacter(null);
-    setView('selector');
-    setEnvironmentImageUrl(null);
-    setActiveQuest(null);
-    window.history.pushState({}, '', window.location.pathname);
+  // Fix: Implement summary generation and state reset on conversation end.
+  const handleEndConversation = async (transcript: ConversationTurn[], sessionId: string) => {
+    if (!selectedCharacter) return;
+    setIsSaving(true);
+
+    try {
+      const conversationHistory = loadConversations();
+      const conversation = conversationHistory.find(c => c.id === sessionId);
+
+      if (conversation && transcript.length > 1) {
+        if (!process.env.API_KEY) {
+          console.error("API_KEY not set, skipping summary generation.");
+        } else {
+          const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+          const transcriptText = transcript
+            .slice(1) // Exclude initial greeting
+            .map(turn => `${turn.speakerName}: ${turn.text}`)
+            .join('\n\n');
+
+          if (transcriptText.trim()) {
+            const prompt = `Please summarize the following educational dialogue with ${selectedCharacter.name}. Provide a concise one-paragraph overview of the key topics discussed, and then list 3-5 of the most important takeaways or concepts as bullet points.
+
+Dialogue:
+${transcriptText}`;
+
+            const response = await ai.models.generateContent({
+              model: "gemini-2.5-flash",
+              contents: prompt,
+              config: {
+                responseMimeType: "application/json",
+                responseSchema: {
+                  type: Type.OBJECT,
+                  properties: {
+                    overview: { type: Type.STRING, description: "A one-paragraph overview of the conversation." },
+                    takeaways: {
+                      type: Type.ARRAY,
+                      items: { type: Type.STRING },
+                      description: "A list of 3-5 key takeaways from the conversation."
+                    }
+                  },
+                  required: ["overview", "takeaways"]
+                },
+              },
+            });
+
+            const summary: Summary = JSON.parse(response.text);
+            const updatedConversation: SavedConversation = {
+              ...conversation,
+              summary,
+              timestamp: Date.now(),
+            };
+            saveConversationToLocalStorage(updatedConversation);
+          }
+        }
+      }
+    } catch (error) {
+      console.error("Failed to generate summary:", error);
+    } finally {
+      setIsSaving(false);
+      setSelectedCharacter(null);
+      setView('selector');
+      setEnvironmentImageUrl(null);
+      setActiveQuest(null);
+      window.history.pushState({}, '', window.location.pathname);
+    }
   };
 
   const renderContent = () => {
     switch (view) {
       case 'conversation':
         return selectedCharacter ? (
-          <ConversationView 
-            character={selectedCharacter} 
-            onEndConversation={handleEndConversation} 
+          <ConversationView
+            character={selectedCharacter}
+            onEndConversation={handleEndConversation}
             environmentImageUrl={environmentImageUrl}
             onEnvironmentUpdate={setEnvironmentImageUrl}
             activeQuest={activeQuest}
+            // Fix: Pass the isSaving prop to ConversationView.
+            isSaving={isSaving}
           />
         ) : null;
       case 'history':

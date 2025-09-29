@@ -1,4 +1,3 @@
-
 import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { GoogleGenAI, Type } from '@google/genai';
 import type { Character, ConversationTurn, SavedConversation, Quest } from '../types';
@@ -283,28 +282,12 @@ const ConversationView: React.FC<ConversationViewProps> = ({ character, onEndCon
   const handleArtifactDisplay = useCallback(async (name: string, description: string) => {
     const artifactId = `artifact_${Date.now()}`;
     
-    setTranscript(prev => {
-        let lastModelTurnIndex = -1;
-        for (let i = prev.length - 1; i >= 0; i--) {
-          if (prev[i].speaker === 'model' && !prev[i].artifact) {
-            lastModelTurnIndex = i;
-            break;
-          }
-        }
-        
-        if (lastModelTurnIndex > -1) {
-            const newTranscript = [...prev];
-            newTranscript[lastModelTurnIndex] = {
-                ...newTranscript[lastModelTurnIndex],
-                artifact: { id: artifactId, name, imageUrl: '', loading: true }
-            };
-            return newTranscript;
-        }
-        return [...prev, {
-            speaker: 'model', speakerName: character.name, text: `Of course, here is the ${name}.`,
-            artifact: { id: artifactId, name, imageUrl: '', loading: true }
-        }];
-    });
+    setTranscript(prev => [...prev, {
+        speaker: 'model',
+        speakerName: 'Matrix Operator',
+        text: `Displaying: ${name}`,
+        artifact: { id: artifactId, name, imageUrl: '', loading: true }
+    }]);
 
     setIsGeneratingVisual(true);
     setGenerationMessage(`Creating ${name}...`);
@@ -322,7 +305,7 @@ const ConversationView: React.FC<ConversationViewProps> = ({ character, onEndCon
             const url = `data:image/jpeg;base64,${response.generatedImages[0].image.imageBytes}`;
             setTranscript(prev => prev.map(turn => {
                 if (turn.artifact?.id === artifactId) {
-                    return { ...turn, artifact: { ...turn.artifact, imageUrl: url, loading: false } };
+                    return { ...turn, text: name, artifact: { ...turn.artifact, imageUrl: url, loading: false } };
                 }
                 return turn;
             }));
@@ -332,7 +315,7 @@ const ConversationView: React.FC<ConversationViewProps> = ({ character, onEndCon
                 if (turn.artifact?.id === artifactId) {
                   const newTurn = { ...turn };
                   delete newTurn.artifact;
-                  newTurn.text = `${newTurn.text} (Failed to create visual for ${name})`;
+                  newTurn.text = `Failed to create visual for ${name}`;
                   return newTurn;
                 }
                 return turn;
@@ -344,7 +327,7 @@ const ConversationView: React.FC<ConversationViewProps> = ({ character, onEndCon
         if (turn.artifact?.id === artifactId) {
           const newTurn = { ...turn };
           delete newTurn.artifact;
-          newTurn.text = `${newTurn.text} (Error creating visual for ${name})`;
+          newTurn.text = `Error creating visual for ${name}`;
           return newTurn;
         }
         return turn;
