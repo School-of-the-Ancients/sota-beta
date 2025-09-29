@@ -507,9 +507,24 @@ ${contextTranscript}
             <p className="text-gray-400 italic">{character.title}</p>
 
             {activeQuest && (
-                <div className="mt-4 p-3 w-full max-w-xs bg-amber-900/50 border border-amber-800 rounded-lg text-center animate-fade-in">
-                    <p className="font-bold text-amber-300 text-sm">Active Quest</p>
-                    <p className="text-amber-200">{activeQuest.title}</p>
+                <div className="mt-4 p-4 w-full max-w-xs bg-amber-900/40 border border-amber-800/80 rounded-lg text-left animate-fade-in space-y-3">
+                    <div>
+                        <p className="font-bold text-amber-300 text-xs uppercase tracking-wide">Active Quest</p>
+                        <p className="text-amber-100 text-lg font-semibold leading-snug">{activeQuest.title}</p>
+                        <p className="text-amber-200/80 text-xs mt-1">Estimated {activeQuest.duration}</p>
+                    </div>
+                    <div>
+                        <p className="text-amber-200 text-xs font-semibold uppercase tracking-wide mb-1">Objective</p>
+                        <p className="text-amber-50/90 text-sm leading-relaxed">{activeQuest.objective}</p>
+                    </div>
+                    <div>
+                        <p className="text-amber-200 text-xs font-semibold uppercase tracking-wide mb-1">Focus Points</p>
+                        <ul className="list-disc list-inside space-y-1 text-amber-50/80 text-sm">
+                            {activeQuest.focusPoints.map((point) => (
+                                <li key={point}>{point}</li>
+                            ))}
+                        </ul>
+                    </div>
                 </div>
             )}
             

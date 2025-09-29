@@ -39,11 +39,30 @@ const QuestsView: React.FC<QuestsViewProps> = ({ quests, characters, onSelectQue
               <div key={quest.id} className="bg-gray-800/50 p-5 rounded-lg border border-gray-700 flex flex-col text-center hover:border-amber-400 transition-colors duration-300">
                 <img src={character.portraitUrl} alt={character.name} className="w-24 h-24 rounded-full mx-auto mb-4 border-2 border-amber-300" />
                 <h3 className="font-bold text-xl text-amber-300">{quest.title}</h3>
-                <p className="text-sm text-gray-400 mt-1 mb-4">with {character.name}</p>
-                <p className="text-gray-300 flex-grow text-sm mb-6">{quest.description}</p>
-                <button 
-                    onClick={() => onSelectQuest(quest)} 
-                    className="mt-auto bg-amber-600 hover:bg-amber-500 text-black font-bold py-2 px-4 rounded-lg transition-colors w-full"
+                <p className="text-sm text-gray-400 mt-1">with {character.name}</p>
+                <div className="mt-3 mb-4">
+                  <span className="inline-flex items-center justify-center px-3 py-1 rounded-full bg-amber-500/20 text-amber-200 text-xs font-semibold uppercase tracking-wide">
+                    {quest.duration}
+                  </span>
+                </div>
+                <p className="text-gray-300 text-sm mb-4">{quest.description}</p>
+                <div className="text-left text-sm text-gray-300 space-y-3 flex-grow">
+                  <div>
+                    <p className="font-semibold text-amber-200 uppercase tracking-wide text-xs mb-1">Objective</p>
+                    <p className="text-gray-300 leading-relaxed">{quest.objective}</p>
+                  </div>
+                  <div>
+                    <p className="font-semibold text-amber-200 uppercase tracking-wide text-xs mb-1">Focus Points</p>
+                    <ul className="list-disc list-inside space-y-1 text-gray-300/90">
+                      {quest.focusPoints.map((point) => (
+                        <li key={point}>{point}</li>
+                      ))}
+                    </ul>
+                  </div>
+                </div>
+                <button
+                    onClick={() => onSelectQuest(quest)}
+                    className="mt-6 bg-amber-600 hover:bg-amber-500 text-black font-bold py-2 px-4 rounded-lg transition-colors w-full"
                 >
                     Begin Quest
                 </button>

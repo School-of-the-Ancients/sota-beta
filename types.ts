@@ -66,4 +66,6 @@ export interface Quest {
   description: string;
   objective: string;
   characterId: string;
+  duration: string;
+  focusPoints: string[];
 }
