@@ -1,20 +1,23 @@
 
 import React, { useState, useEffect } from 'react';
-import type { Character } from './types';
+import type { Character, Quest } from './types';
 import CharacterSelector from './components/CharacterSelector';
 import ConversationView from './components/ConversationView';
 import HistoryView from './components/HistoryView';
 import CharacterCreator from './components/CharacterCreator';
-import { CHARACTERS } from './constants';
+import QuestsView from './components/QuestsView';
 import Instructions from './components/Instructions';
+import { CHARACTERS, QUESTS } from './constants';
+import QuestIcon from './components/icons/QuestIcon';
 
 const CUSTOM_CHARACTERS_KEY = 'school-of-the-ancients-custom-characters';
 
 const App: React.FC = () => {
   const [selectedCharacter, setSelectedCharacter] = useState<Character | null>(null);
-  const [view, setView] = useState<'selector' | 'conversation' | 'history' | 'creator'>('selector');
+  const [view, setView] = useState<'selector' | 'conversation' | 'history' | 'creator' | 'quests'>('selector');
   const [customCharacters, setCustomCharacters] = useState<Character[]>([]);
   const [environmentImageUrl, setEnvironmentImageUrl] = useState<string | null>(null);
+  const [activeQuest, setActiveQuest] = useState<Quest | null>(null);
 
   useEffect(() => {
     // Load custom characters from local storage
@@ -42,9 +45,25 @@ const App: React.FC = () => {
   const handleSelectCharacter = (character: Character) => {
     setSelectedCharacter(character);
     setView('conversation');
+    setActiveQuest(null); // Clear quest if a character is selected manually
     const url = new URL(window.location.href);
     url.searchParams.set('character', character.id);
     window.history.pushState({}, '', url);
+  };
+
+  const handleSelectQuest = (quest: Quest) => {
+    const allCharacters = [...customCharacters, ...CHARACTERS];
+    const characterForQuest = allCharacters.find(c => c.id === quest.characterId);
+    if (characterForQuest) {
+      setActiveQuest(quest);
+      setSelectedCharacter(characterForQuest);
+      setView('conversation');
+      const url = new URL(window.location.href);
+      url.searchParams.set('character', characterForQuest.id);
+      window.history.pushState({}, '', url);
+    } else {
+      console.error(`Character with ID ${quest.characterId} not found for the selected quest.`);
+    }
   };
 
   const handleCharacterCreated = (newCharacter: Character) => {
@@ -74,6 +93,7 @@ const App: React.FC = () => {
     setSelectedCharacter(null);
     setView('selector');
     setEnvironmentImageUrl(null);
+    setActiveQuest(null);
     window.history.pushState({}, '', window.location.pathname);
   };
 
@@ -86,29 +106,47 @@ const App: React.FC = () => {
             onEndConversation={handleEndConversation} 
             environmentImageUrl={environmentImageUrl}
             onEnvironmentUpdate={setEnvironmentImageUrl}
+            activeQuest={activeQuest}
           />
         ) : null;
       case 'history':
         return <HistoryView onBack={() => setView('selector')} />;
       case 'creator':
         return <CharacterCreator onCharacterCreated={handleCharacterCreated} onBack={() => setView('selector')} />;
+      case 'quests':
+        const allCharacters = [...customCharacters, ...CHARACTERS];
+        return <QuestsView onBack={() => setView('selector')} onSelectQuest={handleSelectQuest} quests={QUESTS} characters={allCharacters} />;
       case 'selector':
       default:
         return (
-          <div className="text-center">
+          <div className="text-center animate-fade-in">
+             <p className="max-w-3xl mx-auto mb-8 text-gray-400 text-lg">
+                Engage in real-time voice conversations with legendary minds from history, or embark on a guided Learning Quest to master a new subject.
+            </p>
+            <div className="flex flex-col sm:flex-row justify-center items-center gap-4 mb-12">
+                <button
+                    onClick={() => setView('quests')}
+                    className="flex items-center gap-3 bg-amber-600 hover:bg-amber-500 text-black font-bold py-3 px-8 rounded-lg transition-colors duration-300 text-lg w-full sm:w-auto"
+                >
+                    <QuestIcon className="w-6 h-6" />
+                    <span>Learning Quests</span>
+                </button>
+                <button
+                    onClick={() => setView('history')}
+                    className="bg-gray-700 hover:bg-gray-600 text-amber-300 font-bold py-3 px-8 rounded-lg transition-colors duration-300 border border-gray-600 w-full sm:w-auto"
+                >
+                    View Conversation History
+                </button>
+            </div>
+
             <Instructions />
+
             <CharacterSelector
               characters={[...customCharacters, ...CHARACTERS]}
               onSelectCharacter={handleSelectCharacter}
               onStartCreation={() => setView('creator')}
               onDeleteCharacter={handleDeleteCharacter}
             />
-            <button
-              onClick={() => setView('history')}
-              className="mt-12 bg-gray-700 hover:bg-gray-600 text-amber-300 font-bold py-3 px-8 rounded-lg transition-colors duration-300 border border-gray-600"
-            >
-              View Conversation History
-            </button>
           </div>
         );
     }
