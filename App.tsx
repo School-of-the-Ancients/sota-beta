@@ -6,7 +6,6 @@ import ConversationView from './components/ConversationView';
 import HistoryView from './components/HistoryView';
 import CharacterCreator from './components/CharacterCreator';
 import { CHARACTERS } from './constants';
-import Instructions from './components/Instructions';
 
 const CUSTOM_CHARACTERS_KEY = 'school-of-the-ancients-custom-characters';
 
@@ -96,7 +95,6 @@ const App: React.FC = () => {
       default:
         return (
           <div className="text-center">
-            <Instructions />
             <CharacterSelector
               characters={[...customCharacters, ...CHARACTERS]}
               onSelectCharacter={handleSelectCharacter}
