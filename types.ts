@@ -1,3 +1,8 @@
+export interface Ambience {
+  tag: string;
+  description: string;
+  audioSrc: string;
+}
 
 export interface Character {
   id: string;
@@ -11,6 +16,7 @@ export interface Character {
   expertise: string;
   passion: string;
   suggestedPrompts: string[];
+  ambienceTag: string;
 }
 
 export enum ConnectionState {

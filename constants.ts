@@ -1,7 +1,35 @@
-
-import type { Character } from './types';
+import type { Character, Ambience } from './types';
 
 export const AVAILABLE_VOICES = ['Zephyr', 'Puck', 'Charon', 'Kore', 'Fenrir'];
+
+export const AMBIENCE_LIBRARY: Ambience[] = [
+  {
+    tag: 'workshop',
+    description: "A studious inventor's workshop with a crackling fireplace and tinkering gears.",
+    audioSrc: 'https://raw.githubusercontent.com/School-of-the-Ancients/sota-beta/4a052251889d8670bb708424768167aee03fe300/audio/workshop2.mp3',
+  },
+  {
+    tag: 'garden',
+    description: 'A tranquil ancient garden with a trickling fountain and wind chimes in the breeze.',
+    audioSrc: 'https://raw.githubusercontent.com/School-of-the-Ancients/sota-beta/4a052251889d8670bb708424768167aee03fe300/audio/garden2.mp3',
+  },
+  {
+    tag: 'forum',
+    description: 'Midday in the Roman Forum with the murmur of a bustling crowd and distant chariots.',
+    audioSrc: 'https://raw.githubusercontent.com/School-of-the-Ancients/sota-beta/4a052251889d8670bb708424768167aee03fe300/audio/forum2.mp3',
+  },
+  {
+    tag: 'library',
+    description: 'A quiet 19th-century library with a ticking clock and rain against the window.',
+    audioSrc: 'https://raw.githubusercontent.com/School-of-the-Ancients/sota-beta/4a052251889d8670bb708424768167aee03fe300/audio/library2.mp3',
+  },
+  {
+    tag: 'battlefield',
+    description: 'The tense moments before a battle with wind whistling and the clink of distant armor.',
+    audioSrc: 'https://raw.githubusercontent.com/School-of-the-Ancients/sota-beta/4a052251889d8670bb708424768167aee03fe300/audio/battlefield2.mp3',
+  },
+];
+
 
 export const CHARACTERS: Character[] = [
   {
@@ -20,6 +48,7 @@ export const CHARACTERS: Character[] = [
       'How did you investigate the proportions of the human form?',
       'Show me a sketch of your flying machine.',
     ],
+    ambienceTag: 'workshop',
   },
   {
     id: 'socrates',
@@ -37,6 +66,7 @@ export const CHARACTERS: Character[] = [
       'What is the nature of true knowledge?',
       'How does one live a virtuous life?',
     ],
+    ambienceTag: 'forum',
   },
   {
     id: 'ada_lovelace',
@@ -54,6 +84,7 @@ export const CHARACTERS: Character[] = [
       'What is "poetical science"?',
       'Could a machine ever truly think or create art?',
     ],
+    ambienceTag: 'library',
   },
   {
     id: 'newton',
@@ -71,6 +102,7 @@ export const CHARACTERS: Character[] = [
       'Show me a diagram of light passing through a prism.',
       'What was your most important discovery?',
     ],
+    ambienceTag: 'library',
   },
   {
     id: 'confucius',
@@ -88,6 +120,7 @@ export const CHARACTERS: Character[] = [
       'How can one achieve balance in their life?',
       'What is the role of family in a good society?',
     ],
+    ambienceTag: 'garden',
   },
   {
     id: 'galileo',
@@ -105,6 +138,7 @@ export const CHARACTERS: Character[] = [
       'Why was the idea of a sun-centered universe so controversial?',
       'What is the most important part of the scientific method?',
     ],
+    ambienceTag: 'workshop',
   },
   {
     id: 'plato',
@@ -122,6 +156,7 @@ export const CHARACTERS: Character[] = [
       'Take me to your Academy in Athens.',
       'What is the nature of a just society?',
     ],
+    ambienceTag: 'garden',
   },
   {
     id: 'einstein',
@@ -139,6 +174,7 @@ export const CHARACTERS: Character[] = [
       'Show me a diagram of spacetime warping.',
       'What is a "thought experiment"?',
     ],
+    ambienceTag: 'library',
   },
   {
     id: 'cleopatra',
@@ -156,6 +192,7 @@ export const CHARACTERS: Character[] = [
       'How did you navigate the politics of the Roman Republic?',
       'What is the greatest misconception people have about you?',
     ],
+    ambienceTag: 'forum',
   },
   {
     id: 'aristotle',
@@ -173,6 +210,7 @@ export const CHARACTERS: Character[] = [
       'Show me the Lyceum where you taught.',
       'What is the best form of government?',
     ],
+    ambienceTag: 'garden',
   },
   {
     id: 'marcus_aurelius',
@@ -190,5 +228,6 @@ export const CHARACTERS: Character[] = [
       'Take me to the Roman Forum.',
       'What does it mean to live in accordance with nature?',
     ],
+    ambienceTag: 'forum',
   },
 ];

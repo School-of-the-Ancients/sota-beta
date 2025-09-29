@@ -1,10 +1,10 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { GoogleGenAI, Type } from '@google/genai';
 import type { Character } from '../types';
-import { AVAILABLE_VOICES } from '../constants';
+import { AVAILABLE_VOICES, AMBIENCE_LIBRARY } from '../constants';
 import { HISTORICAL_FIGURES_SUGGESTIONS } from '../suggestions';
 import DiceIcon from './icons/DiceIcon';
+import SoundIcon from './icons/SoundIcon';
 
 interface CharacterCreatorProps {
   onCharacterCreated: (character: Character) => void;
@@ -22,6 +22,7 @@ interface PersonaData {
   systemInstruction: string;
   suggestedPrompts: string[];
   voiceName: string;
+  ambienceTag: string;
 }
 
 const IDENTITY_PROMPTS = [
@@ -149,6 +150,7 @@ const CharacterCreator: React.FC<CharacterCreatorProps> = ({ onCharacterCreated,
     try {
       if (!process.env.API_KEY) throw new Error("API_KEY not set.");
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+      const availableAmbienceTags = AMBIENCE_LIBRARY.map(a => a.tag).join(', ');
       const prompt = `Based on the historical figure named "${name}" ${focus ? `with a focus on: "${focus}"` : ''}, generate the following details:
         - title: A concise, descriptive title (e.g., The Father of Modern Physics).
         - bio: A short, engaging biography in the first person.
@@ -157,7 +159,8 @@ const CharacterCreator: React.FC<CharacterCreatorProps> = ({ onCharacterCreated,
         - passion: A short phrase describing their core motivation or passion.
         - systemInstruction: A detailed prompt for an AI voice model. This must instruct the character to act as a conversational mentor. Their teaching style should be a balanced blend of sharing their own knowledge and insights, followed by asking insightful questions to guide the student's thinking and encourage discovery. They should not exclusively ask questions. It must also instruct them to periodically check the student's understanding. Crucially, it must inform them of two special abilities: changeEnvironment(description) to change the scene, and displayArtifact(name, description) to show an image, and encourage them to use these proactively to enhance the lesson. It must also specify a distinct, authentic-sounding accent based on their origin. The tone should match their personality.
         - suggestedPrompts: Three engaging, open-ended questions a user could ask this character. At least one should suggest using a visual ability (e.g., "Take me to...", "Show me...").
-        - voiceName: Based on their personality and historical context, suggest the most suitable voice from this list: ${AVAILABLE_VOICES.join(', ')}. Return only the name of the voice.`;
+        - voiceName: Based on their personality and historical context, suggest the most suitable voice from this list: ${AVAILABLE_VOICES.join(', ')}. Return only the name of the voice.
+        - ambienceTag: Based on the character's typical environment, select the most fitting keyword from this list: ${availableAmbienceTags}.`;
 
       const response = await ai.models.generateContent({
         model: "gemini-2.5-flash",
@@ -170,8 +173,9 @@ const CharacterCreator: React.FC<CharacterCreatorProps> = ({ onCharacterCreated,
               title: { type: Type.STRING }, bio: { type: Type.STRING }, timeframe: { type: Type.STRING }, expertise: { type: Type.STRING }, passion: { type: Type.STRING }, systemInstruction: { type: Type.STRING },
               suggestedPrompts: { type: Type.ARRAY, items: { type: Type.STRING } },
               voiceName: { type: Type.STRING },
+              ambienceTag: { type: Type.STRING },
             },
-            required: ["title", "bio", "timeframe", "expertise", "passion", "systemInstruction", "suggestedPrompts", "voiceName"]
+            required: ["title", "bio", "timeframe", "expertise", "passion", "systemInstruction", "suggestedPrompts", "voiceName", "ambienceTag"]
           },
         },
       });
@@ -273,38 +277,56 @@ const CharacterCreator: React.FC<CharacterCreatorProps> = ({ onCharacterCreated,
                 <h3 className="text-2xl font-semibold text-amber-300 mb-2">Review Their Persona</h3>
                 <p className="text-gray-400">The AI has drafted a personality. Feel free to edit any detail to match your vision.</p>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-h-[50vh] overflow-y-auto pr-2">
-                <div className="md:col-span-2">
-                    <label className="block text-sm font-medium text-gray-300">Title</label>
-                    <input type="text" value={persona.title} onChange={e => handlePersonaChange('title', e.target.value)} className="mt-1 w-full bg-gray-800 border border-gray-600 rounded-lg px-3 py-2" />
+            <div className="space-y-4 max-h-[50vh] overflow-y-auto pr-2">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="md:col-span-2">
+                        <label className="block text-sm font-medium text-gray-300">Title</label>
+                        <input type="text" value={persona.title} onChange={e => handlePersonaChange('title', e.target.value)} className="mt-1 w-full bg-gray-800 border border-gray-600 rounded-lg px-3 py-2" />
+                    </div>
+                    <div className="md:col-span-2">
+                        <label className="block text-sm font-medium text-gray-300">Bio (in first person)</label>
+                        <textarea value={persona.bio} onChange={e => handlePersonaChange('bio', e.target.value)} rows={4} className="mt-1 w-full bg-gray-800 border border-gray-600 rounded-lg px-3 py-2" />
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium text-gray-300">Timeframe</label>
+                        <input type="text" value={persona.timeframe} onChange={e => handlePersonaChange('timeframe', e.target.value)} className="mt-1 w-full bg-gray-800 border border-gray-600 rounded-lg px-3 py-2" />
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium text-gray-300">Expertise</label>
+                        <input type="text" value={persona.expertise} onChange={e => handlePersonaChange('expertise', e.target.value)} className="mt-1 w-full bg-gray-800 border border-gray-600 rounded-lg px-3 py-2" />
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium text-gray-300">Passion</label>
+                        <input type="text" value={persona.passion} onChange={e => handlePersonaChange('passion', e.target.value)} className="mt-1 w-full bg-gray-800 border border-gray-600 rounded-lg px-3 py-2" />
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium text-gray-300">Voice</label>
+                        <select value={persona.voiceName} onChange={e => handlePersonaChange('voiceName', e.target.value)} className="mt-1 w-full bg-gray-800 border border-gray-600 rounded-lg px-3 py-2">
+                            {AVAILABLE_VOICES.map(v => <option key={v} value={v}>{v}</option>)}
+                        </select>
+                    </div>
+                    <div className="md:col-span-2 space-y-2">
+                        <label className="block text-sm font-medium text-gray-300">Suggested Prompts</label>
+                        {persona.suggestedPrompts.map((prompt, i) => (
+                            <input key={i} type="text" value={prompt} onChange={e => handlePersonaChange('suggestedPrompts', persona.suggestedPrompts.map((p, j) => i === j ? e.target.value : p))} className="w-full bg-gray-800 border border-gray-600 rounded-lg px-3 py-2" />
+                        ))}
+                    </div>
                 </div>
-                <div className="md:col-span-2">
-                    <label className="block text-sm font-medium text-gray-300">Bio (in first person)</label>
-                    <textarea value={persona.bio} onChange={e => handlePersonaChange('bio', e.target.value)} rows={4} className="mt-1 w-full bg-gray-800 border border-gray-600 rounded-lg px-3 py-2" />
-                </div>
-                <div>
-                    <label className="block text-sm font-medium text-gray-300">Timeframe</label>
-                    <input type="text" value={persona.timeframe} onChange={e => handlePersonaChange('timeframe', e.target.value)} className="mt-1 w-full bg-gray-800 border border-gray-600 rounded-lg px-3 py-2" />
-                </div>
-                <div>
-                    <label className="block text-sm font-medium text-gray-300">Expertise</label>
-                    <input type="text" value={persona.expertise} onChange={e => handlePersonaChange('expertise', e.target.value)} className="mt-1 w-full bg-gray-800 border border-gray-600 rounded-lg px-3 py-2" />
-                </div>
-                <div>
-                    <label className="block text-sm font-medium text-gray-300">Passion</label>
-                    <input type="text" value={persona.passion} onChange={e => handlePersonaChange('passion', e.target.value)} className="mt-1 w-full bg-gray-800 border border-gray-600 rounded-lg px-3 py-2" />
-                </div>
-                <div>
-                    <label className="block text-sm font-medium text-gray-300">Voice</label>
-                    <select value={persona.voiceName} onChange={e => handlePersonaChange('voiceName', e.target.value)} className="mt-1 w-full bg-gray-800 border border-gray-600 rounded-lg px-3 py-2">
-                        {AVAILABLE_VOICES.map(v => <option key={v} value={v}>{v}</option>)}
-                    </select>
-                </div>
-                <div className="md:col-span-2 space-y-2">
-                    <label className="block text-sm font-medium text-gray-300">Suggested Prompts</label>
-                    {persona.suggestedPrompts.map((prompt, i) => (
-                        <input key={i} type="text" value={prompt} onChange={e => handlePersonaChange('suggestedPrompts', persona.suggestedPrompts.map((p, j) => i === j ? e.target.value : p))} className="w-full bg-gray-800 border border-gray-600 rounded-lg px-3 py-2" />
-                    ))}
+
+                <div className="pt-4">
+                    <label className="block text-sm font-medium text-gray-300 mb-2">Default Ambience</label>
+                    <div className="space-y-2">
+                        {AMBIENCE_LIBRARY.map(ambience => (
+                             <button 
+                                key={ambience.tag} 
+                                onClick={() => handlePersonaChange('ambienceTag', ambience.tag)}
+                                className={`w-full text-left p-3 rounded-lg border-2 flex items-center gap-4 transition-colors ${persona.ambienceTag === ambience.tag ? 'bg-amber-900/40 border-amber-400' : 'bg-gray-800 border-gray-600 hover:border-gray-500'}`}
+                            >
+                                <SoundIcon className={`w-6 h-6 flex-shrink-0 ${persona.ambienceTag === ambience.tag ? 'text-amber-300' : 'text-gray-400'}`} />
+                                <span className={`${persona.ambienceTag === ambience.tag ? 'text-amber-200' : 'text-gray-300'}`}>{ambience.description}</span>
+                            </button>
+                        ))}
+                    </div>
                 </div>
             </div>
             <div className="flex flex-col sm:flex-row gap-4 pt-4">

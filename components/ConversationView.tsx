@@ -2,12 +2,16 @@ import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react'
 import { GoogleGenAI, Type } from '@google/genai';
 import type { Character, ConversationTurn, SavedConversation } from '../types';
 import { useGeminiLive } from '../hooks/useGeminiLive';
+import { useAmbientAudio } from '../hooks/useAmbientAudio';
 import { ConnectionState } from '../types';
+import { AMBIENCE_LIBRARY } from '../constants';
 import MicrophoneIcon from './icons/MicrophoneIcon';
 import MicrophoneOffIcon from './icons/MicrophoneOffIcon';
 import WaveformIcon from './icons/WaveformIcon';
 import ThinkingIcon from './icons/ThinkingIcon';
 import SendIcon from './icons/SendIcon';
+import MuteIcon from './icons/MuteIcon';
+import UnmuteIcon from './icons/UnmuteIcon';
 
 const HISTORY_KEY = 'school-of-the-ancients-history';
 
@@ -101,6 +105,9 @@ const ConversationView: React.FC<ConversationViewProps> = ({ character, onEndCon
   const [isGeneratingVisual, setIsGeneratingVisual] = useState(false);
   const [generationMessage, setGenerationMessage] = useState('');
 
+  const initialAudioSrc = AMBIENCE_LIBRARY.find(a => a.tag === character.ambienceTag)?.audioSrc ?? null;
+  const { isMuted: isAmbienceMuted, toggleMute: toggleAmbienceMute, changeTrack: changeAmbienceTrack } = useAmbientAudio(initialAudioSrc);
+
   const placeholders = useMemo(() => {
     const prompts = [
       "Or type a message...",
@@ -192,13 +199,29 @@ const ConversationView: React.FC<ConversationViewProps> = ({ character, onEndCon
     try {
       if (!process.env.API_KEY) throw new Error("API_KEY not set.");
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-      const response = await ai.models.generateImages({
+      
+      const imagePromise = ai.models.generateImages({
         model: 'imagen-4.0-generate-001',
         prompt: `A photorealistic, atmospheric, wide-angle background of: ${description}, depicted authentically for the era of ${character.name} (${character.timeframe}). Cinematic and dramatic lighting. The scene should be evocative and immersive, without people or text.`,
         config: { numberOfImages: 1, outputMimeType: 'image/jpeg', aspectRatio: '16:9' },
       });
-      if (response.generatedImages && response.generatedImages.length > 0) {
-        const url = `data:image/jpeg;base64,${response.generatedImages[0].image.imageBytes}`;
+
+      const availableTags = AMBIENCE_LIBRARY.map(a => a.tag).join(', ');
+      const audioTagPromise = ai.models.generateContent({
+        model: "gemini-2.5-flash",
+        contents: `Based on the environment description: "${description}", select the single most fitting keyword from this list: ${availableTags}. Return ONLY the keyword.`
+      });
+
+      const [imageResponse, audioTagResponse] = await Promise.all([imagePromise, audioTagPromise]);
+      
+      const newTag = audioTagResponse.text.trim();
+      const newAudioSrc = AMBIENCE_LIBRARY.find(a => a.tag === newTag)?.audioSrc;
+      if (newAudioSrc) {
+        changeAmbienceTrack(newAudioSrc);
+      }
+      
+      if (imageResponse.generatedImages && imageResponse.generatedImages.length > 0) {
+        const url = `data:image/jpeg;base64,${imageResponse.generatedImages[0].image.imageBytes}`;
         onEnvironmentUpdate(url);
         setTranscript(prev => prev.map(turn => {
           if (turn.artifact?.id === environmentArtifactId) {
@@ -236,7 +259,7 @@ const ConversationView: React.FC<ConversationViewProps> = ({ character, onEndCon
     } finally {
       setIsGeneratingVisual(false);
     }
-  }, [onEnvironmentUpdate, character]);
+  }, [onEnvironmentUpdate, character, changeAmbienceTrack]);
 
   const handleArtifactDisplay = useCallback(async (name: string, description: string) => {
     const artifactId = `artifact_${Date.now()}`;
@@ -400,6 +423,9 @@ ${contextTranscript}
         setDynamicSuggestions([]);
         onEnvironmentUpdate(null);
         
+        const initialSrc = AMBIENCE_LIBRARY.find(a => a.tag === character.ambienceTag)?.audioSrc ?? null;
+        changeAmbienceTrack(initialSrc);
+        
         const clearedConversation: SavedConversation = {
             id: sessionIdRef.current,
             characterId: character.id,
@@ -494,26 +520,35 @@ ${contextTranscript}
             </div>
 
             <div className="flex items-center justify-center gap-4 mt-auto pt-6 flex-wrap">
-            <button
-                onClick={onEndConversation}
-                className="bg-red-800/70 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg transition-colors duration-300 border border-red-700"
-            >
-                End
-            </button>
-            <button
-                onClick={handleReset}
-                disabled={transcript.length === 0 && !environmentImageUrl}
-                className="bg-amber-800/70 hover:bg-amber-700 text-white font-bold py-2 px-4 rounded-lg transition-colors duration-300 border border-amber-700 disabled:opacity-50"
-            >
-                Reset
-            </button>
-            <button
-                onClick={() => toggleMicrophone()}
-                aria-label={isMicActive ? "Mute microphone" : "Unmute microphone"}
-                className={`p-2 rounded-full transition-colors duration-300 border ${isMicActive ? 'bg-blue-800/70 hover:bg-blue-700 border-blue-700' : 'bg-gray-700 hover:bg-gray-600 border-gray-600'}`}
-            >
-                {isMicActive ? <MicrophoneIcon className="w-6 h-6 text-white" /> : <MicrophoneOffIcon className="w-6 h-6 text-white" />}
-            </button>
+              <button
+                  onClick={onEndConversation}
+                  className="bg-red-800/70 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg transition-colors duration-300 border border-red-700"
+              >
+                  End
+              </button>
+              <button
+                  onClick={handleReset}
+                  disabled={transcript.length === 0 && !environmentImageUrl}
+                  className="bg-amber-800/70 hover:bg-amber-700 text-white font-bold py-2 px-4 rounded-lg transition-colors duration-300 border border-amber-700 disabled:opacity-50"
+              >
+                  Reset
+              </button>
+              <div className="flex items-center gap-2">
+                <button
+                    onClick={() => toggleMicrophone()}
+                    aria-label={isMicActive ? "Mute microphone" : "Unmute microphone"}
+                    className={`p-2 rounded-full transition-colors duration-300 border ${isMicActive ? 'bg-blue-800/70 hover:bg-blue-700 border-blue-700' : 'bg-gray-700 hover:bg-gray-600 border-gray-600'}`}
+                >
+                    {isMicActive ? <MicrophoneIcon className="w-6 h-6 text-white" /> : <MicrophoneOffIcon className="w-6 h-6 text-white" />}
+                </button>
+                <button
+                    onClick={toggleAmbienceMute}
+                    aria-label={isAmbienceMuted ? "Unmute ambient sound" : "Mute ambient sound"}
+                    className={`p-2 rounded-full transition-colors duration-300 border ${!isAmbienceMuted ? 'bg-green-800/70 hover:bg-green-700 border-green-700' : 'bg-gray-700 hover:bg-gray-600 border-gray-600'}`}
+                >
+                    {isAmbienceMuted ? <MuteIcon className="w-6 h-6 text-white" /> : <UnmuteIcon className="w-6 h-6 text-white" />}
+                </button>
+              </div>
             </div>
         </div>
         <div className="w-full md:w-2/3 bg-gray-900/50 p-4 rounded-lg border border-gray-700 h-[60vh] md:h-auto flex flex-col">

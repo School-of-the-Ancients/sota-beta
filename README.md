@@ -6,7 +6,6 @@ This project is a dynamic web application that allows you to speak with legendar
 
 ![School of the Ancients Screenshot](https://raw.githubusercontent.com/School-of-the-Ancients/sota-beta/9b4eedaf1b6af2165d08bacdf8a4e506dac43e15/sota-beta.png)
 
-
 ---
 
 ## Core Features
