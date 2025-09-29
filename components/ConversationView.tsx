@@ -12,6 +12,7 @@ import ThinkingIcon from './icons/ThinkingIcon';
 import SendIcon from './icons/SendIcon';
 import MuteIcon from './icons/MuteIcon';
 import UnmuteIcon from './icons/UnmuteIcon';
+import QuestProgressCard from './QuestProgressCard';
 
 const HISTORY_KEY = 'school-of-the-ancients-history';
 
@@ -21,6 +22,8 @@ interface ConversationViewProps {
   environmentImageUrl: string | null;
   onEnvironmentUpdate: (url: string | null) => void;
   activeQuest: Quest | null;
+  completedQuestIds: string[];
+  onCompleteQuest: (questId: string) => void;
   isSaving: boolean;
 }
 
@@ -99,13 +102,30 @@ const ArtifactDisplay: React.FC<{ artifact: NonNullable<ConversationTurn['artifa
     );
   };
 
-const ConversationView: React.FC<ConversationViewProps> = ({ character, onEndConversation, environmentImageUrl, onEnvironmentUpdate, activeQuest, isSaving }) => {
+const ConversationView: React.FC<ConversationViewProps> = ({
+  character,
+  onEndConversation,
+  environmentImageUrl,
+  onEnvironmentUpdate,
+  activeQuest,
+  completedQuestIds,
+  onCompleteQuest,
+  isSaving,
+}) => {
   const [transcript, setTranscript] = useState<ConversationTurn[]>([]);
   const [textInput, setTextInput] = useState('');
   const [dynamicSuggestions, setDynamicSuggestions] = useState<string[]>([]);
   const [isFetchingSuggestions, setIsFetchingSuggestions] = useState(false);
   const [isGeneratingVisual, setIsGeneratingVisual] = useState(false);
   const [generationMessage, setGenerationMessage] = useState('');
+
+  const isQuestCompleted = activeQuest ? completedQuestIds.includes(activeQuest.id) : false;
+
+  const handleQuestComplete = useCallback(() => {
+    if (activeQuest && !isQuestCompleted) {
+      onCompleteQuest(activeQuest.id);
+    }
+  }, [activeQuest, isQuestCompleted, onCompleteQuest]);
 
   const initialAudioSrc = AMBIENCE_LIBRARY.find(a => a.tag === character.ambienceTag)?.audioSrc ?? null;
   const { isMuted: isAmbienceMuted, toggleMute: toggleAmbienceMute, changeTrack: changeAmbienceTrack } = useAmbientAudio(initialAudioSrc);
@@ -507,10 +527,13 @@ ${contextTranscript}
             <p className="text-gray-400 italic">{character.title}</p>
 
             {activeQuest && (
-                <div className="mt-4 p-3 w-full max-w-xs bg-amber-900/50 border border-amber-800 rounded-lg text-center animate-fade-in">
-                    <p className="font-bold text-amber-300 text-sm">Active Quest</p>
-                    <p className="text-amber-200">{activeQuest.title}</p>
-                </div>
+              <div className="mt-4 w-full max-w-xs">
+                <QuestProgressCard
+                  quest={activeQuest}
+                  completed={isQuestCompleted}
+                  onComplete={handleQuestComplete}
+                />
+              </div>
             )}
             
             <div className="mt-6 text-left w-full max-w-xs">

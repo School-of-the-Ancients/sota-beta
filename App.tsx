@@ -15,6 +15,7 @@ import QuestIcon from './components/icons/QuestIcon';
 const CUSTOM_CHARACTERS_KEY = 'school-of-the-ancients-custom-characters';
 // Fix: Add history key constant for conversation management.
 const HISTORY_KEY = 'school-of-the-ancients-history';
+const COMPLETED_QUESTS_KEY = 'school-of-the-ancients-completed-quests';
 
 // Fix: Add helper functions to manage conversation history in localStorage.
 const loadConversations = (): SavedConversation[] => {
@@ -48,6 +49,19 @@ const App: React.FC = () => {
   const [customCharacters, setCustomCharacters] = useState<Character[]>([]);
   const [environmentImageUrl, setEnvironmentImageUrl] = useState<string | null>(null);
   const [activeQuest, setActiveQuest] = useState<Quest | null>(null);
+  const [completedQuestIds, setCompletedQuestIds] = useState<string[]>(() => {
+    if (typeof window === 'undefined') {
+      return [];
+    }
+
+    try {
+      const stored = window.localStorage.getItem(COMPLETED_QUESTS_KEY);
+      return stored ? JSON.parse(stored) : [];
+    } catch (error) {
+      console.error('Failed to load completed quests:', error);
+      return [];
+    }
+  });
   // Fix: Add isSaving state to manage the end conversation flow.
   const [isSaving, setIsSaving] = useState(false);
 
@@ -74,6 +88,14 @@ const App: React.FC = () => {
     }
   }, []); // customCharacters dependency is intentionally omitted to avoid re-running on delete
 
+  useEffect(() => {
+    try {
+      localStorage.setItem(COMPLETED_QUESTS_KEY, JSON.stringify(completedQuestIds));
+    } catch (error) {
+      console.error('Failed to persist completed quests:', error);
+    }
+  }, [completedQuestIds]);
+
   const handleSelectCharacter = (character: Character) => {
     setSelectedCharacter(character);
     setView('conversation');
@@ -96,6 +118,15 @@ const App: React.FC = () => {
     } else {
       console.error(`Character with ID ${quest.characterId} not found for the selected quest.`);
     }
+  };
+
+  const handleCompleteQuest = (questId: string) => {
+    setCompletedQuestIds(prev => {
+      if (prev.includes(questId)) {
+        return prev;
+      }
+      return [...prev, questId];
+    });
   };
 
   const handleCharacterCreated = (newCharacter: Character) => {
@@ -198,6 +229,8 @@ ${transcriptText}`;
             environmentImageUrl={environmentImageUrl}
             onEnvironmentUpdate={setEnvironmentImageUrl}
             activeQuest={activeQuest}
+            completedQuestIds={completedQuestIds}
+            onCompleteQuest={handleCompleteQuest}
             // Fix: Pass the isSaving prop to ConversationView.
             isSaving={isSaving}
           />
@@ -208,7 +241,15 @@ ${transcriptText}`;
         return <CharacterCreator onCharacterCreated={handleCharacterCreated} onBack={() => setView('selector')} />;
       case 'quests':
         const allCharacters = [...customCharacters, ...CHARACTERS];
-        return <QuestsView onBack={() => setView('selector')} onSelectQuest={handleSelectQuest} quests={QUESTS} characters={allCharacters} />;
+        return (
+          <QuestsView
+            onBack={() => setView('selector')}
+            onSelectQuest={handleSelectQuest}
+            quests={QUESTS}
+            characters={allCharacters}
+            completedQuestIds={completedQuestIds}
+          />
+        );
       case 'selector':
       default:
         return (
