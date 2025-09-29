@@ -64,7 +64,27 @@ const HistoryView: React.FC<HistoryViewProps> = ({ onBack }) => {
     let content = `Study Guide: Conversation with ${selectedConversation.characterName}\n`;
     content += `Date: ${new Date(selectedConversation.timestamp).toLocaleString()}\n`;
     content += `==================================================\n\n`;
-  
+
+    if (selectedConversation.questTitle || selectedConversation.questAssessment) {
+      content += `QUEST INFORMATION\n---------------------\n`;
+      if (selectedConversation.questTitle) {
+        content += `Quest: ${selectedConversation.questTitle}\n`;
+      }
+      if (selectedConversation.questAssessment) {
+        content += `Status: ${selectedConversation.questAssessment.passed ? 'Completed' : 'Needs Review'}\n`;
+        content += `Feedback: ${selectedConversation.questAssessment.feedback}\n`;
+        if (selectedConversation.questAssessment.evidence.length > 0) {
+          content += `Evidence:\n`;
+          selectedConversation.questAssessment.evidence.forEach(item => {
+            content += `- ${item}\n`;
+          });
+        }
+      } else {
+        content += 'Knowledge check not yet completed for this quest.\n';
+      }
+      content += `\n==================================================\n\n`;
+    }
+
     if (selectedConversation.summary) {
       content += `SUMMARY\n---------------------\n`;
       content += `${selectedConversation.summary.overview}\n\n`;
@@ -114,7 +134,45 @@ const HistoryView: React.FC<HistoryViewProps> = ({ onBack }) => {
               <p className="text-gray-400 text-sm">{new Date(selectedConversation.timestamp).toLocaleString()}</p>
             </div>
           </div>
-          
+
+          {(selectedConversation.questTitle || selectedConversation.questAssessment) && (
+            <div
+              className={`mb-4 p-4 rounded-lg border ${
+                selectedConversation.questAssessment
+                  ? selectedConversation.questAssessment.passed
+                    ? 'border-emerald-500/70 bg-emerald-900/30'
+                    : 'border-amber-500/70 bg-amber-900/30'
+                  : 'border-gray-600 bg-gray-800/40'
+              }`}
+            >
+              <p className="text-xs font-semibold uppercase tracking-wide text-gray-300">Learning Quest</p>
+              <h3 className="text-lg font-bold text-amber-100 mt-1">{selectedConversation.questTitle ?? 'Quest Session'}</h3>
+              {selectedConversation.questAssessment ? (
+                <>
+                  <p className="text-gray-200 mt-3 leading-relaxed">{selectedConversation.questAssessment.feedback}</p>
+                  {selectedConversation.questAssessment.evidence.length > 0 && (
+                    <ul className="list-disc list-inside mt-3 space-y-1 text-sm text-gray-200/90">
+                      {selectedConversation.questAssessment.evidence.map((item, index) => (
+                        <li key={`history-${selectedConversation.id}-evidence-${index}`}>{item}</li>
+                      ))}
+                    </ul>
+                  )}
+                  <p
+                    className={`mt-3 inline-flex items-center px-2 py-1 rounded-full text-xs font-semibold uppercase tracking-wide ${
+                      selectedConversation.questAssessment.passed
+                        ? 'bg-emerald-500/20 text-emerald-200'
+                        : 'bg-amber-500/20 text-amber-200'
+                    }`}
+                  >
+                    {selectedConversation.questAssessment.passed ? 'Completed' : 'Needs Review'}
+                  </p>
+                </>
+              ) : (
+                <p className="text-gray-300 mt-3">Knowledge check has not been completed for this quest yet.</p>
+              )}
+            </div>
+          )}
+
           {selectedConversation.summary && (
             <div className="mb-4 bg-gray-900/70 p-4 rounded-lg border border-amber-800">
               <h3 className="text-lg font-bold text-amber-300 mb-2">Key Takeaways</h3>
@@ -164,9 +222,23 @@ const HistoryView: React.FC<HistoryViewProps> = ({ onBack }) => {
             <div key={conv.id} className="bg-gray-800/50 p-4 rounded-lg border border-gray-700 flex flex-col sm:flex-row items-center justify-between gap-4 hover:bg-gray-700/50 transition-colors">
               <div className="flex items-center self-start sm:self-center">
                 <img src={conv.portraitUrl} alt={conv.characterName} className="w-12 h-12 rounded-full mr-4" />
-                <div>
+                <div className="flex flex-col">
                   <p className="font-bold text-lg text-amber-300">{conv.characterName}</p>
                   <p className="text-sm text-gray-400">{new Date(conv.timestamp).toLocaleString()}</p>
+                  {conv.questTitle && (
+                    <p className="text-xs text-amber-200 mt-1">Quest: {conv.questTitle}</p>
+                  )}
+                  {conv.questAssessment && (
+                    <span
+                      className={`mt-2 inline-flex items-center px-2 py-1 rounded-full text-xs font-semibold uppercase tracking-wide ${
+                        conv.questAssessment.passed
+                          ? 'bg-emerald-500/20 text-emerald-200'
+                          : 'bg-amber-500/20 text-amber-200'
+                      }`}
+                    >
+                      {conv.questAssessment.passed ? 'Completed' : 'Needs Review'}
+                    </span>
+                  )}
                 </div>
               </div>
               <div className="flex gap-2 self-end sm:self-center">

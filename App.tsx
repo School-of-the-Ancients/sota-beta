@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 // Fix: Add necessary imports for summary generation and conversation saving.
 import { GoogleGenAI, Type } from '@google/genai';
-import type { Character, Quest, ConversationTurn, SavedConversation, Summary } from './types';
+import type { Character, Quest, ConversationTurn, SavedConversation, Summary, QuestAssessment } from './types';
 import CharacterSelector from './components/CharacterSelector';
 import ConversationView from './components/ConversationView';
 import HistoryView from './components/HistoryView';
@@ -15,6 +15,7 @@ import QuestIcon from './components/icons/QuestIcon';
 const CUSTOM_CHARACTERS_KEY = 'school-of-the-ancients-custom-characters';
 // Fix: Add history key constant for conversation management.
 const HISTORY_KEY = 'school-of-the-ancients-history';
+const QUEST_COMPLETIONS_KEY = 'school-of-the-ancients-quest-completions';
 
 // Fix: Add helper functions to manage conversation history in localStorage.
 const loadConversations = (): SavedConversation[] => {
@@ -42,6 +43,24 @@ const saveConversationToLocalStorage = (conversation: SavedConversation) => {
   }
 };
 
+const loadCompletedQuests = (): string[] => {
+  try {
+    const raw = localStorage.getItem(QUEST_COMPLETIONS_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch (error) {
+    console.error('Failed to load completed quests:', error);
+    return [];
+  }
+};
+
+const saveCompletedQuests = (questIds: string[]) => {
+  try {
+    localStorage.setItem(QUEST_COMPLETIONS_KEY, JSON.stringify(questIds));
+  } catch (error) {
+    console.error('Failed to save completed quests:', error);
+  }
+};
+
 const App: React.FC = () => {
   const [selectedCharacter, setSelectedCharacter] = useState<Character | null>(null);
   const [view, setView] = useState<'selector' | 'conversation' | 'history' | 'creator' | 'quests'>('selector');
@@ -50,6 +69,12 @@ const App: React.FC = () => {
   const [activeQuest, setActiveQuest] = useState<Quest | null>(null);
   // Fix: Add isSaving state to manage the end conversation flow.
   const [isSaving, setIsSaving] = useState(false);
+  const [completedQuestIds, setCompletedQuestIds] = useState<string[]>([]);
+  const [lastQuestResult, setLastQuestResult] = useState<QuestAssessment | null>(null);
+
+  useEffect(() => {
+    setCompletedQuestIds(loadCompletedQuests());
+  }, []);
 
   useEffect(() => {
     // Load custom characters from local storage
@@ -121,63 +146,183 @@ const App: React.FC = () => {
     }
   };
 
-  // Fix: Implement summary generation and state reset on conversation end.
+  const handleDismissQuestResult = () => {
+    setLastQuestResult(null);
+  };
+
+  // Fix: Implement summary generation, quest evaluation, and state reset on conversation end.
   const handleEndConversation = async (transcript: ConversationTurn[], sessionId: string) => {
     if (!selectedCharacter) return;
     setIsSaving(true);
+    const questAtEnd = activeQuest;
+    let questContext: Quest | null = questAtEnd || null;
+    let questAssessment: QuestAssessment | null = null;
 
     try {
       const conversationHistory = loadConversations();
       const conversation = conversationHistory.find(c => c.id === sessionId);
+      const questForAssessment = questAtEnd || (conversation?.questId ? QUESTS.find(q => q.id === conversation.questId) || null : null);
+      questContext = questForAssessment;
 
-      if (conversation && transcript.length > 1) {
-        if (!process.env.API_KEY) {
-          console.error("API_KEY not set, skipping summary generation.");
+      const hasUserContribution = transcript.some(turn => turn.speaker === 'user' && turn.text.trim().length > 0);
+      const hasSubstantiveTranscript = transcript.length > 1 && hasUserContribution;
+      const transcriptText = transcript
+        .slice(1)
+        .map(turn => `${turn.speakerName}: ${turn.text}`)
+        .join('\n\n');
+
+      let aiClient: GoogleGenAI | null = null;
+      if (process.env.API_KEY) {
+        aiClient = new GoogleGenAI({ apiKey: process.env.API_KEY });
+      } else if (hasSubstantiveTranscript) {
+        console.error('API_KEY not set, skipping AI-powered evaluation.');
+      }
+
+      if (questForAssessment) {
+        if (!hasSubstantiveTranscript) {
+          questAssessment = {
+            questId: questForAssessment.id,
+            questTitle: questForAssessment.title,
+            passed: false,
+            feedback: 'The conversation was too brief to judge mastery. Try discussing the focus points with your mentor and then end the quest again.',
+            evidence: [],
+          };
+        } else if (!aiClient) {
+          questAssessment = {
+            questId: questForAssessment.id,
+            questTitle: questForAssessment.title,
+            passed: false,
+            feedback: 'Knowledge check unavailable because the AI key is not configured. Please try again once it is set.',
+            evidence: [],
+          };
         } else {
-          const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-          const transcriptText = transcript
-            .slice(1) // Exclude initial greeting
-            .map(turn => `${turn.speakerName}: ${turn.text}`)
-            .join('\n\n');
+          try {
+            const prompt = `You are an educational evaluator. Determine whether the student successfully completed the quest "${questForAssessment.title}" with the objective: "${questForAssessment.objective}". Consider the focus points: ${questForAssessment.focusPoints.join('; ')}.
 
-          if (transcriptText.trim()) {
+Review the transcript of the mentor and student below. Pass the student only if their own words show clear understanding, explanation, or application of the quest objective. Provide encouraging feedback even when they pass, and offer specific next steps when they do not.
+
+Return JSON with:
+- passed: boolean (true only when understanding is demonstrated)
+- feedback: string (2-3 sentences of constructive feedback tailored to the result)
+- evidence: array of 1-3 short bullet-style strings citing the student's contributions or gaps.
+
+Transcript:
+${transcriptText}`;
+
+            const response = await aiClient.models.generateContent({
+              model: 'gemini-2.5-flash',
+              contents: prompt,
+              config: {
+                responseMimeType: 'application/json',
+                responseSchema: {
+                  type: Type.OBJECT,
+                  properties: {
+                    passed: { type: Type.BOOLEAN },
+                    feedback: { type: Type.STRING },
+                    evidence: { type: Type.ARRAY, items: { type: Type.STRING } },
+                  },
+                  required: ['passed', 'feedback'],
+                },
+              },
+            });
+
+            const data = JSON.parse(response.text);
+            questAssessment = {
+              questId: questForAssessment.id,
+              questTitle: questForAssessment.title,
+              passed: Boolean(data.passed),
+              feedback: data.feedback || 'Great work today! Keep exploring the topic to deepen your mastery.',
+              evidence: Array.isArray(data.evidence) ? data.evidence : [],
+            };
+          } catch (error) {
+            console.error('Failed to evaluate quest knowledge:', error);
+            questAssessment = {
+              questId: questForAssessment.id,
+              questTitle: questForAssessment.title,
+              passed: false,
+              feedback: 'Knowledge check could not be completed due to an unexpected error. Please try ending the quest again.',
+              evidence: [],
+            };
+          }
+        }
+      }
+
+      let summary: Summary | undefined;
+      if (conversation && hasSubstantiveTranscript) {
+        if (!aiClient) {
+          console.error('API_KEY not set, skipping summary generation.');
+        } else {
+          try {
             const prompt = `Please summarize the following educational dialogue with ${selectedCharacter.name}. Provide a concise one-paragraph overview of the key topics discussed, and then list 3-5 of the most important takeaways or concepts as bullet points.
 
 Dialogue:
 ${transcriptText}`;
 
-            const response = await ai.models.generateContent({
-              model: "gemini-2.5-flash",
+            const response = await aiClient.models.generateContent({
+              model: 'gemini-2.5-flash',
               contents: prompt,
               config: {
-                responseMimeType: "application/json",
+                responseMimeType: 'application/json',
                 responseSchema: {
                   type: Type.OBJECT,
                   properties: {
-                    overview: { type: Type.STRING, description: "A one-paragraph overview of the conversation." },
+                    overview: { type: Type.STRING, description: 'A one-paragraph overview of the conversation.' },
                     takeaways: {
                       type: Type.ARRAY,
                       items: { type: Type.STRING },
-                      description: "A list of 3-5 key takeaways from the conversation."
-                    }
+                      description: 'A list of 3-5 key takeaways from the conversation.',
+                    },
                   },
-                  required: ["overview", "takeaways"]
+                  required: ['overview', 'takeaways'],
                 },
               },
             });
 
-            const summary: Summary = JSON.parse(response.text);
-            const updatedConversation: SavedConversation = {
-              ...conversation,
-              summary,
-              timestamp: Date.now(),
-            };
-            saveConversationToLocalStorage(updatedConversation);
+            summary = JSON.parse(response.text) as Summary;
+          } catch (error) {
+            console.error('Failed to generate summary:', error);
           }
         }
       }
+
+      if (conversation) {
+        const updatedConversation: SavedConversation = {
+          ...conversation,
+          summary: summary ?? conversation.summary,
+          timestamp: Date.now(),
+          transcript,
+          questId: questForAssessment?.id ?? conversation.questId,
+          questTitle: questForAssessment?.title ?? conversation.questTitle,
+          questAssessment: questAssessment ?? conversation.questAssessment,
+        };
+        saveConversationToLocalStorage(updatedConversation);
+      }
+
+      if (questAssessment) {
+        setLastQuestResult(questAssessment);
+        if (questAssessment.passed) {
+          const questId = questAssessment.questId;
+          setCompletedQuestIds(prev => {
+            if (prev.includes(questId)) {
+              return prev;
+            }
+            const updated = [...prev, questId];
+            saveCompletedQuests(updated);
+            return updated;
+          });
+        }
+      }
     } catch (error) {
-      console.error("Failed to generate summary:", error);
+      console.error('Failed to finalize conversation:', error);
+      if (questContext) {
+        setLastQuestResult({
+          questId: questContext.id,
+          questTitle: questContext.title,
+          passed: false,
+          feedback: 'Knowledge check could not be completed due to an unexpected error. Please try ending the quest again.',
+          evidence: [],
+        });
+      }
     } finally {
       setIsSaving(false);
       setSelectedCharacter(null);
@@ -208,11 +353,55 @@ ${transcriptText}`;
         return <CharacterCreator onCharacterCreated={handleCharacterCreated} onBack={() => setView('selector')} />;
       case 'quests':
         const allCharacters = [...customCharacters, ...CHARACTERS];
-        return <QuestsView onBack={() => setView('selector')} onSelectQuest={handleSelectQuest} quests={QUESTS} characters={allCharacters} />;
+        return (
+          <QuestsView
+            onBack={() => setView('selector')}
+            onSelectQuest={handleSelectQuest}
+            quests={QUESTS}
+            characters={allCharacters}
+            completedQuestIds={completedQuestIds}
+            latestResult={lastQuestResult}
+            onDismissResult={handleDismissQuestResult}
+          />
+        );
       case 'selector':
       default:
         return (
           <div className="text-center animate-fade-in">
+            {lastQuestResult && (
+              <div
+                className={`max-w-3xl mx-auto mb-8 p-5 rounded-lg border text-left ${
+                  lastQuestResult.passed
+                    ? 'border-emerald-500/70 bg-emerald-900/30'
+                    : 'border-amber-500/70 bg-amber-900/30'
+                }`}
+              >
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-gray-300">
+                      {lastQuestResult.passed ? 'Quest Completed' : 'Quest Review Needed'}
+                    </p>
+                    <h3 className="text-2xl font-bold text-amber-100 mt-1">
+                      {lastQuestResult.questTitle}
+                    </h3>
+                  </div>
+                  <button
+                    onClick={handleDismissQuestResult}
+                    className="text-xs font-semibold text-gray-300 hover:text-white bg-gray-800/60 border border-gray-700 px-3 py-1 rounded-md transition-colors"
+                  >
+                    Dismiss
+                  </button>
+                </div>
+                <p className="text-gray-200 mt-3 leading-relaxed">{lastQuestResult.feedback}</p>
+                {lastQuestResult.evidence.length > 0 && (
+                  <ul className="list-disc list-inside mt-3 space-y-1 text-sm text-gray-200/90">
+                    {lastQuestResult.evidence.map((item, index) => (
+                      <li key={`${lastQuestResult.questId}-evidence-${index}`}>{item}</li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            )}
              <p className="max-w-3xl mx-auto mb-8 text-gray-400 text-lg">
                 Engage in real-time voice conversations with legendary minds from history, or embark on a guided Learning Quest to master a new subject.
             </p>
