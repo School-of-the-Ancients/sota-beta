@@ -432,6 +432,8 @@ ${contextTranscript}
   useEffect(() => {
     if (transcript.length === 0 && !environmentImageUrl) return;
 
+    const history = loadConversations();
+    const existingConversation = history.find(c => c.id === sessionIdRef.current);
     const conversation: SavedConversation = {
       id: sessionIdRef.current,
       characterId: character.id,
@@ -440,9 +442,11 @@ ${contextTranscript}
       timestamp: Date.now(),
       transcript,
       environmentImageUrl: environmentImageUrl || undefined,
+      questId: activeQuest?.id ?? existingConversation?.questId,
+      questEvaluation: existingConversation?.questEvaluation,
     };
     saveConversationToLocalStorage(conversation);
-  }, [transcript, character, environmentImageUrl]);
+  }, [transcript, character, environmentImageUrl, activeQuest]);
 
   const handleReset = () => {
     if (transcript.length === 0 && !environmentImageUrl) return;
@@ -455,10 +459,12 @@ ${contextTranscript}
         setTranscript([greetingTurn]);
         setDynamicSuggestions([]);
         onEnvironmentUpdate(null);
-        
+
         const initialSrc = AMBIENCE_LIBRARY.find(a => a.tag === character.ambienceTag)?.audioSrc ?? null;
         changeAmbienceTrack(initialSrc);
-        
+
+        const history = loadConversations();
+        const existingConversation = history.find(c => c.id === sessionIdRef.current);
         const clearedConversation: SavedConversation = {
             id: sessionIdRef.current,
             characterId: character.id,
@@ -467,6 +473,8 @@ ${contextTranscript}
             timestamp: Date.now(),
             transcript: [greetingTurn],
             environmentImageUrl: undefined,
+            questId: activeQuest?.id ?? existingConversation?.questId,
+            questEvaluation: existingConversation?.questEvaluation,
         };
         saveConversationToLocalStorage(clearedConversation);
     }

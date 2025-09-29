@@ -2,6 +2,9 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import type { SavedConversation, ConversationTurn } from '../types';
 import DownloadIcon from './icons/DownloadIcon';
+import QuestIcon from './icons/QuestIcon';
+import CheckCircleIcon from './icons/CheckCircleIcon';
+import { QUESTS } from '../constants';
 
 const HISTORY_KEY = 'school-of-the-ancients-history';
 
@@ -101,6 +104,7 @@ const HistoryView: React.FC<HistoryViewProps> = ({ onBack }) => {
   }, [history]);
 
   if (selectedConversation) {
+    const questDetails = selectedConversation.questId ? QUESTS.find(q => q.id === selectedConversation.questId) : null;
     return (
       <div className="max-w-4xl mx-auto bg-cover bg-center bg-[#202020] p-4 md:p-6 rounded-2xl shadow-2xl border border-gray-700 animate-fade-in relative"
         style={{ backgroundImage: selectedConversation.environmentImageUrl ? `url(${selectedConversation.environmentImageUrl})` : 'none' }}
@@ -122,6 +126,33 @@ const HistoryView: React.FC<HistoryViewProps> = ({ onBack }) => {
               <ul className="list-disc list-inside space-y-1 text-gray-300">
                 {selectedConversation.summary.takeaways.map((item, i) => <li key={i}>{item}</li>)}
               </ul>
+            </div>
+          )}
+
+          {selectedConversation.questEvaluation && (
+            <div className={`mb-4 p-4 rounded-lg border ${selectedConversation.questEvaluation.status === 'completed' ? 'border-emerald-500/50 bg-emerald-500/10 text-emerald-100' : 'border-amber-500/60 bg-amber-500/10 text-amber-100'}`}>
+              <div className="flex items-start justify-between gap-3 mb-3">
+                <div className="flex items-center gap-2">
+                  {selectedConversation.questEvaluation.status === 'completed' ? (
+                    <CheckCircleIcon className="w-5 h-5" />
+                  ) : (
+                    <QuestIcon className="w-5 h-5" />
+                  )}
+                  <div>
+                    <p className="text-sm font-semibold uppercase tracking-wide">Knowledge Check</p>
+                    {questDetails && <p className="text-lg font-bold">{questDetails.title}</p>}
+                  </div>
+                </div>
+                <span className="text-xs text-white/70">{new Date(selectedConversation.questEvaluation.lastChecked).toLocaleString()}</span>
+              </div>
+              <p className="text-sm leading-relaxed opacity-90">{selectedConversation.questEvaluation.rationale}</p>
+              {selectedConversation.questEvaluation.demonstratedPoints.length > 0 && (
+                <ul className="mt-3 list-disc list-inside space-y-1 text-sm opacity-80">
+                  {selectedConversation.questEvaluation.demonstratedPoints.map((point, i) => (
+                    <li key={i}>{point}</li>
+                  ))}
+                </ul>
+              )}
             </div>
           )}
 
@@ -167,6 +198,12 @@ const HistoryView: React.FC<HistoryViewProps> = ({ onBack }) => {
                 <div>
                   <p className="font-bold text-lg text-amber-300">{conv.characterName}</p>
                   <p className="text-sm text-gray-400">{new Date(conv.timestamp).toLocaleString()}</p>
+                  {conv.questEvaluation && (
+                    <span className={`mt-1 inline-flex items-center gap-1 text-xs font-semibold uppercase tracking-wide px-2 py-1 rounded-full ${conv.questEvaluation.status === 'completed' ? 'bg-emerald-500/20 text-emerald-200' : 'bg-amber-500/20 text-amber-200'}`}>
+                      {conv.questEvaluation.status === 'completed' ? <CheckCircleIcon className="w-3 h-3" /> : <QuestIcon className="w-3 h-3" />}
+                      {conv.questEvaluation.status === 'completed' ? 'Quest Completed' : 'Needs Review'}
+                    </span>
+                  )}
                 </div>
               </div>
               <div className="flex gap-2 self-end sm:self-center">

@@ -49,6 +49,13 @@ export interface Summary {
   takeaways: string[];
 }
 
+export interface QuestProgressRecord {
+  status: 'completed' | 'incomplete';
+  rationale: string;
+  demonstratedPoints: string[];
+  lastChecked: number;
+}
+
 export interface SavedConversation {
   id: string;
   characterId: string;
@@ -58,6 +65,8 @@ export interface SavedConversation {
   transcript: ConversationTurn[];
   environmentImageUrl?: string;
   summary?: Summary;
+  questId?: string;
+  questEvaluation?: QuestProgressRecord;
 }
 
 export interface Quest {

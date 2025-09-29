@@ -1,16 +1,18 @@
 
 import React from 'react';
-import type { Quest, Character } from '../types';
+import type { Quest, Character, QuestProgressRecord } from '../types';
 import QuestIcon from './icons/QuestIcon';
+import CheckCircleIcon from './icons/CheckCircleIcon';
 
 interface QuestsViewProps {
   quests: Quest[];
   characters: Character[];
   onSelectQuest: (quest: Quest) => void;
   onBack: () => void;
+  questProgress: Record<string, QuestProgressRecord>;
 }
 
-const QuestsView: React.FC<QuestsViewProps> = ({ quests, characters, onSelectQuest, onBack }) => {
+const QuestsView: React.FC<QuestsViewProps> = ({ quests, characters, onSelectQuest, onBack, questProgress }) => {
   return (
     <div className="max-w-4xl mx-auto animate-fade-in">
       <div className="flex justify-between items-center mb-6">
@@ -34,9 +36,16 @@ const QuestsView: React.FC<QuestsViewProps> = ({ quests, characters, onSelectQue
           {quests.map((quest) => {
             const character = characters.find(c => c.id === quest.characterId);
             if (!character) return null;
+            const progress = questProgress[quest.id];
+            const isCompleted = progress?.status === 'completed';
+            const demonstratedPoints = progress?.demonstratedPoints?.filter(point => point.trim()) ?? [];
+            const previewPoints = demonstratedPoints.slice(0, 3);
 
             return (
-              <div key={quest.id} className="bg-gray-800/50 p-5 rounded-lg border border-gray-700 flex flex-col text-center hover:border-amber-400 transition-colors duration-300">
+              <div
+                key={quest.id}
+                className={`relative bg-gray-800/50 p-5 rounded-lg border ${isCompleted ? 'border-emerald-500/40 hover:border-emerald-400/80' : 'border-gray-700 hover:border-amber-400'} flex flex-col text-center transition-colors duration-300`}
+              >
                 <img src={character.portraitUrl} alt={character.name} className="w-24 h-24 rounded-full mx-auto mb-4 border-2 border-amber-300" />
                 <h3 className="font-bold text-xl text-amber-300">{quest.title}</h3>
                 <p className="text-sm text-gray-400 mt-1">with {character.name}</p>
@@ -60,11 +69,41 @@ const QuestsView: React.FC<QuestsViewProps> = ({ quests, characters, onSelectQue
                     </ul>
                   </div>
                 </div>
+                {progress && (
+                  <div className={`mt-4 text-left text-sm rounded-lg border ${isCompleted ? 'border-emerald-500/50 bg-emerald-500/10 text-emerald-100' : 'border-amber-500/50 bg-amber-500/10 text-amber-100'} p-3 space-y-2`}>
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-2">
+                        {isCompleted ? (
+                          <CheckCircleIcon className="w-4 h-4" />
+                        ) : (
+                          <QuestIcon className="w-4 h-4" />
+                        )}
+                        <span className="font-semibold uppercase tracking-wide text-xs">
+                          {isCompleted ? 'Completed' : 'Needs Review'}
+                        </span>
+                      </div>
+                      {progress.lastChecked && (
+                        <span className="text-[11px] text-white/70">{new Date(progress.lastChecked).toLocaleDateString()}</span>
+                      )}
+                    </div>
+                    <p className="opacity-90 leading-snug">{progress.rationale}</p>
+                    {previewPoints.length > 0 && (
+                      <ul className="list-disc list-inside space-y-1 opacity-80">
+                        {previewPoints.map(point => (
+                          <li key={point}>{point}</li>
+                        ))}
+                        {demonstratedPoints.length > previewPoints.length && (
+                          <li className="italic">…and more</li>
+                        )}
+                      </ul>
+                    )}
+                  </div>
+                )}
                 <button
-                    onClick={() => onSelectQuest(quest)}
-                    className="mt-6 bg-amber-600 hover:bg-amber-500 text-black font-bold py-2 px-4 rounded-lg transition-colors w-full"
+                  onClick={() => onSelectQuest(quest)}
+                  className={`mt-6 font-bold py-2 px-4 rounded-lg transition-colors w-full ${isCompleted ? 'bg-emerald-500 hover:bg-emerald-400 text-black' : 'bg-amber-600 hover:bg-amber-500 text-black'}`}
                 >
-                    Begin Quest
+                  {isCompleted ? 'Revisit Quest' : 'Begin Quest'}
                 </button>
               </div>
             );
