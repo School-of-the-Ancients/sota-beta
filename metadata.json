@@ -1,6 +1,6 @@
 {
   "name": "v2 School of the Ancients",
-  "description": "quests added, operator broken and looping and responding twice, ",
+  "description": "Engage in real-time voice conversations with legendary scientific minds like Galileo, Leonardo da Vinci, and Isaac Newton, powered by the Gemini Live API.",
   "requestFramePermissions": [
     "microphone"
   ]
