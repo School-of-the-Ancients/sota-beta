@@ -510,6 +510,9 @@ ${contextTranscript}
                 <div className="mt-4 p-3 w-full max-w-xs bg-amber-900/50 border border-amber-800 rounded-lg text-center animate-fade-in">
                     <p className="font-bold text-amber-300 text-sm">Active Quest</p>
                     <p className="text-amber-200">{activeQuest.title}</p>
+                    <p className="text-xs text-amber-100/90 leading-relaxed mt-2">
+                        {activeQuest.objective}
+                    </p>
                 </div>
             )}
             

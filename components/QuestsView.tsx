@@ -41,11 +41,15 @@ const QuestsView: React.FC<QuestsViewProps> = ({ quests, characters, onSelectQue
                 <h3 className="font-bold text-xl text-amber-300">{quest.title}</h3>
                 <p className="text-sm text-gray-400 mt-1 mb-4">with {character.name}</p>
                 <p className="text-gray-300 flex-grow text-sm mb-6">{quest.description}</p>
-                <button 
-                    onClick={() => onSelectQuest(quest)} 
+                <div className="bg-gray-900/60 border border-amber-900/60 rounded-md p-3 mb-6 text-left">
+                  <p className="uppercase text-[11px] tracking-wide text-amber-500 font-semibold">Quest Objective</p>
+                  <p className="text-sm text-amber-100 leading-relaxed mt-1">{quest.objective}</p>
+                </div>
+                <button
+                    onClick={() => onSelectQuest(quest)}
                     className="mt-auto bg-amber-600 hover:bg-amber-500 text-black font-bold py-2 px-4 rounded-lg transition-colors w-full"
                 >
-                    Begin Quest
+                  Begin Quest
                 </button>
               </div>
             );
