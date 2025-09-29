@@ -152,72 +152,12 @@ export const useGeminiLive = (
         });
     }, []);
 
-    const cleanupResources = useCallback((options?: { closeSession?: boolean }) => {
-        const shouldCloseSession = options?.closeSession ?? true;
-
-        const sessionPromise = sessionPromiseRef.current;
-        sessionPromiseRef.current = null;
-
-        if (shouldCloseSession && sessionPromise) {
-            sessionPromise
-                .then(session => {
-                    try {
-                        session.close();
-                    } catch (err) {
-                        console.warn('Session close failed:', err);
-                    }
-                })
-                .catch(err => {
-                    console.warn('Error during session close:', err);
-                });
-        }
-
-        mediaStreamRef.current?.getTracks().forEach(track => track.stop());
-        mediaStreamRef.current = null;
-
-        const scriptProcessor = scriptProcessorRef.current;
-        const mediaSource = mediaStreamSourceRef.current;
-        if (scriptProcessor && mediaSource) {
-            try {
-                mediaSource.disconnect(scriptProcessor);
-                scriptProcessor.disconnect();
-            } catch (err) {
-                // Best effort: Web Audio graph may already be torn down.
-            }
-        }
-        if (scriptProcessor) {
-            scriptProcessor.onaudioprocess = null;
-        }
-        scriptProcessorRef.current = null;
-        mediaStreamSourceRef.current = null;
-
-        audioBufferSources.current.forEach(source => {
-            try {
-                source.stop();
-            } catch (err) {
-                // Source might already be stopped; ignore.
-            }
-        });
-        audioBufferSources.current.clear();
-        nextStartTimeRef.current = 0;
-
-        if (inputAudioContextRef.current) {
-            inputAudioContextRef.current.close().catch(() => undefined);
-        }
-        if (outputAudioContextRef.current) {
-            outputAudioContextRef.current.close().catch(() => undefined);
-        }
-
-        inputAudioContextRef.current = null;
-        outputAudioContextRef.current = null;
-    }, []);
-
     const sendTextMessage = useCallback((text: string) => {
         if (!text.trim()) return;
-
+        
         onTurnCompleteRef.current({ user: text, model: '' });
         userTranscriptionRef.current = ''; // Clear after adding to transcript
-
+        
         setConnectionState(ConnectionState.THINKING);
         sessionPromiseRef.current?.then((session) => {
             try {
@@ -300,21 +240,15 @@ export const useGeminiLive = (
                                   } else if (fc.name === 'displayArtifact' && fc.args && typeof fc.args.name === 'string' && typeof fc.args.description === 'string') {
                                     onArtifactDisplayRequestRef.current(fc.args.name, fc.args.description);
                                   }
-
+                        
                                   sessionPromiseRef.current?.then((session) => {
-                                    try {
-                                      session.sendToolResponse({
-                                        functionResponses: {
-                                          id: fc.id,
-                                          name: fc.name,
-                                          response: { result: "ok, action started" },
-                                        }
-                                      });
-                                    } catch (err) {
-                                      console.warn('Error sending tool response; session may be closed.', err);
-                                    }
-                                  }).catch(err => {
-                                    console.warn('Failed to send tool response; session may be closing.', err);
+                                    session.sendToolResponse({
+                                      functionResponses: {
+                                        id: fc.id,
+                                        name: fc.name,
+                                        response: { result: "ok, action started" },
+                                      }
+                                    });
                                   });
                                 }
                               }
@@ -375,11 +309,9 @@ export const useGeminiLive = (
                     },
                     onerror: (e: ErrorEvent) => {
                         console.error('Session error:', e);
-                        cleanupResources({ closeSession: false });
                         setConnectionState(ConnectionState.ERROR);
                     },
                     onclose: () => {
-                        cleanupResources({ closeSession: false });
                         setConnectionState(ConnectionState.DISCONNECTED);
                     },
                 },
@@ -409,9 +341,34 @@ export const useGeminiLive = (
     }, [systemInstruction, voiceName]);
 
     const disconnect = useCallback(() => {
-        cleanupResources();
+        sessionPromiseRef.current?.then((session) => session.close()).catch(err => {
+            console.warn('Error during session close:', err);
+        });
+
+        mediaStreamRef.current?.getTracks().forEach(track => track.stop());
+
+        if (scriptProcessorRef.current && mediaStreamSourceRef.current) {
+            try {
+                mediaStreamSourceRef.current.disconnect(scriptProcessorRef.current);
+                scriptProcessorRef.current.disconnect();
+            } catch (e) {
+                // Ignore errors
+            }
+        }
+        scriptProcessorRef.current = null;
+        mediaStreamSourceRef.current = null;
+
+
+        inputAudioContextRef.current?.close().catch(console.error);
+        outputAudioContextRef.current?.close().catch(console.error);
+
+        inputAudioContextRef.current = null;
+        outputAudioContextRef.current = null;
+        mediaStreamRef.current = null;
+        sessionPromiseRef.current = null;
+
         setConnectionState(ConnectionState.DISCONNECTED);
-    }, [cleanupResources]);
+    }, []);
 
     useEffect(() => {
         connect();
