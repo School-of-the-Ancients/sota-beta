@@ -1,6 +1,7 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import type { SavedConversation, ConversationTurn } from '../types';
+import DownloadIcon from './icons/DownloadIcon';
 
 const HISTORY_KEY = 'school-of-the-ancients-history';
 
@@ -57,6 +58,44 @@ const HistoryView: React.FC<HistoryViewProps> = ({ onBack }) => {
     }
   };
 
+  const handleDownload = () => {
+    if (!selectedConversation) return;
+  
+    let content = `Study Guide: Conversation with ${selectedConversation.characterName}\n`;
+    content += `Date: ${new Date(selectedConversation.timestamp).toLocaleString()}\n`;
+    content += `==================================================\n\n`;
+  
+    if (selectedConversation.summary) {
+      content += `SUMMARY\n---------------------\n`;
+      content += `${selectedConversation.summary.overview}\n\n`;
+      content += `Key Takeaways:\n`;
+      selectedConversation.summary.takeaways.forEach(item => {
+        content += `- ${item}\n`;
+      });
+      content += `\n==================================================\n\n`;
+    }
+  
+    content += `FULL TRANSCRIPT\n---------------------\n\n`;
+    selectedConversation.transcript.forEach(turn => {
+      content += `${turn.speakerName}:\n${turn.text}\n\n`;
+      if (turn.artifact && turn.artifact.imageUrl && !turn.artifact.loading) {
+        content += `[Artifact Displayed: ${turn.artifact.name}]\n\n`;
+      }
+    });
+  
+    const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    const characterNameForFile = selectedConversation.characterName.replace(/\s+/g, '-');
+    const dateForFile = new Date(selectedConversation.timestamp).toISOString().split('T')[0];
+    link.download = `SotA-Guide-${characterNameForFile}-${dateForFile}.txt`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
   const sortedHistory = useMemo(() => {
     return [...history].sort((a, b) => b.timestamp - a.timestamp);
   }, [history]);
@@ -75,6 +114,17 @@ const HistoryView: React.FC<HistoryViewProps> = ({ onBack }) => {
               <p className="text-gray-400 text-sm">{new Date(selectedConversation.timestamp).toLocaleString()}</p>
             </div>
           </div>
+          
+          {selectedConversation.summary && (
+            <div className="mb-4 bg-gray-900/70 p-4 rounded-lg border border-amber-800">
+              <h3 className="text-lg font-bold text-amber-300 mb-2">Key Takeaways</h3>
+              <p className="text-gray-300 mb-3">{selectedConversation.summary.overview}</p>
+              <ul className="list-disc list-inside space-y-1 text-gray-300">
+                {selectedConversation.summary.takeaways.map((item, i) => <li key={i}>{item}</li>)}
+              </ul>
+            </div>
+          )}
+
           <div className="bg-gray-900/50 p-4 rounded-lg border border-gray-700 max-h-[60vh] overflow-y-auto space-y-4">
             {selectedConversation.transcript.map((turn, index) => (
               <div key={index} className={`p-3 rounded-lg border ${turn.speaker === 'user' ? 'bg-blue-900/20 border-blue-800/50' : 'bg-teal-900/20 border-teal-800/50'}`}>
@@ -84,9 +134,15 @@ const HistoryView: React.FC<HistoryViewProps> = ({ onBack }) => {
               </div>
             ))}
           </div>
-          <button onClick={() => setSelectedConversation(null)} className="mt-6 bg-amber-600 hover:bg-amber-500 text-black font-bold py-2 px-6 rounded-lg transition-colors">
-            Back to History
-          </button>
+          <div className="flex flex-col sm:flex-row gap-4 mt-6">
+            <button onClick={() => setSelectedConversation(null)} className="bg-amber-600 hover:bg-amber-500 text-black font-bold py-2 px-6 rounded-lg transition-colors">
+              Back to History
+            </button>
+            <button onClick={handleDownload} className="flex items-center justify-center gap-2 bg-blue-800/70 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded-lg transition-colors">
+              <DownloadIcon className="w-5 h-5" />
+              Download Study Guide
+            </button>
+          </div>
         </div>
       </div>
     );

@@ -1,6 +1,6 @@
 import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { GoogleGenAI, Type } from '@google/genai';
-import type { Character, ConversationTurn, SavedConversation } from '../types';
+import type { Character, ConversationTurn, SavedConversation, Quest } from '../types';
 import { useGeminiLive } from '../hooks/useGeminiLive';
 import { useAmbientAudio } from '../hooks/useAmbientAudio';
 import { ConnectionState } from '../types';
@@ -17,9 +17,11 @@ const HISTORY_KEY = 'school-of-the-ancients-history';
 
 interface ConversationViewProps {
   character: Character;
-  onEndConversation: () => void;
+  onEndConversation: (transcript: ConversationTurn[], sessionId: string) => void;
   environmentImageUrl: string | null;
   onEnvironmentUpdate: (url: string | null) => void;
+  activeQuest: Quest | null;
+  isSaving: boolean;
 }
 
 const loadConversations = (): SavedConversation[] => {
@@ -97,7 +99,7 @@ const ArtifactDisplay: React.FC<{ artifact: NonNullable<ConversationTurn['artifa
     );
   };
 
-const ConversationView: React.FC<ConversationViewProps> = ({ character, onEndConversation, environmentImageUrl, onEnvironmentUpdate }) => {
+const ConversationView: React.FC<ConversationViewProps> = ({ character, onEndConversation, environmentImageUrl, onEnvironmentUpdate, activeQuest, isSaving }) => {
   const [transcript, setTranscript] = useState<ConversationTurn[]>([]);
   const [textInput, setTextInput] = useState('');
   const [dynamicSuggestions, setDynamicSuggestions] = useState<string[]>([]);
@@ -141,18 +143,34 @@ const ConversationView: React.FC<ConversationViewProps> = ({ character, onEndCon
 
   const sessionIdRef = useRef(`conv_${character.id}_${Date.now()}`);
 
-  // Load existing conversation on mount
+  // Load existing conversation or start a new one with a greeting
   useEffect(() => {
-    const history = loadConversations();
-    const existingConversation = history.find(c => c.characterId === character.id);
-    if (existingConversation) {
-        setTranscript(existingConversation.transcript);
-        onEnvironmentUpdate(existingConversation.environmentImageUrl || null);
-        sessionIdRef.current = existingConversation.id; 
+    const greetingTurn: ConversationTurn = {
+      speaker: 'model',
+      speakerName: character.name,
+      text: character.greeting,
+    };
+
+    if (activeQuest) {
+      // Start a fresh conversation for a quest
+      setTranscript([greetingTurn]);
+      onEnvironmentUpdate(null);
+      sessionIdRef.current = `quest_${activeQuest.id}_${Date.now()}`;
     } else {
-        onEnvironmentUpdate(null);
+      const history = loadConversations();
+      const existingConversation = history.find(c => c.characterId === character.id);
+      if (existingConversation && existingConversation.transcript.length > 0) {
+          setTranscript(existingConversation.transcript);
+          onEnvironmentUpdate(existingConversation.environmentImageUrl || null);
+          sessionIdRef.current = existingConversation.id; 
+      } else {
+          // This is a new conversation or an empty one from history
+          setTranscript([greetingTurn]);
+          onEnvironmentUpdate(null);
+          sessionIdRef.current = existingConversation ? existingConversation.id : `conv_${character.id}_${Date.now()}`;
+      }
     }
-  }, [character.id, onEnvironmentUpdate]);
+  }, [character, onEnvironmentUpdate, activeQuest]);
 
     // Cycle through placeholders for text input
     useEffect(() => {
@@ -264,28 +282,12 @@ const ConversationView: React.FC<ConversationViewProps> = ({ character, onEndCon
   const handleArtifactDisplay = useCallback(async (name: string, description: string) => {
     const artifactId = `artifact_${Date.now()}`;
     
-    setTranscript(prev => {
-        let lastModelTurnIndex = -1;
-        for (let i = prev.length - 1; i >= 0; i--) {
-          if (prev[i].speaker === 'model' && !prev[i].artifact) {
-            lastModelTurnIndex = i;
-            break;
-          }
-        }
-        
-        if (lastModelTurnIndex > -1) {
-            const newTranscript = [...prev];
-            newTranscript[lastModelTurnIndex] = {
-                ...newTranscript[lastModelTurnIndex],
-                artifact: { id: artifactId, name, imageUrl: '', loading: true }
-            };
-            return newTranscript;
-        }
-        return [...prev, {
-            speaker: 'model', speakerName: character.name, text: `Of course, here is the ${name}.`,
-            artifact: { id: artifactId, name, imageUrl: '', loading: true }
-        }];
-    });
+    setTranscript(prev => [...prev, {
+        speaker: 'model',
+        speakerName: 'Matrix Operator',
+        text: `Displaying: ${name}`,
+        artifact: { id: artifactId, name, imageUrl: '', loading: true }
+    }]);
 
     setIsGeneratingVisual(true);
     setGenerationMessage(`Creating ${name}...`);
@@ -303,7 +305,7 @@ const ConversationView: React.FC<ConversationViewProps> = ({ character, onEndCon
             const url = `data:image/jpeg;base64,${response.generatedImages[0].image.imageBytes}`;
             setTranscript(prev => prev.map(turn => {
                 if (turn.artifact?.id === artifactId) {
-                    return { ...turn, artifact: { ...turn.artifact, imageUrl: url, loading: false } };
+                    return { ...turn, text: name, artifact: { ...turn.artifact, imageUrl: url, loading: false } };
                 }
                 return turn;
             }));
@@ -313,7 +315,7 @@ const ConversationView: React.FC<ConversationViewProps> = ({ character, onEndCon
                 if (turn.artifact?.id === artifactId) {
                   const newTurn = { ...turn };
                   delete newTurn.artifact;
-                  newTurn.text = `${newTurn.text} (Failed to create visual for ${name})`;
+                  newTurn.text = `Failed to create visual for ${name}`;
                   return newTurn;
                 }
                 return turn;
@@ -325,7 +327,7 @@ const ConversationView: React.FC<ConversationViewProps> = ({ character, onEndCon
         if (turn.artifact?.id === artifactId) {
           const newTurn = { ...turn };
           delete newTurn.artifact;
-          newTurn.text = `${newTurn.text} (Error creating visual for ${name})`;
+          newTurn.text = `Error creating visual for ${name}`;
           return newTurn;
         }
         return turn;
@@ -343,7 +345,7 @@ const ConversationView: React.FC<ConversationViewProps> = ({ character, onEndCon
     isMicActive,
     toggleMicrophone,
     sendTextMessage
-  } = useGeminiLive(character.systemInstruction, character.voiceName, handleTurnComplete, handleEnvironmentChange, handleArtifactDisplay);
+  } = useGeminiLive(character.systemInstruction, character.voiceName, handleTurnComplete, handleEnvironmentChange, handleArtifactDisplay, activeQuest);
 
   const updateDynamicSuggestions = useCallback(async (currentTranscript: ConversationTurn[]) => {
     if (currentTranscript.length === 0) return;
@@ -419,7 +421,12 @@ ${contextTranscript}
   const handleReset = () => {
     if (transcript.length === 0 && !environmentImageUrl) return;
     if (window.confirm('Are you sure you want to reset this conversation? The current transcript and environment will be cleared.')) {
-        setTranscript([]);
+        const greetingTurn: ConversationTurn = {
+            speaker: 'model',
+            speakerName: character.name,
+            text: character.greeting,
+        };
+        setTranscript([greetingTurn]);
         setDynamicSuggestions([]);
         onEnvironmentUpdate(null);
         
@@ -432,7 +439,7 @@ ${contextTranscript}
             characterName: character.name,
             portraitUrl: character.portraitUrl,
             timestamp: Date.now(),
-            transcript: [],
+            transcript: [greetingTurn],
             environmentImageUrl: undefined,
         };
         saveConversationToLocalStorage(clearedConversation);
@@ -472,9 +479,16 @@ ${contextTranscript}
             </div>
             <h2 className="text-2xl sm:text-3xl font-bold text-amber-200 mt-8">{character.name}</h2>
             <p className="text-gray-400 italic">{character.title}</p>
+
+            {activeQuest && (
+                <div className="mt-4 p-3 w-full max-w-xs bg-amber-900/50 border border-amber-800 rounded-lg text-center animate-fade-in">
+                    <p className="font-bold text-amber-300 text-sm">Active Quest</p>
+                    <p className="text-amber-200">{activeQuest.title}</p>
+                </div>
+            )}
             
             <div className="mt-6 text-left w-full max-w-xs">
-            {transcript.length === 0 ? (
+            {transcript.length <= 1 ? (
                 <div className="animate-fade-in">
                 <h4 className="text-md font-bold text-amber-200 mb-2 text-center">Conversation Starters</h4>
                 <div className="space-y-2">
@@ -521,10 +535,11 @@ ${contextTranscript}
 
             <div className="flex items-center justify-center gap-4 mt-auto pt-6 flex-wrap">
               <button
-                  onClick={onEndConversation}
-                  className="bg-red-800/70 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg transition-colors duration-300 border border-red-700"
+                  onClick={() => onEndConversation(transcript, sessionIdRef.current)}
+                  disabled={isSaving}
+                  className="bg-red-800/70 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg transition-colors duration-300 border border-red-700 disabled:opacity-50 disabled:cursor-wait"
               >
-                  End
+                  {isSaving ? 'Saving...' : 'End'}
               </button>
               <button
                   onClick={handleReset}

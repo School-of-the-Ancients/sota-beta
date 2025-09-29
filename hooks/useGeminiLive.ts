@@ -1,6 +1,7 @@
+
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { GoogleGenAI, LiveServerMessage, Modality, Blob, FunctionDeclaration, Type } from '@google/genai';
-import { ConnectionState } from '../types';
+import { ConnectionState, Quest } from '../types';
 
 // Audio Encoding & Decoding functions
 function encode(bytes: Uint8Array): string {
@@ -93,6 +94,7 @@ export const useGeminiLive = (
     onTurnComplete: (turn: { user: string; model: string }) => void,
     onEnvironmentChangeRequest: (description: string) => void,
     onArtifactDisplayRequest: (name: string, description: string) => void,
+    activeQuest: Quest | null,
 ) => {
     const [connectionState, setConnectionState] = useState<ConnectionState>(ConnectionState.IDLE);
     const [userTranscription, setUserTranscription] = useState<string>('');
@@ -183,6 +185,11 @@ export const useGeminiLive = (
 
         try {
             const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+            
+            let finalSystemInstruction = systemInstruction;
+            if (activeQuest) {
+                finalSystemInstruction = `YOUR CURRENT MISSION: As a mentor, your primary goal is to guide the student to understand the following: "${activeQuest.objective}". Tailor your questions and explanations to lead them towards this goal.\n\n---\n\n${systemInstruction}`;
+            }
 
             const sessionPromise = ai.live.connect({
                 model: 'gemini-2.5-flash-native-audio-preview-09-2025',
@@ -322,7 +329,7 @@ export const useGeminiLive = (
                     speechConfig: {
                         voiceConfig: { prebuiltVoiceConfig: { voiceName: voiceName } },
                     },
-                    systemInstruction: systemInstruction,
+                    systemInstruction: finalSystemInstruction,
                     tools: [{functionDeclarations: [changeEnvironmentFunctionDeclaration, displayArtifactFunctionDeclaration]}],
                 },
             });
@@ -338,7 +345,7 @@ export const useGeminiLive = (
             console.error('Failed to connect to Gemini Live:', error);
             setConnectionState(ConnectionState.ERROR);
         }
-    }, [systemInstruction, voiceName]);
+    }, [systemInstruction, voiceName, activeQuest]);
 
     const disconnect = useCallback(() => {
         sessionPromiseRef.current?.then((session) => session.close()).catch(err => {

@@ -16,6 +16,7 @@ type Step = 'IDENTITY' | 'PERSONA' | 'PORTRAIT';
 interface PersonaData {
   title: string;
   bio: string;
+  greeting: string;
   timeframe: string;
   expertise: string;
   passion: string;
@@ -154,10 +155,11 @@ const CharacterCreator: React.FC<CharacterCreatorProps> = ({ onCharacterCreated,
       const prompt = `Based on the historical figure named "${name}" ${focus ? `with a focus on: "${focus}"` : ''}, generate the following details:
         - title: A concise, descriptive title (e.g., The Father of Modern Physics).
         - bio: A short, engaging biography in the first person.
+        - greeting: A brief, welcoming opening line for a conversation, in the first person, that invites the user to ask a question. For example, "Greetings. I am Albert Einstein. It is a pleasure to ponder the universe with you. What is on your mind?"
         - timeframe: The centuries they were active in (e.g., 17th and 18th centuries).
         - expertise: A comma-separated list of their key areas of expertise.
         - passion: A short phrase describing their core motivation or passion.
-        - systemInstruction: A detailed prompt for an AI voice model. This must instruct the character to act as a conversational mentor. Their teaching style should be a balanced blend of sharing their own knowledge and insights, followed by asking insightful questions to guide the student's thinking and encourage discovery. They should not exclusively ask questions. It must also instruct them to periodically check the student's understanding. Crucially, it must inform them of two special abilities: changeEnvironment(description) to change the scene, and displayArtifact(name, description) to show an image, and encourage them to use these proactively to enhance the lesson. It must also specify a distinct, authentic-sounding accent based on their origin. The tone should match their personality.
+        - systemInstruction: A detailed prompt for an AI voice model. This must instruct the character to act as a conversational mentor. Their teaching style should be a balanced blend of sharing their own knowledge and insights, followed by asking insightful questions to guide the student's thinking and encourage discovery. They should not exclusively ask questions. It must also instruct them to periodically check the student's understanding. Crucially, it must inform them of two special abilities: \`changeEnvironment(description)\` to change the scene, and \`displayArtifact(name, description)\` to show an image. It must instruct them: "When you decide to use one of these abilities, generate ONLY the function call and do not provide any accompanying speech. You can describe what is being shown after the visual has been generated." The prompt must also specify a distinct, authentic-sounding accent based on their origin. The tone should match their personality.
         - suggestedPrompts: Three engaging, open-ended questions a user could ask this character. At least one should suggest using a visual ability (e.g., "Take me to...", "Show me...").
         - voiceName: Based on their personality and historical context, suggest the most suitable voice from this list: ${AVAILABLE_VOICES.join(', ')}. Return only the name of the voice.
         - ambienceTag: Based on the character's typical environment, select the most fitting keyword from this list: ${availableAmbienceTags}.`;
@@ -170,12 +172,12 @@ const CharacterCreator: React.FC<CharacterCreatorProps> = ({ onCharacterCreated,
           responseSchema: {
             type: Type.OBJECT,
             properties: {
-              title: { type: Type.STRING }, bio: { type: Type.STRING }, timeframe: { type: Type.STRING }, expertise: { type: Type.STRING }, passion: { type: Type.STRING }, systemInstruction: { type: Type.STRING },
+              title: { type: Type.STRING }, bio: { type: Type.STRING }, greeting: { type: Type.STRING }, timeframe: { type: Type.STRING }, expertise: { type: Type.STRING }, passion: { type: Type.STRING }, systemInstruction: { type: Type.STRING },
               suggestedPrompts: { type: Type.ARRAY, items: { type: Type.STRING } },
               voiceName: { type: Type.STRING },
               ambienceTag: { type: Type.STRING },
             },
-            required: ["title", "bio", "timeframe", "expertise", "passion", "systemInstruction", "suggestedPrompts", "voiceName", "ambienceTag"]
+            required: ["title", "bio", "greeting", "timeframe", "expertise", "passion", "systemInstruction", "suggestedPrompts", "voiceName", "ambienceTag"]
           },
         },
       });
@@ -282,6 +284,10 @@ const CharacterCreator: React.FC<CharacterCreatorProps> = ({ onCharacterCreated,
                     <div className="md:col-span-2">
                         <label className="block text-sm font-medium text-gray-300">Title</label>
                         <input type="text" value={persona.title} onChange={e => handlePersonaChange('title', e.target.value)} className="mt-1 w-full bg-gray-800 border border-gray-600 rounded-lg px-3 py-2" />
+                    </div>
+                     <div className="md:col-span-2">
+                        <label className="block text-sm font-medium text-gray-300">Greeting</label>
+                        <textarea value={persona.greeting} onChange={e => handlePersonaChange('greeting', e.target.value)} rows={3} className="mt-1 w-full bg-gray-800 border border-gray-600 rounded-lg px-3 py-2" />
                     </div>
                     <div className="md:col-span-2">
                         <label className="block text-sm font-medium text-gray-300">Bio (in first person)</label>

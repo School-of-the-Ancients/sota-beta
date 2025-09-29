@@ -1,20 +1,55 @@
 
 import React, { useState, useEffect } from 'react';
-import type { Character } from './types';
+// Fix: Add necessary imports for summary generation and conversation saving.
+import { GoogleGenAI, Type } from '@google/genai';
+import type { Character, Quest, ConversationTurn, SavedConversation, Summary } from './types';
 import CharacterSelector from './components/CharacterSelector';
 import ConversationView from './components/ConversationView';
 import HistoryView from './components/HistoryView';
 import CharacterCreator from './components/CharacterCreator';
-import { CHARACTERS } from './constants';
+import QuestsView from './components/QuestsView';
 import Instructions from './components/Instructions';
+import { CHARACTERS, QUESTS } from './constants';
+import QuestIcon from './components/icons/QuestIcon';
 
 const CUSTOM_CHARACTERS_KEY = 'school-of-the-ancients-custom-characters';
+// Fix: Add history key constant for conversation management.
+const HISTORY_KEY = 'school-of-the-ancients-history';
+
+// Fix: Add helper functions to manage conversation history in localStorage.
+const loadConversations = (): SavedConversation[] => {
+  try {
+    const rawHistory = localStorage.getItem(HISTORY_KEY);
+    return rawHistory ? JSON.parse(rawHistory) : [];
+  } catch (error) {
+    console.error("Failed to load conversation history:", error);
+    return [];
+  }
+};
+
+const saveConversationToLocalStorage = (conversation: SavedConversation) => {
+  try {
+    const history = loadConversations();
+    const existingIndex = history.findIndex(c => c.id === conversation.id);
+    if (existingIndex > -1) {
+      history[existingIndex] = conversation;
+    } else {
+      history.unshift(conversation);
+    }
+    localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
+  } catch (error) {
+    console.error("Failed to save conversation:", error);
+  }
+};
 
 const App: React.FC = () => {
   const [selectedCharacter, setSelectedCharacter] = useState<Character | null>(null);
-  const [view, setView] = useState<'selector' | 'conversation' | 'history' | 'creator'>('selector');
+  const [view, setView] = useState<'selector' | 'conversation' | 'history' | 'creator' | 'quests'>('selector');
   const [customCharacters, setCustomCharacters] = useState<Character[]>([]);
   const [environmentImageUrl, setEnvironmentImageUrl] = useState<string | null>(null);
+  const [activeQuest, setActiveQuest] = useState<Quest | null>(null);
+  // Fix: Add isSaving state to manage the end conversation flow.
+  const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
     // Load custom characters from local storage
@@ -42,9 +77,25 @@ const App: React.FC = () => {
   const handleSelectCharacter = (character: Character) => {
     setSelectedCharacter(character);
     setView('conversation');
+    setActiveQuest(null); // Clear quest if a character is selected manually
     const url = new URL(window.location.href);
     url.searchParams.set('character', character.id);
     window.history.pushState({}, '', url);
+  };
+
+  const handleSelectQuest = (quest: Quest) => {
+    const allCharacters = [...customCharacters, ...CHARACTERS];
+    const characterForQuest = allCharacters.find(c => c.id === quest.characterId);
+    if (characterForQuest) {
+      setActiveQuest(quest);
+      setSelectedCharacter(characterForQuest);
+      setView('conversation');
+      const url = new URL(window.location.href);
+      url.searchParams.set('character', characterForQuest.id);
+      window.history.pushState({}, '', url);
+    } else {
+      console.error(`Character with ID ${quest.characterId} not found for the selected quest.`);
+    }
   };
 
   const handleCharacterCreated = (newCharacter: Character) => {
@@ -70,45 +121,125 @@ const App: React.FC = () => {
     }
   };
 
-  const handleEndConversation = () => {
-    setSelectedCharacter(null);
-    setView('selector');
-    setEnvironmentImageUrl(null);
-    window.history.pushState({}, '', window.location.pathname);
+  // Fix: Implement summary generation and state reset on conversation end.
+  const handleEndConversation = async (transcript: ConversationTurn[], sessionId: string) => {
+    if (!selectedCharacter) return;
+    setIsSaving(true);
+
+    try {
+      const conversationHistory = loadConversations();
+      const conversation = conversationHistory.find(c => c.id === sessionId);
+
+      if (conversation && transcript.length > 1) {
+        if (!process.env.API_KEY) {
+          console.error("API_KEY not set, skipping summary generation.");
+        } else {
+          const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+          const transcriptText = transcript
+            .slice(1) // Exclude initial greeting
+            .map(turn => `${turn.speakerName}: ${turn.text}`)
+            .join('\n\n');
+
+          if (transcriptText.trim()) {
+            const prompt = `Please summarize the following educational dialogue with ${selectedCharacter.name}. Provide a concise one-paragraph overview of the key topics discussed, and then list 3-5 of the most important takeaways or concepts as bullet points.
+
+Dialogue:
+${transcriptText}`;
+
+            const response = await ai.models.generateContent({
+              model: "gemini-2.5-flash",
+              contents: prompt,
+              config: {
+                responseMimeType: "application/json",
+                responseSchema: {
+                  type: Type.OBJECT,
+                  properties: {
+                    overview: { type: Type.STRING, description: "A one-paragraph overview of the conversation." },
+                    takeaways: {
+                      type: Type.ARRAY,
+                      items: { type: Type.STRING },
+                      description: "A list of 3-5 key takeaways from the conversation."
+                    }
+                  },
+                  required: ["overview", "takeaways"]
+                },
+              },
+            });
+
+            const summary: Summary = JSON.parse(response.text);
+            const updatedConversation: SavedConversation = {
+              ...conversation,
+              summary,
+              timestamp: Date.now(),
+            };
+            saveConversationToLocalStorage(updatedConversation);
+          }
+        }
+      }
+    } catch (error) {
+      console.error("Failed to generate summary:", error);
+    } finally {
+      setIsSaving(false);
+      setSelectedCharacter(null);
+      setView('selector');
+      setEnvironmentImageUrl(null);
+      setActiveQuest(null);
+      window.history.pushState({}, '', window.location.pathname);
+    }
   };
 
   const renderContent = () => {
     switch (view) {
       case 'conversation':
         return selectedCharacter ? (
-          <ConversationView 
-            character={selectedCharacter} 
-            onEndConversation={handleEndConversation} 
+          <ConversationView
+            character={selectedCharacter}
+            onEndConversation={handleEndConversation}
             environmentImageUrl={environmentImageUrl}
             onEnvironmentUpdate={setEnvironmentImageUrl}
+            activeQuest={activeQuest}
+            // Fix: Pass the isSaving prop to ConversationView.
+            isSaving={isSaving}
           />
         ) : null;
       case 'history':
         return <HistoryView onBack={() => setView('selector')} />;
       case 'creator':
         return <CharacterCreator onCharacterCreated={handleCharacterCreated} onBack={() => setView('selector')} />;
+      case 'quests':
+        const allCharacters = [...customCharacters, ...CHARACTERS];
+        return <QuestsView onBack={() => setView('selector')} onSelectQuest={handleSelectQuest} quests={QUESTS} characters={allCharacters} />;
       case 'selector':
       default:
         return (
-          <div className="text-center">
+          <div className="text-center animate-fade-in">
+             <p className="max-w-3xl mx-auto mb-8 text-gray-400 text-lg">
+                Engage in real-time voice conversations with legendary minds from history, or embark on a guided Learning Quest to master a new subject.
+            </p>
+            <div className="flex flex-col sm:flex-row justify-center items-center gap-4 mb-12">
+                <button
+                    onClick={() => setView('quests')}
+                    className="flex items-center gap-3 bg-amber-600 hover:bg-amber-500 text-black font-bold py-3 px-8 rounded-lg transition-colors duration-300 text-lg w-full sm:w-auto"
+                >
+                    <QuestIcon className="w-6 h-6" />
+                    <span>Learning Quests</span>
+                </button>
+                <button
+                    onClick={() => setView('history')}
+                    className="bg-gray-700 hover:bg-gray-600 text-amber-300 font-bold py-3 px-8 rounded-lg transition-colors duration-300 border border-gray-600 w-full sm:w-auto"
+                >
+                    View Conversation History
+                </button>
+            </div>
+
             <Instructions />
+
             <CharacterSelector
               characters={[...customCharacters, ...CHARACTERS]}
               onSelectCharacter={handleSelectCharacter}
               onStartCreation={() => setView('creator')}
               onDeleteCharacter={handleDeleteCharacter}
             />
-            <button
-              onClick={() => setView('history')}
-              className="mt-12 bg-gray-700 hover:bg-gray-600 text-amber-300 font-bold py-3 px-8 rounded-lg transition-colors duration-300 border border-gray-600"
-            >
-              View Conversation History
-            </button>
           </div>
         );
     }

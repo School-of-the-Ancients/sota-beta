@@ -1,3 +1,4 @@
+
 export interface Ambience {
   tag: string;
   description: string;
@@ -10,6 +11,7 @@ export interface Character {
   title: string;
   portraitUrl: string;
   bio: string;
+  greeting: string;
   systemInstruction: string;
   voiceName:string;
   timeframe: string;
@@ -42,6 +44,11 @@ export interface ConversationTurn {
   };
 }
 
+export interface Summary {
+  overview: string;
+  takeaways: string[];
+}
+
 export interface SavedConversation {
   id: string;
   characterId: string;
@@ -50,4 +57,13 @@ export interface SavedConversation {
   timestamp: number;
   transcript: ConversationTurn[];
   environmentImageUrl?: string;
+  summary?: Summary;
+}
+
+export interface Quest {
+  id: string;
+  title: string;
+  description: string;
+  objective: string;
+  characterId: string;
 }
