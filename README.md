@@ -4,7 +4,8 @@
 
 This project is a dynamic web application that allows you to speak with legendary minds like Leonardo da Vinci, Socrates, and Cleopatra. Powered by the Google Gemini API, these AI mentors teach in their authentic style, using the Socratic method to guide you through complex topics. More than just a chatbot, this is an immersive learning environment where the AI can change the visual scenery and display artifacts on command, creating a "Matrix Operator" style experience.
 
-![School of the Ancients Screenshot](https://raw.githubusercontent.com/School-of-the-Ancients/sota-beta/9b4eedaf1b6af2165d08bacdf8a4e506dac43e15/sota-beta.png)
+![School of the Ancients Screenshot](https://storage.googleapis.com/aistudio-hosting/docs/project-screenshots/school-of-the-ancients.png)
+
 ---
 
 ## Core Features

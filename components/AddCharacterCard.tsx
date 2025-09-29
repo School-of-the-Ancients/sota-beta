@@ -14,8 +14,8 @@ const AddCharacterCard: React.FC<AddCharacterCardProps> = ({ onClick }) => {
       <svg xmlns="http://www.w3.org/2000/svg" className="h-24 w-24 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1}>
         <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
       </svg>
-      <h3 className="text-2xl font-bold">Bring a new mind to the school.</h3>
-     
+      <h3 className="text-2xl font-bold">Create a New Ancient</h3>
+      <p className="text-sm mt-1">Bring a new mind to the school.</p>
     </div>
   );
 };

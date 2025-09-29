@@ -27,7 +27,7 @@ const Instructions: React.FC = () => {
               <span className="font-semibold text-teal-300">Change Scenery:</span> Say "<i className="text-teal-400">Operator, Take me to the Roman Forum</i>" to transport yourself to a new location.
             </li>
             <li>
-              <span className="font-semibold text-teal-300">Display Artifacts:</span> Say "<i className="text-teal-400">Operator, Show me a diagram of Leonardo's flying machine</i>" to see a visual aid.
+              <span className="font-semibold text-teal-300">Display Artifacts:</span> Say "<i className="text-teal-400">Operator, Show me a diagram of your flying machine</i>" to see a visual aid.
             </li>
           </ul>
         </div>
