@@ -101,12 +101,34 @@ const ConversationView: React.FC<ConversationViewProps> = ({ character, onEndCon
   const [isGeneratingVisual, setIsGeneratingVisual] = useState(false);
   const [generationMessage, setGenerationMessage] = useState('');
 
-  const placeholders = useMemo(() => [
-    "Or type a message...",
-    "Try saying: 'Take me to your workshop'",
-    `What would you like to ask ${character.name}?`,
-    "Try saying: 'Show me the Vitruvian Man'",
-  ], [character.name]);
+  const placeholders = useMemo(() => {
+    const prompts = [
+      "Or type a message...",
+      `What would you like to ask ${character.name}?`,
+    ];
+
+    if (character.suggestedPrompts?.[0]) {
+      const prompt1 = character.suggestedPrompts[0];
+      const verb =
+        prompt1.toLowerCase().startsWith('show me') ||
+        prompt1.toLowerCase().startsWith('take me')
+          ? 'saying'
+          : 'asking';
+      prompts.push(`Try ${verb}: "${prompt1}"`);
+    }
+
+    if (character.suggestedPrompts?.[1]) {
+      const prompt2 = character.suggestedPrompts[1];
+      const verb =
+        prompt2.toLowerCase().startsWith('show me') ||
+        prompt2.toLowerCase().startsWith('take me')
+          ? 'saying'
+          : 'asking';
+      prompts.push(`Try ${verb}: "${prompt2}"`);
+    }
+
+    return prompts;
+  }, [character.name, character.suggestedPrompts]);
   
   const [placeholder, setPlaceholder] = useState(placeholders[0]);
 
