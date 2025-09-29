@@ -1,19 +1,19 @@
 # Repository Guidelines
 
 ## Project Structure & Module Organization
-The React 19 SPA boots from `index.tsx`, while `App.tsx` wires the main views such as `ConversationView` and `HistoryView`. UI pieces live under `components/` (PascalCase filenames) with icons in `components/icons/`. Conversation seeds and shared constants sit in `constants.ts`; reusable types stay in `types.ts`; prompt templates are in `suggestions.ts`. Audio handling resides in `hooks/useGeminiLive.ts`, and static assets ship from `img/`. Keep new docs under `docs/` and place one-off exploration artifacts in `implementation.md`.
+The React 19 single-page app boots from `index.tsx`, and `App.tsx` registers feature views like `ConversationView` and `HistoryView`. UI pieces sit in `components/` (PascalCase filenames) with shared icons under `components/icons/`. Conversation seeds and constants live in `constants.ts`, reusable types in `types.ts`, and prompt templates in `suggestions.ts`. Audio capture and playback logic belong to `hooks/useGeminiLive.ts`. Store static assets and artwork in `img/`, long-form docs in `docs/`, and exploratory notes in `implementation.md`.
 
 ## Build, Test, and Development Commands
-Install dependencies once with `npm install`. Use `npm run dev` to launch Vite at http://localhost:3000 for local work. Run `npm run build` to emit the production bundle in `dist/`, then `npm run preview` to sanity-check the build. Add a dedicated script if you introduce automated tests (Vitest + React Testing Library is the expected stack).
+Run `npm install` once to pull dependencies. Use `npm run dev` to start Vite on http://localhost:3000 for iterative work. Ship-ready bundles come from `npm run build`, and `npm run preview` serves the compiled output for smoke testing. When you introduce automated tests, add a script (e.g., `npm run test`) so the workflow remains discoverable.
 
 ## Coding Style & Naming Conventions
-Stick to TypeScript-first functional components, 2-space indentation, and single quotes. Prefer hooks over classes, isolating side effects in `useEffect`. Name components in PascalCase (`CharacterCreator.tsx`), hooks and helpers in camelCase (`useGeminiLive`), and access shared modules through the `@/` alias defined in `tsconfig.json`. Tailwind utility classes provide layout and spacing; extend the config before inventing bespoke class names.
+Author TypeScript functional components with 2-space indentation and single quotes. Prefer hooks over classes, isolating side effects inside `useEffect`. Components follow PascalCase (`ConversationPanel.tsx`), hooks and helpers stay camelCase (`useGeminiLive`, `formatTimestamp`). Import shared modules through the `@/` alias defined in `tsconfig.json`. Rely on Tailwind utility classes for layout; extend the Tailwind config before inventing custom CSS.
 
 ## Testing Guidelines
-There is no default runner yet—add Vitest suites alongside the feature you cover and co-locate them near the source (e.g., `components/ChatPanel.test.tsx`). For now, document manual verification: microphone permission flows, character creation, and environment toggles. Record the scenario list in your PR description so future work knows what regressed.
+Adopt Vitest with React Testing Library when adding automated coverage, co-locating specs beside the source (`components/ConversationPanel.test.tsx`). Name tests after the behavior under verification and document any manual scenarios (microphone permissions, persona creation, environment toggles) in your PR description. Add a test script to `package.json` once suites exist.
 
 ## Commit & Pull Request Guidelines
-Use imperative, scoped commit messages (`feat: add Cleopatra persona artifacts`). PRs should include a summary, screenshots for UI changes, linked issues, environment variables touched (e.g., `GEMINI_API_KEY`), and a short test plan. Keep changes focused; note follow-ups instead of bundling them.
+Write imperative, scoped commit messages such as `feat: add Cleopatra persona artifacts`. Pull requests should summarize the change, attach UI screenshots when the visuals shift, link related issues, note environment variables touched (e.g., `GEMINI_API_KEY`), and include a short test plan. Keep changes narrowly focused and call out follow-up work instead of bundling it.
 
 ## Security & Configuration Tips
-Store Gemini credentials in a local `.env` (`GEMINI_API_KEY`) and rely on Vite to expose `process.env.API_KEY`. Never commit voice captures or transcripts. Before sharing logs, wipe `localStorage` to avoid leaking user conversations.
+Keep Gemini API keys in a local `.env` file; Vite exposes them via `process.env`. Never commit audio captures, transcripts, or other sensitive artifacts. Before sharing logs, clear `localStorage` to avoid leaking prior conversations or tokens.
