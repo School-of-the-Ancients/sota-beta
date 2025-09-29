@@ -37,6 +37,11 @@ export const QUESTS: Quest[] = [
     description: "Explore the core tenets of Stoicism, learning how to find tranquility and resilience in the face of modern-day challenges.",
     objective: "The student should understand the Stoic concepts of the dichotomy of control, living in accordance with nature, and viewing obstacles as opportunities for virtue.",
     characterId: 'marcus_aurelius',
+    milestones: [
+      'Explain the Stoic dichotomy of control in your own words.',
+      'Identify a recent obstacle and reframe it as an opportunity to practice virtue.',
+      'Describe one daily habit that aligns with living according to nature.',
+    ],
   },
   {
     id: 'socratic_method_101',
@@ -44,6 +49,11 @@ export const QUESTS: Quest[] = [
     description: "Engage in a classic dialogue to understand the art of questioning. Learn how to examine your own beliefs and pursue truth through rigorous inquiry.",
     objective: "The student should experience the Socratic method firsthand and understand its purpose: to reveal contradictions in one's own beliefs and stimulate critical thinking, rather than to receive direct answers.",
     characterId: 'socrates',
+    milestones: [
+      'Formulate an initial belief or claim to investigate.',
+      'Challenge an assumption in that belief using a probing question.',
+      'Summarize how the dialogue changed or refined your original position.',
+    ],
   },
   {
     id: 'renaissance_art_101',
@@ -51,6 +61,11 @@ export const QUESTS: Quest[] = [
     description: "Journey with the master himself to understand the techniques and philosophies that defined Renaissance art, from human anatomy to the science of perspective.",
     objective: "The student should learn about the connection between art and science during the Renaissance, understand the importance of humanism, and be able to identify key principles in Leonardo's work.",
     characterId: 'davinci',
+    milestones: [
+      'Describe how Renaissance artists used perspective to create depth.',
+      'Connect one scientific observation to a technique in Leonardo’s artwork.',
+      'Identify a theme of humanism present in a Renaissance masterpiece.',
+    ],
   },
 ];
 

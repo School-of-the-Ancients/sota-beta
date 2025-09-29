@@ -66,4 +66,5 @@ export interface Quest {
   description: string;
   objective: string;
   characterId: string;
+  milestones: string[];
 }

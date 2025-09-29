@@ -40,9 +40,24 @@ const QuestsView: React.FC<QuestsViewProps> = ({ quests, characters, onSelectQue
                 <img src={character.portraitUrl} alt={character.name} className="w-24 h-24 rounded-full mx-auto mb-4 border-2 border-amber-300" />
                 <h3 className="font-bold text-xl text-amber-300">{quest.title}</h3>
                 <p className="text-sm text-gray-400 mt-1 mb-4">with {character.name}</p>
-                <p className="text-gray-300 flex-grow text-sm mb-6">{quest.description}</p>
-                <button 
-                    onClick={() => onSelectQuest(quest)} 
+                <div className="flex flex-col flex-grow gap-4 mb-5">
+                  <p className="text-gray-300 text-sm">{quest.description}</p>
+                  {quest.milestones.length > 0 && (
+                    <div className="text-left bg-gray-900/50 border border-gray-700 rounded-lg p-3">
+                      <p className="text-amber-300 text-xs font-semibold uppercase tracking-wider mb-2">Milestones</p>
+                      <ul className="space-y-2">
+                        {quest.milestones.map((milestone) => (
+                          <li key={milestone} className="flex items-start gap-2 text-xs text-gray-200">
+                            <span className="mt-1 h-1.5 w-1.5 rounded-full bg-amber-400 flex-shrink-0"></span>
+                            <span className="text-left">{milestone}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+                <button
+                    onClick={() => onSelectQuest(quest)}
                     className="mt-auto bg-amber-600 hover:bg-amber-500 text-black font-bold py-2 px-4 rounded-lg transition-colors w-full"
                 >
                     Begin Quest

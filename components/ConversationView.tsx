@@ -106,6 +106,7 @@ const ConversationView: React.FC<ConversationViewProps> = ({ character, onEndCon
   const [isFetchingSuggestions, setIsFetchingSuggestions] = useState(false);
   const [isGeneratingVisual, setIsGeneratingVisual] = useState(false);
   const [generationMessage, setGenerationMessage] = useState('');
+  const [questProgress, setQuestProgress] = useState<boolean[]>([]);
 
   const initialAudioSrc = AMBIENCE_LIBRARY.find(a => a.tag === character.ambienceTag)?.audioSrc ?? null;
   const { isMuted: isAmbienceMuted, toggleMute: toggleAmbienceMute, changeTrack: changeAmbienceTrack } = useAmbientAudio(initialAudioSrc);
@@ -172,16 +173,35 @@ const ConversationView: React.FC<ConversationViewProps> = ({ character, onEndCon
     }
   }, [character, onEnvironmentUpdate, activeQuest]);
 
-    // Cycle through placeholders for text input
-    useEffect(() => {
-        const interval = setInterval(() => {
-            setPlaceholder(prev => {
-                const currentIndex = placeholders.indexOf(prev);
-                return placeholders[(currentIndex + 1) % placeholders.length];
-            });
-        }, 4000);
-        return () => clearInterval(interval);
-    }, [placeholders]);
+  useEffect(() => {
+    if (activeQuest) {
+      setQuestProgress(activeQuest.milestones.map(() => false));
+    } else {
+      setQuestProgress([]);
+    }
+  }, [activeQuest]);
+
+  const handleToggleMilestone = useCallback((index: number) => {
+    setQuestProgress(prev => {
+      if (!prev.length) return prev;
+      const updated = [...prev];
+      updated[index] = !updated[index];
+      return updated;
+    });
+  }, []);
+
+  const completedMilestones = questProgress.filter(Boolean).length;
+
+  // Cycle through placeholders for text input
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setPlaceholder(prev => {
+        const currentIndex = placeholders.indexOf(prev);
+        return placeholders[(currentIndex + 1) % placeholders.length];
+      });
+    }, 4000);
+    return () => clearInterval(interval);
+  }, [placeholders]);
 
 
   const handleTurnComplete = useCallback(({ user, model }: { user: string; model: string }) => {
@@ -507,12 +527,43 @@ ${contextTranscript}
             <p className="text-gray-400 italic">{character.title}</p>
 
             {activeQuest && (
-                <div className="mt-4 p-3 w-full max-w-xs bg-amber-900/50 border border-amber-800 rounded-lg text-center animate-fade-in">
-                    <p className="font-bold text-amber-300 text-sm">Active Quest</p>
-                    <p className="text-amber-200">{activeQuest.title}</p>
-                </div>
+                <div className="mt-4 p-4 w-full max-w-xs bg-amber-900/50 border border-amber-800 rounded-lg text-left animate-fade-in">
+                    <p className="font-bold text-amber-300 text-sm uppercase tracking-wide text-center">Active Quest</p>
+                    <p className="text-amber-200 font-semibold text-center">{activeQuest.title}</p>
+                    <p className="text-amber-100 text-xs mt-3 leading-relaxed">{activeQuest.objective}</p>
+                    {activeQuest.milestones.length > 0 && (
+                      <div className="mt-4">
+                        <div className="flex items-center justify-between text-[11px] text-amber-200 font-semibold uppercase tracking-wide">
+                          <span>Milestones</span>
+                          <span>{completedMilestones}/{activeQuest.milestones.length}</span>
+                        </div>
+                        <ul className="mt-2 space-y-2">
+                          {activeQuest.milestones.map((milestone, index) => {
+                            const isComplete = Boolean(questProgress[index]);
+                            return (
+                              <li key={milestone}>
+                                <button
+                                  type="button"
+                                  onClick={() => handleToggleMilestone(index)}
+                                  className="w-full flex items-start gap-3 text-left text-[13px] text-amber-100 bg-amber-950/40 border border-amber-800/60 rounded-lg px-3 py-2 hover:border-amber-500 transition-colors"
+                                  aria-pressed={isComplete}
+                                >
+                                  <span
+                                    className={`mt-0.5 flex h-5 w-5 items-center justify-center rounded border ${isComplete ? 'bg-amber-400 text-black border-amber-300' : 'border-amber-400 text-amber-300'}`}
+                                  >
+                                    {isComplete ? '✓' : ''}
+                                  </span>
+                                  <span className="flex-1 leading-snug">{milestone}</span>
+                                </button>
+                              </li>
+                            );
+                          })}
+                        </ul>
+                      </div>
+                    )}
+                  </div>
             )}
-            
+
             <div className="mt-6 text-left w-full max-w-xs">
             {transcript.length <= 1 ? (
                 <div className="animate-fade-in">
