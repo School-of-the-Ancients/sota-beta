@@ -185,16 +185,42 @@ const ConversationView: React.FC<ConversationViewProps> = ({ character, onEndCon
 
 
   const handleTurnComplete = useCallback(({ user, model }: { user: string; model: string }) => {
-    if (user.trim() || model.trim()) {
-      let turns: ConversationTurn[] = [];
-      if (user.trim()) {
-        turns.push({ speaker: 'user', speakerName: 'You', text: user });
-      }
-      if (model.trim()) {
-        turns.push({ speaker: 'model', speakerName: character.name, text: model });
-      }
-      setTranscript(prev => [...prev, ...turns]);
+    const trimmedUser = user.trim();
+    const trimmedModel = model.trim();
+
+    if (!trimmedUser && !trimmedModel) {
+      return;
     }
+
+    setTranscript(prev => {
+      const updatedTranscript = [...prev];
+
+      if (trimmedUser) {
+        const lastTurn = updatedTranscript[updatedTranscript.length - 1];
+        const isDuplicateUserTurn =
+          lastTurn?.speaker === 'user' &&
+          lastTurn.speakerName === 'You' &&
+          lastTurn.text === trimmedUser;
+
+        if (!isDuplicateUserTurn) {
+          updatedTranscript.push({ speaker: 'user', speakerName: 'You', text: trimmedUser });
+        }
+      }
+
+      if (trimmedModel) {
+        const lastTurn = updatedTranscript[updatedTranscript.length - 1];
+        const isDuplicateModelTurn =
+          lastTurn?.speaker === 'model' &&
+          lastTurn.speakerName === character.name &&
+          lastTurn.text === trimmedModel;
+
+        if (!isDuplicateModelTurn) {
+          updatedTranscript.push({ speaker: 'model', speakerName: character.name, text: trimmedModel });
+        }
+      }
+
+      return updatedTranscript;
+    });
   }, [character.name]);
 
   const handleEnvironmentChange = useCallback(async (description: string) => {
