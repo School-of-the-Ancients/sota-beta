@@ -168,7 +168,7 @@ const App: React.FC = () => {
           <h1 className="text-4xl sm:text-5xl md:text-6xl font-bold text-amber-300 tracking-wider" style={{ textShadow: '0 0 10px rgba(252, 211, 77, 0.5)' }}>
             School of the Ancients
           </h1>
-          <p className="text-gray-400 mt-2 text-lg">Learn something.</p>
+          <p className="text-gray-400 mt-2 text-lg">Old world wisdom. New world classroom.</p>
         </header>
         <main className="max-w-7xl w-full mx-auto flex-grow flex flex-col">
           {renderContent()}

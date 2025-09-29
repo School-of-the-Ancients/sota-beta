@@ -18,10 +18,11 @@ const HISTORY_KEY = 'school-of-the-ancients-history';
 
 interface ConversationViewProps {
   character: Character;
-  onEndConversation: () => void;
+  onEndConversation: (transcript: ConversationTurn[], sessionId: string) => void;
   environmentImageUrl: string | null;
   onEnvironmentUpdate: (url: string | null) => void;
   activeQuest: Quest | null;
+  isSaving: boolean;
 }
 
 const loadConversations = (): SavedConversation[] => {
@@ -99,7 +100,7 @@ const ArtifactDisplay: React.FC<{ artifact: NonNullable<ConversationTurn['artifa
     );
   };
 
-const ConversationView: React.FC<ConversationViewProps> = ({ character, onEndConversation, environmentImageUrl, onEnvironmentUpdate, activeQuest }) => {
+const ConversationView: React.FC<ConversationViewProps> = ({ character, onEndConversation, environmentImageUrl, onEnvironmentUpdate, activeQuest, isSaving }) => {
   const [transcript, setTranscript] = useState<ConversationTurn[]>([]);
   const [textInput, setTextInput] = useState('');
   const [dynamicSuggestions, setDynamicSuggestions] = useState<string[]>([]);
@@ -551,10 +552,11 @@ ${contextTranscript}
 
             <div className="flex items-center justify-center gap-4 mt-auto pt-6 flex-wrap">
               <button
-                  onClick={onEndConversation}
-                  className="bg-red-800/70 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg transition-colors duration-300 border border-red-700"
+                  onClick={() => onEndConversation(transcript, sessionIdRef.current)}
+                  disabled={isSaving}
+                  className="bg-red-800/70 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg transition-colors duration-300 border border-red-700 disabled:opacity-50 disabled:cursor-wait"
               >
-                  End
+                  {isSaving ? 'Saving...' : 'End'}
               </button>
               <button
                   onClick={handleReset}

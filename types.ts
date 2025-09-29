@@ -44,6 +44,11 @@ export interface ConversationTurn {
   };
 }
 
+export interface Summary {
+  overview: string;
+  takeaways: string[];
+}
+
 export interface SavedConversation {
   id: string;
   characterId: string;
@@ -52,6 +57,7 @@ export interface SavedConversation {
   timestamp: number;
   transcript: ConversationTurn[];
   environmentImageUrl?: string;
+  summary?: Summary;
 }
 
 export interface Quest {
