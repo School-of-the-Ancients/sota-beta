@@ -69,3 +69,12 @@ export interface Quest {
   duration: string;
   focusPoints: string[];
 }
+
+export interface QuestCheckResult {
+  questId: string;
+  questTitle: string;
+  passed: boolean;
+  feedback: string;
+  evidence?: string[];
+  nextSteps?: string[];
+}

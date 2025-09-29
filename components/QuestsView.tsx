@@ -8,9 +8,10 @@ interface QuestsViewProps {
   characters: Character[];
   onSelectQuest: (quest: Quest) => void;
   onBack: () => void;
+  completedQuestIds: string[];
 }
 
-const QuestsView: React.FC<QuestsViewProps> = ({ quests, characters, onSelectQuest, onBack }) => {
+const QuestsView: React.FC<QuestsViewProps> = ({ quests, characters, onSelectQuest, onBack, completedQuestIds }) => {
   return (
     <div className="max-w-4xl mx-auto animate-fade-in">
       <div className="flex justify-between items-center mb-6">
@@ -34,9 +35,15 @@ const QuestsView: React.FC<QuestsViewProps> = ({ quests, characters, onSelectQue
           {quests.map((quest) => {
             const character = characters.find(c => c.id === quest.characterId);
             if (!character) return null;
+            const isCompleted = completedQuestIds.includes(quest.id);
 
             return (
-              <div key={quest.id} className="bg-gray-800/50 p-5 rounded-lg border border-gray-700 flex flex-col text-center hover:border-amber-400 transition-colors duration-300">
+              <div key={quest.id} className="relative bg-gray-800/50 p-5 rounded-lg border border-gray-700 flex flex-col text-center hover:border-amber-400 transition-colors duration-300">
+                {isCompleted && (
+                  <span className="absolute top-3 right-3 text-xs font-semibold uppercase tracking-wide bg-green-600/20 text-green-200 border border-green-500/40 px-2 py-1 rounded-full">
+                    Completed
+                  </span>
+                )}
                 <img src={character.portraitUrl} alt={character.name} className="w-24 h-24 rounded-full mx-auto mb-4 border-2 border-amber-300" />
                 <h3 className="font-bold text-xl text-amber-300">{quest.title}</h3>
                 <p className="text-sm text-gray-400 mt-1">with {character.name}</p>
@@ -64,7 +71,7 @@ const QuestsView: React.FC<QuestsViewProps> = ({ quests, characters, onSelectQue
                     onClick={() => onSelectQuest(quest)}
                     className="mt-6 bg-amber-600 hover:bg-amber-500 text-black font-bold py-2 px-4 rounded-lg transition-colors w-full"
                 >
-                    Begin Quest
+                    {isCompleted ? 'Review Quest' : 'Begin Quest'}
                 </button>
               </div>
             );

@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 // Fix: Add necessary imports for summary generation and conversation saving.
 import { GoogleGenAI, Type } from '@google/genai';
-import type { Character, Quest, ConversationTurn, SavedConversation, Summary } from './types';
+import type { Character, Quest, ConversationTurn, SavedConversation, Summary, QuestCheckResult } from './types';
 import CharacterSelector from './components/CharacterSelector';
 import ConversationView from './components/ConversationView';
 import HistoryView from './components/HistoryView';
@@ -15,6 +15,7 @@ import QuestIcon from './components/icons/QuestIcon';
 const CUSTOM_CHARACTERS_KEY = 'school-of-the-ancients-custom-characters';
 // Fix: Add history key constant for conversation management.
 const HISTORY_KEY = 'school-of-the-ancients-history';
+const QUEST_PROGRESS_KEY = 'school-of-the-ancients-quest-progress';
 
 // Fix: Add helper functions to manage conversation history in localStorage.
 const loadConversations = (): SavedConversation[] => {
@@ -42,6 +43,39 @@ const saveConversationToLocalStorage = (conversation: SavedConversation) => {
   }
 };
 
+const loadQuestProgress = (): string[] => {
+  try {
+    const stored = localStorage.getItem(QUEST_PROGRESS_KEY);
+    if (!stored) {
+      return [];
+    }
+
+    const parsed = JSON.parse(stored);
+
+    if (Array.isArray(parsed)) {
+      return parsed;
+    }
+
+    if (parsed && Array.isArray(parsed.completedQuestIds)) {
+      return parsed.completedQuestIds;
+    }
+
+    return [];
+  } catch (error) {
+    console.error('Failed to load quest progress:', error);
+    return [];
+  }
+};
+
+const saveQuestProgress = (completedQuestIds: string[]) => {
+  try {
+    const payload = { completedQuestIds };
+    localStorage.setItem(QUEST_PROGRESS_KEY, JSON.stringify(payload));
+  } catch (error) {
+    console.error('Failed to save quest progress:', error);
+  }
+};
+
 const App: React.FC = () => {
   const [selectedCharacter, setSelectedCharacter] = useState<Character | null>(null);
   const [view, setView] = useState<'selector' | 'conversation' | 'history' | 'creator' | 'quests'>('selector');
@@ -50,6 +84,8 @@ const App: React.FC = () => {
   const [activeQuest, setActiveQuest] = useState<Quest | null>(null);
   // Fix: Add isSaving state to manage the end conversation flow.
   const [isSaving, setIsSaving] = useState(false);
+  const [completedQuestIds, setCompletedQuestIds] = useState<string[]>([]);
+  const [questCheckResult, setQuestCheckResult] = useState<QuestCheckResult | null>(null);
 
   useEffect(() => {
     // Load custom characters from local storage
@@ -60,6 +96,11 @@ const App: React.FC = () => {
       }
     } catch (e) {
       console.error("Failed to load custom characters:", e);
+    }
+
+    const storedQuestProgress = loadQuestProgress();
+    if (storedQuestProgress.length > 0) {
+      setCompletedQuestIds(storedQuestProgress);
     }
 
     const urlParams = new URLSearchParams(window.location.search);
@@ -73,6 +114,10 @@ const App: React.FC = () => {
       }
     }
   }, []); // customCharacters dependency is intentionally omitted to avoid re-running on delete
+
+  useEffect(() => {
+    saveQuestProgress(completedQuestIds);
+  }, [completedQuestIds]);
 
   const handleSelectCharacter = (character: Character) => {
     setSelectedCharacter(character);
@@ -121,10 +166,105 @@ const App: React.FC = () => {
     }
   };
 
+  const handleDismissQuestResult = () => {
+    setQuestCheckResult(null);
+  };
+
   // Fix: Implement summary generation and state reset on conversation end.
+  const evaluateQuestKnowledge = async (quest: Quest, transcript: ConversationTurn[]) => {
+    if (!process.env.API_KEY) {
+      setQuestCheckResult({
+        questId: quest.id,
+        questTitle: quest.title,
+        passed: false,
+        feedback: 'Set your API key to enable knowledge checks for quests.',
+      });
+      return;
+    }
+
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+
+    const transcriptText = transcript
+      .filter(turn => turn.text && turn.text.trim())
+      .map(turn => `${turn.speakerName}: ${turn.text}`)
+      .join('\n\n');
+
+    if (!transcriptText.trim()) {
+      setQuestCheckResult({
+        questId: quest.id,
+        questTitle: quest.title,
+        passed: false,
+        feedback: 'The conversation transcript was empty, so the knowledge check could not be completed.',
+      });
+      return;
+    }
+
+    const prompt = `You are an expert tutor verifying whether a student has completed a learning quest. Use only the student's contributions (lines where the speaker is "You") to judge their understanding.\n\nQuest title: ${quest.title}\nQuest objective: ${quest.objective}\nKey focus points:${quest.focusPoints.map(point => `\n- ${point}`).join('')}\n\nTranscript:\n${transcriptText}\n\nDetermine whether the student demonstrated a clear understanding of the quest objective. Consider the accuracy, depth, and reflection in their answers. Return a JSON object with: \n- passed (boolean): true if the student met the objective.\n- feedback (string): an encouraging summary tailored to their performance.\n- evidence (array of strings, optional): specific student statements that support your decision.\n- nextSteps (array of strings, optional): concise suggestions for what the student should explore next if they did not pass.\nKeep the tone supportive and specific.`;
+
+    try {
+      const response = await ai.models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: prompt,
+        config: {
+          responseMimeType: 'application/json',
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+              passed: { type: Type.BOOLEAN },
+              feedback: { type: Type.STRING },
+              evidence: {
+                type: Type.ARRAY,
+                items: { type: Type.STRING },
+              },
+              nextSteps: {
+                type: Type.ARRAY,
+                items: { type: Type.STRING },
+              },
+            },
+            required: ['passed', 'feedback'],
+          },
+        },
+      });
+
+      const parsed = JSON.parse(response.text);
+
+      const questResult: QuestCheckResult = {
+        questId: quest.id,
+        questTitle: quest.title,
+        passed: Boolean(parsed.passed),
+        feedback: typeof parsed.feedback === 'string' && parsed.feedback.trim()
+          ? parsed.feedback
+          : 'Knowledge check completed.',
+      };
+
+      if (Array.isArray(parsed.evidence) && parsed.evidence.length > 0) {
+        questResult.evidence = parsed.evidence;
+      }
+
+      if (Array.isArray(parsed.nextSteps) && parsed.nextSteps.length > 0) {
+        questResult.nextSteps = parsed.nextSteps;
+      }
+
+      setQuestCheckResult(questResult);
+
+      if (questResult.passed) {
+        setCompletedQuestIds(prev => (prev.includes(quest.id) ? prev : [...prev, quest.id]));
+      }
+    } catch (error) {
+      console.error('Failed to evaluate quest knowledge:', error);
+      setQuestCheckResult({
+        questId: quest.id,
+        questTitle: quest.title,
+        passed: false,
+        feedback: 'We could not complete the knowledge check. Please try ending the quest again.',
+      });
+    }
+  };
+
   const handleEndConversation = async (transcript: ConversationTurn[], sessionId: string) => {
     if (!selectedCharacter) return;
     setIsSaving(true);
+    const questForSession = activeQuest;
 
     try {
       const conversationHistory = loadConversations();
@@ -178,6 +318,14 @@ ${transcriptText}`;
       }
     } catch (error) {
       console.error("Failed to generate summary:", error);
+    }
+
+    try {
+      if (questForSession && transcript.length > 1) {
+        await evaluateQuestKnowledge(questForSession, transcript);
+      }
+    } catch (error) {
+      console.error('Failed to run quest knowledge check:', error);
     } finally {
       setIsSaving(false);
       setSelectedCharacter(null);
@@ -208,11 +356,62 @@ ${transcriptText}`;
         return <CharacterCreator onCharacterCreated={handleCharacterCreated} onBack={() => setView('selector')} />;
       case 'quests':
         const allCharacters = [...customCharacters, ...CHARACTERS];
-        return <QuestsView onBack={() => setView('selector')} onSelectQuest={handleSelectQuest} quests={QUESTS} characters={allCharacters} />;
+        return (
+          <QuestsView
+            onBack={() => setView('selector')}
+            onSelectQuest={handleSelectQuest}
+            quests={QUESTS}
+            characters={allCharacters}
+            completedQuestIds={completedQuestIds}
+          />
+        );
       case 'selector':
       default:
         return (
           <div className="text-center animate-fade-in">
+            {questCheckResult && (
+              <div
+                className={`max-w-3xl mx-auto mb-8 text-left p-5 rounded-xl border ${
+                  questCheckResult.passed
+                    ? 'border-green-500/60 bg-green-900/30 text-green-100'
+                    : 'border-amber-500/70 bg-amber-900/30 text-amber-50'
+                }`}
+              >
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <p className="text-xs uppercase tracking-wider font-semibold opacity-80">Quest Knowledge Check</p>
+                    <h3 className="text-xl font-semibold mt-1 text-amber-100">{questCheckResult.questTitle}</h3>
+                    <p className="mt-3 text-sm sm:text-base leading-relaxed">{questCheckResult.feedback}</p>
+                  </div>
+                  <button
+                    onClick={handleDismissQuestResult}
+                    className="text-xs uppercase tracking-wide font-semibold text-gray-200 bg-black/20 hover:bg-black/30 rounded-full px-3 py-1"
+                  >
+                    Dismiss
+                  </button>
+                </div>
+                {questCheckResult.evidence && questCheckResult.evidence.length > 0 && (
+                  <div className="mt-4">
+                    <p className="text-xs font-semibold uppercase tracking-wide opacity-80">Evidence</p>
+                    <ul className="mt-2 space-y-1 text-sm list-disc list-inside">
+                      {questCheckResult.evidence.map((item, index) => (
+                        <li key={`evidence-${index}`}>{item}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                {questCheckResult.nextSteps && questCheckResult.nextSteps.length > 0 && (
+                  <div className="mt-4">
+                    <p className="text-xs font-semibold uppercase tracking-wide opacity-80">Suggested Next Steps</p>
+                    <ul className="mt-2 space-y-1 text-sm list-disc list-inside">
+                      {questCheckResult.nextSteps.map((item, index) => (
+                        <li key={`next-${index}`}>{item}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            )}
              <p className="max-w-3xl mx-auto mb-8 text-gray-400 text-lg">
                 Engage in real-time voice conversations with legendary minds from history, or embark on a guided Learning Quest to master a new subject.
             </p>
