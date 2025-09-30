@@ -112,6 +112,32 @@ const CharacterCreator: React.FC<CharacterCreatorProps> = ({ onCharacterCreated,
     }
     setError(null);
     setIsLoading(true);
+
+    // Step 1: Validate if the character is a real historical figure
+    setLoadingMessage('Verifying historical figure...');
+    try {
+      if (!process.env.API_KEY) throw new Error("API_KEY not set.");
+      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+      const validationPrompt = `Is "${name}" a widely recognized historical figure (e.g., a philosopher, scientist, artist, ruler, inventor, or writer from the past)? Please answer with only "Yes" or "No".`;
+      
+      const validationResponse = await ai.models.generateContent({
+        model: "gemini-2.5-flash",
+        contents: validationPrompt,
+      });
+
+      const validationResult = validationResponse.text.trim().toLowerCase();
+      if (!validationResult.includes('yes')) {
+        setError(`"${name}" does not appear to be a recognized historical figure. Please try another name.`);
+        setIsLoading(false);
+        return;
+      }
+    } catch (err) {
+      console.error("Failed to validate character:", err);
+      setError("An error occurred during verification. Please try again.");
+      setIsLoading(false);
+      return;
+    }
+
     setLoadingMessage('Researching historical figure...');
 
     let personaData: PersonaData | null = null;
@@ -134,7 +160,6 @@ const CharacterCreator: React.FC<CharacterCreatorProps> = ({ onCharacterCreated,
 
       const response = await ai.models.generateContent({
         model: "gemini-2.5-flash",
-        contents: prompt,
         config: {
           responseMimeType: "application/json",
           responseSchema: {
@@ -148,6 +173,7 @@ const CharacterCreator: React.FC<CharacterCreatorProps> = ({ onCharacterCreated,
             required: ["title", "bio", "greeting", "timeframe", "expertise", "passion", "systemInstruction", "suggestedPrompts", "voiceName", "ambienceTag"]
           },
         },
+        contents: prompt,
       });
 
       personaData = JSON.parse(response.text);
@@ -155,14 +181,11 @@ const CharacterCreator: React.FC<CharacterCreatorProps> = ({ onCharacterCreated,
     } catch (err) {
       console.error("Failed to generate persona:", err);
       setError("An error occurred while researching this figure. They may be too obscure or there could be a service issue. Please try another name.");
-    } finally {
-      setIsLoading(false);
-    }
-
-    if (!personaData) {
       setIsLoading(false);
       return;
     }
+
+    if (!personaData) return;
 
     // Part 2: Generate Portrait
     try {
