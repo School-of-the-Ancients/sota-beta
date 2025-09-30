@@ -440,15 +440,9 @@ ${contextTranscript}
       timestamp: Date.now(),
       transcript,
       environmentImageUrl: environmentImageUrl || undefined,
-      ...(activeQuest
-        ? {
-            questId: activeQuest.id,
-            questTitle: activeQuest.title,
-          }
-        : {}),
     };
     saveConversationToLocalStorage(conversation);
-  }, [transcript, character, environmentImageUrl, activeQuest]);
+  }, [transcript, character, environmentImageUrl]);
 
   const handleReset = () => {
     if (transcript.length === 0 && !environmentImageUrl) return;
@@ -473,12 +467,6 @@ ${contextTranscript}
             timestamp: Date.now(),
             transcript: [greetingTurn],
             environmentImageUrl: undefined,
-            ...(activeQuest
-              ? {
-                  questId: activeQuest.id,
-                  questTitle: activeQuest.title,
-                }
-              : {}),
         };
         saveConversationToLocalStorage(clearedConversation);
     }

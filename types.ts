@@ -49,15 +49,6 @@ export interface Summary {
   takeaways: string[];
 }
 
-export interface QuestAssessment {
-  questId: string;
-  questTitle: string;
-  passed: boolean;
-  summary: string;
-  evidence: string[];
-  improvements: string[];
-}
-
 export interface SavedConversation {
   id: string;
   characterId: string;
@@ -67,9 +58,6 @@ export interface SavedConversation {
   transcript: ConversationTurn[];
   environmentImageUrl?: string;
   summary?: Summary;
-  questId?: string;
-  questTitle?: string;
-  questAssessment?: QuestAssessment;
 }
 
 export interface Quest {
