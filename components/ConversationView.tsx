@@ -364,7 +364,7 @@ const ConversationView: React.FC<ConversationViewProps> = ({ character, onEndCon
   }, [character]);
 
 
-  const {
+  const { 
     connectionState,
     userTranscription,
     modelTranscription,
@@ -372,6 +372,38 @@ const ConversationView: React.FC<ConversationViewProps> = ({ character, onEndCon
     toggleMicrophone,
     sendTextMessage
   } = useGeminiLive(character.systemInstruction, character.voiceName, handleTurnComplete, handleEnvironmentChange, handleArtifactDisplay, activeQuest);
+
+  const latestVisual = useMemo(() => {
+    for (let i = transcript.length - 1; i >= 0; i--) {
+      const turn = transcript[i];
+      if (turn.artifact) {
+        const isEnvironment = turn.text?.toLowerCase().includes('environment');
+        return {
+          id: turn.artifact.id,
+          title: turn.artifact.name,
+          subtitle: isEnvironment ? 'Environment' : 'Artifact',
+          description: turn.text,
+          imageUrl: turn.artifact.imageUrl,
+          loading: turn.artifact.loading,
+          aspectClass: isEnvironment ? 'aspect-video' : 'aspect-[4/3]',
+        };
+      }
+    }
+
+    if (environmentImageUrl) {
+      return {
+        id: 'environment_fallback',
+        title: 'Current Environment',
+        subtitle: 'Environment',
+        description: 'Active exploration setting',
+        imageUrl: environmentImageUrl,
+        loading: false,
+        aspectClass: 'aspect-video',
+      };
+    }
+
+    return null;
+  }, [transcript, environmentImageUrl]);
 
   const updateDynamicSuggestions = useCallback(async (currentTranscript: ConversationTurn[]) => {
     if (currentTranscript.length === 0) return;
@@ -493,8 +525,8 @@ ${contextTranscript}
   };
 
   return (
-    <div 
-        className="relative flex flex-col md:flex-row gap-4 md:gap-8 max-w-6xl mx-auto w-full flex-grow rounded-lg md:rounded-2xl shadow-2xl border border-gray-700 overflow-hidden bg-gray-900/60 backdrop-blur-lg transition-all duration-1000"
+    <div
+        className="relative flex flex-col md:flex-row gap-4 md:gap-8 max-w-6xl mx-auto w-full flex-grow rounded-lg md:rounded-2xl shadow-2xl border border-gray-700 bg-gray-900/60 backdrop-blur-lg transition-all duration-1000 md:overflow-hidden"
     >
       {isGeneratingVisual && (
          <div className="absolute inset-0 bg-black/80 flex flex-col items-center justify-center z-30 rounded-lg md:rounded-2xl">
@@ -503,9 +535,9 @@ ${contextTranscript}
         </div>
       )}
       
-      <div className="relative z-10 flex flex-col md:flex-row gap-4 md:gap-8 w-full p-2 sm:p-4 md:p-6">
-        <div className="w-full md:w-1/3 md:max-w-sm flex flex-col items-center text-center">
-            <div className="relative w-40 h-40 sm:w-48 sm:h-48 md:w-64 md:h-64 flex-shrink-0">
+      <div className="relative z-10 flex flex-col md:flex-row gap-4 md:gap-8 w-full p-3 sm:p-4 md:p-6">
+        <div className="order-2 md:order-1 w-full md:w-1/3 md:max-w-sm flex flex-col items-center text-center gap-6">
+            <div className="relative w-32 h-32 sm:w-44 sm:h-44 md:w-64 md:h-64 flex-shrink-0">
                 <img
                     src={character.portraitUrl}
                     alt={character.name}
@@ -515,7 +547,7 @@ ${contextTranscript}
                     <StatusIndicator state={connectionState} isMicActive={isMicActive} />
                 </div>
             </div>
-            <h2 className="text-2xl sm:text-3xl font-bold text-amber-200 mt-8">{character.name}</h2>
+            <h2 className="text-2xl sm:text-3xl font-bold text-amber-200">{character.name}</h2>
             <p className="text-gray-400 italic">{character.title}</p>
 
             {activeQuest && (
@@ -619,8 +651,48 @@ ${contextTranscript}
               </div>
             </div>
         </div>
-        <div className="w-full md:w-2/3 bg-gray-900/50 p-4 rounded-lg border border-gray-700 h-[60vh] md:h-auto flex flex-col">
-            <h3 className="text-xl font-semibold mb-4 text-gray-300 border-b border-gray-700 pb-2 flex-shrink-0">Conversation Transcript</h3>
+        <div className="order-1 md:order-2 w-full md:w-2/3 bg-gray-900/50 p-4 rounded-lg border border-gray-700 min-h-[70vh] md:min-h-0 flex flex-col gap-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-xl font-semibold text-gray-300">Conversation Transcript</h3>
+              <span className="text-xs uppercase tracking-wide text-gray-500">Live</span>
+            </div>
+            {latestVisual && (
+              <div className="sticky top-2 sm:top-4 z-20">
+                <div className="rounded-xl border border-teal-800/70 bg-gray-950/80 backdrop-blur-lg shadow-lg overflow-hidden">
+                  <div className="flex items-center justify-between px-3 py-2 border-b border-teal-900/60">
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-wide text-teal-300">Latest Visual</p>
+                      <p className="text-sm font-semibold text-amber-100">{latestVisual.title}</p>
+                    </div>
+                    <span className="text-xs text-gray-400">{latestVisual.subtitle}</span>
+                  </div>
+                  <div className={`relative w-full ${latestVisual.aspectClass}`}>
+                    <div className="absolute inset-0">
+                      {latestVisual.loading ? (
+                        <div className="h-full w-full bg-gray-900 flex items-center justify-center">
+                          <div className="w-10 h-10 border-4 border-teal-400 border-t-transparent rounded-full animate-spin"></div>
+                        </div>
+                      ) : (
+                        latestVisual.imageUrl ? (
+                          <img
+                            src={latestVisual.imageUrl}
+                            alt={latestVisual.title}
+                            className="h-full w-full object-cover"
+                          />
+                        ) : (
+                          <div className="h-full w-full bg-gray-900 flex items-center justify-center text-gray-400 text-sm">
+                            Visual loading...
+                          </div>
+                        )
+                      )}
+                    </div>
+                  </div>
+                  <div className="px-3 py-2 border-t border-teal-900/60 text-xs text-gray-300">
+                    {latestVisual.description}
+                  </div>
+                </div>
+              </div>
+            )}
             <div className="flex-grow space-y-4 overflow-y-auto pr-2">
                 {transcript.map((turn, index) => {
                     const isUser = turn.speaker === 'user';
