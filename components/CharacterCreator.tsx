@@ -256,7 +256,7 @@ const CharacterCreator: React.FC<CharacterCreatorProps> = ({ onCharacterCreated,
             </div>
             <div>
                 <label htmlFor="focus" className="block text-sm font-medium text-gray-300 mb-2">Character Focus <span className="text-gray-500">(Optional)</span></label>
-                <textarea id="focus" value={focus} onChange={(e) => setFocus(e.target.value)} placeholder="e.g., 'Focus on her work with radioactivity', 'as a young, revolutionary scientist'" rows={3} className="w-full bg-gray-800 border border-gray-600 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-amber-400 text-lg" />
+                <textarea id="focus" value={focus} onChange={(e) => setFocus(e.target.value)} placeholder="e.g., 'Focus on his later years as an inventor', 'as a young, revolutionary artist'" rows={3} className="w-full bg-gray-800 border border-gray-600 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-amber-400 text-lg" />
             </div>
             <button onClick={handleCreateCharacter} disabled={!name.trim()} className="w-full bg-amber-600 hover:bg-amber-500 text-black font-bold py-3 px-6 rounded-lg transition-colors text-lg disabled:opacity-50">
                 Create Ancient
