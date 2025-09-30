@@ -84,20 +84,56 @@ const StatusIndicator: React.FC<{ state: ConnectionState; isMicActive: boolean }
 };
 
 const ArtifactDisplay: React.FC<{ artifact: NonNullable<ConversationTurn['artifact']> }> = ({ artifact }) => {
-    return (
-      <div className="mt-2 border-t border-teal-800/50 pt-3">
-        <p className="text-sm font-semibold text-teal-300 mb-2">{artifact.name}</p>
-        {artifact.loading && (
-          <div className="w-full aspect-[4/3] bg-gray-800 rounded-lg flex items-center justify-center">
-            <div className="w-8 h-8 border-2 border-teal-400 border-t-transparent rounded-full animate-spin"></div>
+  return (
+    <div className="mt-2 border-t border-teal-800/50 pt-3">
+      <p className="text-sm font-semibold text-teal-300 mb-2">{artifact.name}</p>
+      {artifact.loading && (
+        <div className="w-full aspect-[4/3] bg-gray-800 rounded-lg flex items-center justify-center">
+          <div className="w-8 h-8 border-2 border-teal-400 border-t-transparent rounded-full animate-spin"></div>
+        </div>
+      )}
+      {artifact.imageUrl && !artifact.loading && (
+        <img src={artifact.imageUrl} alt={artifact.name} className="w-full rounded-lg" />
+      )}
+    </div>
+  );
+};
+
+type VisualPreview = {
+  title: string;
+  imageUrl: string | null;
+  loading: boolean;
+  type: 'environment' | 'artifact';
+};
+
+const LatestVisualPreview: React.FC<{ visual: VisualPreview }> = ({ visual }) => {
+  const badgeText = visual.type === 'environment' ? 'Environment' : 'Artifact';
+
+  return (
+    <div className="sticky top-4 z-20 w-full">
+      <div className="bg-gray-950/80 border border-amber-700/60 rounded-2xl shadow-xl overflow-hidden backdrop-blur-sm">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-amber-700/40">
+          <span className="text-xs font-semibold uppercase tracking-wide text-amber-300">{badgeText}</span>
+          <span className="text-xs text-gray-400">Live Preview</span>
+        </div>
+        <div className="px-4 pt-3 pb-4">
+          <h3 className="text-lg font-semibold text-amber-100 leading-snug">{visual.title}</h3>
+          <div className="mt-3 aspect-[16/9] rounded-xl border border-gray-700 overflow-hidden bg-gray-800 flex items-center justify-center">
+            {visual.loading && (
+              <div className="w-10 h-10 border-4 border-amber-300 border-t-transparent rounded-full animate-spin" />
+            )}
+            {!visual.loading && visual.imageUrl && (
+              <img src={visual.imageUrl} alt={visual.title} className="w-full h-full object-cover" />
+            )}
+            {!visual.loading && !visual.imageUrl && (
+              <p className="text-sm text-gray-400 px-4 text-center">Visual will appear here shortly.</p>
+            )}
           </div>
-        )}
-        {artifact.imageUrl && !artifact.loading && (
-          <img src={artifact.imageUrl} alt={artifact.name} className="w-full rounded-lg" />
-        )}
+        </div>
       </div>
-    );
-  };
+    </div>
+  );
+};
 
 const ConversationView: React.FC<ConversationViewProps> = ({ character, onEndConversation, environmentImageUrl, onEnvironmentUpdate, activeQuest, isSaving }) => {
   const [transcript, setTranscript] = useState<ConversationTurn[]>([]);
@@ -484,6 +520,33 @@ ${contextTranscript}
     }
   };
 
+  const latestVisual = useMemo<VisualPreview | null>(() => {
+    for (let i = transcript.length - 1; i >= 0; i -= 1) {
+      const turn = transcript[i];
+      if (turn.artifact) {
+        const { artifact } = turn;
+        const type = artifact.id.startsWith('env_') ? 'environment' : 'artifact';
+        return {
+          title: artifact.name,
+          imageUrl: artifact.imageUrl || null,
+          loading: Boolean(artifact.loading),
+          type,
+        };
+      }
+    }
+
+    if (environmentImageUrl) {
+      return {
+        title: 'Current Environment',
+        imageUrl: environmentImageUrl,
+        loading: false,
+        type: 'environment',
+      };
+    }
+
+    return null;
+  }, [transcript, environmentImageUrl]);
+
   const handleSendText = (e: React.FormEvent) => {
     e.preventDefault();
     if (textInput.trim()) {
@@ -493,8 +556,8 @@ ${contextTranscript}
   };
 
   return (
-    <div 
-        className="relative flex flex-col md:flex-row gap-4 md:gap-8 max-w-6xl mx-auto w-full flex-grow rounded-lg md:rounded-2xl shadow-2xl border border-gray-700 overflow-hidden bg-gray-900/60 backdrop-blur-lg transition-all duration-1000"
+    <div
+        className="relative flex flex-col md:flex-row gap-4 md:gap-8 max-w-6xl mx-auto w-full flex-grow rounded-lg md:rounded-2xl shadow-2xl border border-gray-700 bg-gray-900/60 backdrop-blur-lg transition-all duration-1000"
     >
       {isGeneratingVisual && (
          <div className="absolute inset-0 bg-black/80 flex flex-col items-center justify-center z-30 rounded-lg md:rounded-2xl">
@@ -504,7 +567,7 @@ ${contextTranscript}
       )}
       
       <div className="relative z-10 flex flex-col md:flex-row gap-4 md:gap-8 w-full p-2 sm:p-4 md:p-6">
-        <div className="w-full md:w-1/3 md:max-w-sm flex flex-col items-center text-center">
+        <div className="order-2 md:order-1 w-full md:w-1/3 md:max-w-sm flex flex-col items-start md:items-center text-left md:text-center gap-6">
             <div className="relative w-40 h-40 sm:w-48 sm:h-48 md:w-64 md:h-64 flex-shrink-0">
                 <img
                     src={character.portraitUrl}
@@ -540,7 +603,7 @@ ${contextTranscript}
                 </div>
             )}
             
-            <div className="mt-6 text-left w-full max-w-xs">
+            <div className="w-full">
             {transcript.length <= 1 ? (
                 <div className="animate-fade-in">
                 <h4 className="text-md font-bold text-amber-200 mb-2 text-center">Conversation Starters</h4>
@@ -586,7 +649,7 @@ ${contextTranscript}
             )}
             </div>
 
-            <div className="flex items-center justify-center gap-4 mt-auto pt-6 flex-wrap">
+            <div className="flex items-center justify-center md:justify-between gap-3 mt-auto pt-2 flex-wrap w-full">
               <button
                   onClick={() => onEndConversation(transcript, sessionIdRef.current)}
                   disabled={isSaving}
@@ -619,7 +682,9 @@ ${contextTranscript}
               </div>
             </div>
         </div>
-        <div className="w-full md:w-2/3 bg-gray-900/50 p-4 rounded-lg border border-gray-700 h-[60vh] md:h-auto flex flex-col">
+        <div className="order-1 md:order-2 flex-1 flex flex-col gap-4">
+          {latestVisual && <LatestVisualPreview visual={latestVisual} />}
+          <div className="bg-gray-900/50 p-4 rounded-lg border border-gray-700 min-h-[60vh] md:min-h-0 flex flex-col">
             <h3 className="text-xl font-semibold mb-4 text-gray-300 border-b border-gray-700 pb-2 flex-shrink-0">Conversation Transcript</h3>
             <div className="flex-grow space-y-4 overflow-y-auto pr-2">
                 {transcript.map((turn, index) => {
@@ -681,6 +746,7 @@ ${contextTranscript}
                     <SendIcon className="w-5 h-5" />
                 </button>
             </form>
+          </div>
         </div>
       </div>
     </div>
