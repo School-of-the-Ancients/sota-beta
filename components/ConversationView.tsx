@@ -99,6 +99,15 @@ const ArtifactDisplay: React.FC<{ artifact: NonNullable<ConversationTurn['artifa
     );
   };
 
+type LatestVisual = {
+  id: string;
+  name: string;
+  imageUrl: string;
+  loading?: boolean;
+  source: 'environment' | 'artifact';
+  description: string;
+};
+
 const ConversationView: React.FC<ConversationViewProps> = ({ character, onEndConversation, environmentImageUrl, onEnvironmentUpdate, activeQuest, isSaving }) => {
   const [transcript, setTranscript] = useState<ConversationTurn[]>([]);
   const [textInput, setTextInput] = useState('');
@@ -142,6 +151,7 @@ const ConversationView: React.FC<ConversationViewProps> = ({ character, onEndCon
   const [placeholder, setPlaceholder] = useState(placeholders[0]);
 
   const sessionIdRef = useRef(`conv_${character.id}_${Date.now()}`);
+  const transcriptContainerRef = useRef<HTMLDivElement | null>(null);
 
   // Load existing conversation or start a new one with a greeting
   useEffect(() => {
@@ -428,6 +438,12 @@ ${contextTranscript}
     }
   }, [transcript, updateDynamicSuggestions]);
 
+  useEffect(() => {
+    if (transcriptContainerRef.current) {
+      transcriptContainerRef.current.scrollTop = transcriptContainerRef.current.scrollHeight;
+    }
+  }, [transcript, userTranscription, modelTranscription]);
+
   // Auto-save conversation on transcript change
   useEffect(() => {
     if (transcript.length === 0 && !environmentImageUrl) return;
@@ -492,9 +508,40 @@ ${contextTranscript}
     }
   };
 
+  const latestVisual: LatestVisual | null = useMemo(() => {
+    for (let i = transcript.length - 1; i >= 0; i -= 1) {
+      const turn = transcript[i];
+      if (turn.artifact) {
+        return {
+          id: turn.artifact.id,
+          name: turn.artifact.name,
+          imageUrl: turn.artifact.imageUrl,
+          loading: turn.artifact.loading,
+          source: turn.artifact.id.startsWith('env_') ? 'environment' : 'artifact',
+          description: turn.text,
+        };
+      }
+    }
+
+    if (environmentImageUrl) {
+      return {
+        id: 'environment_fallback',
+        name: 'Current Environment',
+        imageUrl: environmentImageUrl,
+        loading: false,
+        source: 'environment',
+        description: 'Current Environment',
+      };
+    }
+
+    return null;
+  }, [transcript, environmentImageUrl]);
+
+  const previewAspectClass = latestVisual?.source === 'environment' ? 'aspect-[16/9]' : 'aspect-[4/3]';
+
   return (
-    <div 
-        className="relative flex flex-col md:flex-row gap-4 md:gap-8 max-w-6xl mx-auto w-full flex-grow rounded-lg md:rounded-2xl shadow-2xl border border-gray-700 overflow-hidden bg-gray-900/60 backdrop-blur-lg transition-all duration-1000"
+    <div
+        className="relative flex flex-col md:flex-row gap-4 md:gap-8 max-w-6xl mx-auto w-full flex-grow rounded-xl md:rounded-2xl shadow-2xl border border-gray-700 overflow-hidden bg-gray-900/60 backdrop-blur-lg transition-all duration-1000"
     >
       {isGeneratingVisual && (
          <div className="absolute inset-0 bg-black/80 flex flex-col items-center justify-center z-30 rounded-lg md:rounded-2xl">
@@ -503,9 +550,9 @@ ${contextTranscript}
         </div>
       )}
       
-      <div className="relative z-10 flex flex-col md:flex-row gap-4 md:gap-8 w-full p-2 sm:p-4 md:p-6">
-        <div className="w-full md:w-1/3 md:max-w-sm flex flex-col items-center text-center">
-            <div className="relative w-40 h-40 sm:w-48 sm:h-48 md:w-64 md:h-64 flex-shrink-0">
+      <div className="relative z-10 flex flex-col md:flex-row gap-4 md:gap-8 w-full p-3 sm:p-4 md:p-6">
+        <div className="w-full md:w-1/3 md:max-w-sm flex flex-col items-center text-center gap-6 md:gap-8">
+            <div className="relative w-32 h-32 sm:w-44 sm:h-44 md:w-64 md:h-64 flex-shrink-0">
                 <img
                     src={character.portraitUrl}
                     alt={character.name}
@@ -515,8 +562,10 @@ ${contextTranscript}
                     <StatusIndicator state={connectionState} isMicActive={isMicActive} />
                 </div>
             </div>
-            <h2 className="text-2xl sm:text-3xl font-bold text-amber-200 mt-8">{character.name}</h2>
-            <p className="text-gray-400 italic">{character.title}</p>
+            <div className="flex flex-col items-center">
+              <h2 className="text-2xl sm:text-3xl font-bold text-amber-200 mt-4 md:mt-6">{character.name}</h2>
+              <p className="text-gray-400 italic text-sm sm:text-base mt-1">{character.title}</p>
+            </div>
 
             {activeQuest && (
                 <div className="mt-4 p-4 w-full max-w-xs bg-amber-900/40 border border-amber-800/80 rounded-lg text-left animate-fade-in space-y-3">
@@ -540,7 +589,7 @@ ${contextTranscript}
                 </div>
             )}
             
-            <div className="mt-6 text-left w-full max-w-xs">
+            <div className="w-full max-w-xs text-left">
             {transcript.length <= 1 ? (
                 <div className="animate-fade-in">
                 <h4 className="text-md font-bold text-amber-200 mb-2 text-center">Conversation Starters</h4>
@@ -619,14 +668,47 @@ ${contextTranscript}
               </div>
             </div>
         </div>
-        <div className="w-full md:w-2/3 bg-gray-900/50 p-4 rounded-lg border border-gray-700 h-[60vh] md:h-auto flex flex-col">
-            <h3 className="text-xl font-semibold mb-4 text-gray-300 border-b border-gray-700 pb-2 flex-shrink-0">Conversation Transcript</h3>
-            <div className="flex-grow space-y-4 overflow-y-auto pr-2">
+        <div className="w-full md:w-2/3 bg-gray-900/50 p-4 rounded-lg border border-gray-700 min-h-[70vh] md:h-auto flex flex-col gap-4">
+            <div className="flex items-center justify-between gap-2 flex-shrink-0 border-b border-gray-700 pb-2">
+              <h3 className="text-xl font-semibold text-gray-300">Conversation Transcript</h3>
+              <span className="text-xs text-gray-500 uppercase tracking-wide">Live</span>
+            </div>
+            <div
+              ref={transcriptContainerRef}
+              className="flex-grow overflow-y-auto px-1 md:px-2 flex flex-col gap-4 pb-4"
+            >
+                {latestVisual && (
+                  <div className="sticky top-0 z-20 -mx-1 md:-mx-2 pt-1 pb-2 backdrop-blur-sm">
+                    <div className="rounded-xl border border-teal-700/60 bg-gray-900/90 shadow-lg overflow-hidden">
+                      <div className="flex items-center justify-between px-3 py-2 bg-gray-800/70">
+                        <span className="text-xs font-semibold uppercase tracking-wide text-teal-200">
+                          {latestVisual.source === 'environment' ? 'Environment Preview' : 'Artifact Preview'}
+                        </span>
+                        <span className="text-[11px] text-gray-400">Pinned</span>
+                      </div>
+                      {(!latestVisual.imageUrl || latestVisual.loading) ? (
+                        <div className={`w-full ${previewAspectClass} bg-gray-800 flex items-center justify-center`}>
+                          <div className="w-8 h-8 border-2 border-teal-400 border-t-transparent rounded-full animate-spin"></div>
+                        </div>
+                      ) : (
+                        <img
+                          src={latestVisual.imageUrl}
+                          alt={latestVisual.name}
+                          className={`w-full ${previewAspectClass} object-cover`}
+                        />
+                      )}
+                      <div className="px-3 py-2 text-left">
+                        <p className="text-sm font-semibold text-teal-100">{latestVisual.name}</p>
+                        <p className="text-xs text-gray-400 mt-1 leading-relaxed">{latestVisual.description}</p>
+                      </div>
+                    </div>
+                  </div>
+                )}
                 {transcript.map((turn, index) => {
                     const isUser = turn.speaker === 'user';
                     const isOperator = turn.speakerName === 'Matrix Operator';
-                    
-                    const containerClasses = isUser 
+
+                    const containerClasses = isUser
                         ? 'bg-blue-900/20 border-blue-800/50' 
                         : isOperator
                             ? 'bg-gray-700/20 border-gray-600/50'
@@ -663,7 +745,7 @@ ${contextTranscript}
                 </>
                 )}
             </div>
-            <form onSubmit={handleSendText} className="mt-4 flex gap-2 flex-shrink-0">
+            <form onSubmit={handleSendText} className="flex gap-2 flex-shrink-0">
                 <input
                     type="text"
                     value={textInput}
