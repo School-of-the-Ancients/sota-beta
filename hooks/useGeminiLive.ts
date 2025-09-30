@@ -186,9 +186,53 @@ export const useGeminiLive = (
         try {
             const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
             
-            let finalSystemInstruction = systemInstruction;
+            const trimmedSystemInstruction = systemInstruction.trim();
+            let accentGuidance = '';
+            let instructionBody = trimmedSystemInstruction;
+
+            if (trimmedSystemInstruction) {
+                const lowerInstruction = trimmedSystemInstruction.toLowerCase();
+                const speakIndex = lowerInstruction.lastIndexOf('speak ');
+
+                if (speakIndex !== -1) {
+                    accentGuidance = trimmedSystemInstruction.slice(speakIndex).trim();
+                    instructionBody = trimmedSystemInstruction.slice(0, speakIndex).trim();
+                } else {
+                    const lastPeriodIndex = trimmedSystemInstruction.lastIndexOf('.');
+                    if (lastPeriodIndex !== -1 && lastPeriodIndex < trimmedSystemInstruction.length - 1) {
+                        accentGuidance = trimmedSystemInstruction.slice(lastPeriodIndex + 1).trim();
+                        instructionBody = trimmedSystemInstruction.slice(0, lastPeriodIndex + 1).trim();
+                    }
+                }
+            }
+
+            const instructionSegments: string[] = [];
+
             if (activeQuest) {
-                finalSystemInstruction = `YOUR CURRENT MISSION: As a mentor, your primary goal is to guide the student to understand the following: "${activeQuest.objective}". Tailor your questions and explanations to lead them towards this goal.\n\n---\n\n${systemInstruction}`;
+                instructionSegments.push(
+                    `YOUR CURRENT MISSION: As a mentor, your primary goal is to guide the student to understand the following: "${activeQuest.objective}". Tailor your questions and explanations to lead them towards this goal.`,
+                );
+                instructionSegments.push('---');
+            }
+
+            if (instructionBody) {
+                instructionSegments.push(instructionBody);
+            }
+
+            let finalSystemInstruction = '';
+
+            if (accentGuidance) {
+                if (!activeQuest && instructionSegments.length === 1 && instructionSegments[0] === instructionBody) {
+                    finalSystemInstruction = [instructionBody, accentGuidance].filter(Boolean).join(' ').trim();
+                } else {
+                    finalSystemInstruction = [...instructionSegments, accentGuidance].filter(Boolean).join('\n\n');
+                }
+            } else {
+                finalSystemInstruction = instructionSegments.join('\n\n');
+            }
+
+            if (!finalSystemInstruction) {
+                finalSystemInstruction = systemInstruction;
             }
 
             const sessionPromise = ai.live.connect({
