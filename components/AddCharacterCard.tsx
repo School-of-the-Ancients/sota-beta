@@ -8,14 +8,24 @@ interface AddCharacterCardProps {
 const AddCharacterCard: React.FC<AddCharacterCardProps> = ({ onClick }) => {
   return (
     <div
-      className="w-72 h-96 cursor-pointer rounded-lg shadow-lg bg-gray-800/50 border-2 border-dashed border-gray-600 hover:border-amber-400 transition-all duration-300 transform hover:scale-105 flex flex-col items-center justify-center text-gray-400 hover:text-amber-300"
+      className="group flex min-h-[18rem] w-full cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed border-gray-600 bg-gray-800/40 p-6 text-center text-gray-400 shadow-lg transition-all duration-300 hover:border-amber-400 hover:text-amber-300 focus:outline-none focus:ring-2 focus:ring-amber-400 sm:min-h-[20rem]"
       onClick={onClick}
+      onKeyDown={(event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          onClick();
+        }
+      }}
+      role="button"
+      tabIndex={0}
     >
-      <svg xmlns="http://www.w3.org/2000/svg" className="h-24 w-24 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1}>
+      <svg xmlns="http://www.w3.org/2000/svg" className="mb-4 h-20 w-20 transition-transform duration-300 group-hover:scale-110" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1}>
         <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
       </svg>
-      <h3 className="text-2xl font-bold">Bring a new mind to the school.</h3>
-     
+      <h3 className="text-xl font-bold sm:text-2xl">Bring a new mind to the school.</h3>
+      <p className="mt-3 max-w-xs text-sm text-gray-400 sm:text-base">
+        Craft a custom mentor with your own portrait, voice, and expertise.
+      </p>
     </div>
   );
 };
