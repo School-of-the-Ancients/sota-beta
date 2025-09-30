@@ -372,38 +372,42 @@ Focus only on the student's contributions. Mark passed=true only if the learner 
       case 'selector':
       default:
         return (
-          <div className="text-center animate-fade-in">
-             <p className="max-w-3xl mx-auto mb-8 text-gray-400 text-lg">
+          <div className="animate-fade-in space-y-8 px-2 text-center sm:space-y-10 sm:px-0">
+            <div className="space-y-3">
+              <p className="mx-auto max-w-2xl text-base leading-relaxed text-gray-300 sm:max-w-3xl sm:text-lg">
                 Engage in real-time voice conversations with legendary minds from history, or embark on a guided Learning Quest to master a new subject.
-            </p>
-            <div className="max-w-3xl mx-auto mb-8 bg-gray-800/50 border border-gray-700 rounded-lg p-4 text-left">
-              <p className="text-sm text-gray-300 mb-2 font-semibold">Quest Progress</p>
-              <p className="text-xs uppercase tracking-wide text-gray-400 mb-3">{completedQuests.length} of {QUESTS.length} quests completed</p>
-              <div className="w-full h-2 bg-gray-700 rounded-full overflow-hidden">
+              </p>
+            </div>
+            <div className="mx-auto w-full max-w-3xl rounded-2xl border border-gray-700 bg-gray-800/60 p-4 text-left shadow-lg sm:p-6">
+              <p className="text-xs font-semibold uppercase tracking-wide text-amber-200/90 sm:text-sm">Quest Progress</p>
+              <p className="mt-1 text-xs uppercase tracking-wide text-gray-400 sm:text-sm">
+                {completedQuests.length} of {QUESTS.length} quests completed
+              </p>
+              <div className="mt-4 h-2 w-full overflow-hidden rounded-full bg-gray-700">
                 <div
-                  className="h-full bg-amber-500 transition-all duration-500"
+                  className="h-full rounded-full bg-amber-500 transition-all duration-500"
                   style={{ width: `${Math.min(100, Math.round((completedQuests.length / Math.max(QUESTS.length, 1)) * 100))}%` }}
                 />
               </div>
             </div>
             {lastQuestOutcome && (
               <div
-                className={`max-w-3xl mx-auto mb-8 rounded-lg border p-5 text-left shadow-lg ${lastQuestOutcome.passed ? 'bg-emerald-900/40 border-emerald-700' : 'bg-red-900/30 border-red-700'}`}
+                className={`mx-auto w-full max-w-3xl rounded-2xl border p-5 text-left shadow-xl sm:p-6 ${lastQuestOutcome.passed ? 'bg-emerald-900/40 border-emerald-700' : 'bg-red-900/30 border-red-700'}`}
               >
-                <div className="flex justify-between items-start gap-4">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                   <div>
-                    <p className="text-xs uppercase tracking-wide text-gray-300 font-semibold">Latest Quest Review</p>
-                    <h3 className="text-2xl font-bold text-amber-200 mt-1">{lastQuestOutcome.questTitle}</h3>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-gray-300">Latest Quest Review</p>
+                    <h3 className="mt-1 text-2xl font-bold text-amber-200 sm:text-3xl">{lastQuestOutcome.questTitle}</h3>
                   </div>
-                  <span className={`text-sm font-semibold px-3 py-1 rounded-full ${lastQuestOutcome.passed ? 'bg-emerald-600 text-emerald-50' : 'bg-red-600 text-red-50'}`}>
+                  <span className={`inline-flex items-center justify-center rounded-full px-3 py-1 text-sm font-semibold ${lastQuestOutcome.passed ? 'bg-emerald-600 text-emerald-50' : 'bg-red-600 text-red-50'}`}>
                     {lastQuestOutcome.passed ? 'Completed' : 'Needs Review'}
                   </span>
                 </div>
-                <p className="text-gray-200 mt-4 leading-relaxed">{lastQuestOutcome.summary}</p>
+                <p className="mt-4 text-sm leading-relaxed text-gray-100 sm:text-base">{lastQuestOutcome.summary}</p>
                 {lastQuestOutcome.evidence.length > 0 && (
-                  <div className="mt-4">
-                    <p className="text-sm font-semibold text-emerald-200 uppercase tracking-wide mb-1">Highlights</p>
-                    <ul className="list-disc list-inside text-gray-100 space-y-1 text-sm">
+                  <div className="mt-4 space-y-2">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-emerald-200 sm:text-sm">Highlights</p>
+                    <ul className="list-disc space-y-1 pl-4 text-sm text-gray-100">
                       {lastQuestOutcome.evidence.map(item => (
                         <li key={item}>{item}</li>
                       ))}
@@ -411,9 +415,9 @@ Focus only on the student's contributions. Mark passed=true only if the learner 
                   </div>
                 )}
                 {!lastQuestOutcome.passed && lastQuestOutcome.improvements.length > 0 && (
-                  <div className="mt-4">
-                    <p className="text-sm font-semibold text-red-200 uppercase tracking-wide mb-1">Next Steps</p>
-                    <ul className="list-disc list-inside text-red-100 space-y-1 text-sm">
+                  <div className="mt-4 space-y-2">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-red-200 sm:text-sm">Next Steps</p>
+                    <ul className="list-disc space-y-1 pl-4 text-sm text-red-100">
                       {lastQuestOutcome.improvements.map(item => (
                         <li key={item}>{item}</li>
                       ))}
@@ -422,24 +426,24 @@ Focus only on the student's contributions. Mark passed=true only if the learner 
                 )}
               </div>
             )}
-            <div className="flex flex-col sm:flex-row justify-center items-center gap-4 mb-12">
-                <button
-                    onClick={() => setView('quests')}
-                    className="flex items-center gap-3 bg-amber-600 hover:bg-amber-500 text-black font-bold py-3 px-8 rounded-lg transition-colors duration-300 text-lg w-full sm:w-auto"
-                >
-                    <QuestIcon className="w-6 h-6" />
-                    <span>Learning Quests</span>
-                </button>
-                <button
-                    onClick={() => setView('history')}
-                    className="bg-gray-700 hover:bg-gray-600 text-amber-300 font-bold py-3 px-8 rounded-lg transition-colors duration-300 border border-gray-600 w-full sm:w-auto"
-                >
-                    View Conversation History
-                </button>
+            <div className="flex flex-col items-stretch justify-center gap-3 sm:flex-row sm:items-center sm:gap-4">
+              <button
+                onClick={() => setView('quests')}
+                className="flex w-full items-center justify-center gap-3 rounded-xl bg-amber-600 py-3 text-base font-bold text-black transition-colors duration-300 hover:bg-amber-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 sm:w-auto sm:px-8 sm:text-lg"
+              >
+                <QuestIcon className="h-6 w-6" />
+                <span>Learning Quests</span>
+              </button>
+              <button
+                onClick={() => setView('history')}
+                className="w-full rounded-xl border border-gray-600 bg-gray-700 py-3 text-base font-bold text-amber-300 transition-colors duration-300 hover:bg-gray-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 sm:w-auto sm:px-8 sm:text-lg"
+              >
+                View Conversation History
+              </button>
             </div>
-
-            <Instructions />
-
+            <div className="mx-auto w-full max-w-5xl text-left">
+              <Instructions />
+            </div>
             <CharacterSelector
               characters={[...customCharacters, ...CHARACTERS]}
               onSelectCharacter={handleSelectCharacter}
@@ -459,17 +463,20 @@ Focus only on the student's contributions. Mark passed=true only if the learner 
       />
       {environmentImageUrl && <div className="absolute inset-0 bg-black/50 z-0" />}
 
-      <div 
-        className="relative z-10 min-h-screen flex flex-col text-gray-200 font-serif p-4 sm:p-6 lg:p-8"
-        style={{ background: environmentImageUrl ? 'transparent' : 'linear-gradient(to bottom right, #1a1a1a, #2b2b2b)' }}
+      <div
+        className="relative z-10 min-h-screen flex flex-col text-gray-200 font-serif p-4 pb-16 sm:p-6 sm:pb-20 lg:p-8"
+        style={{
+          background: environmentImageUrl ? 'transparent' : 'linear-gradient(to bottom right, #1a1a1a, #2b2b2b)',
+          paddingBottom: 'calc(env(safe-area-inset-bottom) + 2rem)',
+        }}
       >
-        <header className="text-center mb-8">
-          <h1 className="text-4xl sm:text-5xl md:text-6xl font-bold text-amber-300 tracking-wider" style={{ textShadow: '0 0 10px rgba(252, 211, 77, 0.5)' }}>
+        <header className="mb-8 text-center sm:mb-10">
+          <h1 className="text-4xl font-bold tracking-wider text-amber-300 sm:text-5xl md:text-6xl" style={{ textShadow: '0 0 10px rgba(252, 211, 77, 0.5)' }}>
             School of the Ancients
           </h1>
-          <p className="text-gray-400 mt-2 text-lg">Old world wisdom. New world classroom.</p>
+          <p className="mt-2 text-base text-gray-400 sm:text-lg">Old world wisdom. New world classroom.</p>
         </header>
-        <main className="max-w-7xl w-full mx-auto flex-grow flex flex-col">
+        <main className="mx-auto flex w-full max-w-7xl flex-grow flex-col gap-8 sm:gap-10">
           {renderContent()}
         </main>
       </div>
