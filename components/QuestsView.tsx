@@ -6,11 +6,12 @@ import QuestIcon from './icons/QuestIcon';
 interface QuestsViewProps {
   quests: Quest[];
   characters: Character[];
+  completedQuestIds: string[];
   onSelectQuest: (quest: Quest) => void;
   onBack: () => void;
 }
 
-const QuestsView: React.FC<QuestsViewProps> = ({ quests, characters, onSelectQuest, onBack }) => {
+const QuestsView: React.FC<QuestsViewProps> = ({ quests, characters, completedQuestIds, onSelectQuest, onBack }) => {
   return (
     <div className="max-w-4xl mx-auto animate-fade-in">
       <div className="flex justify-between items-center mb-6">
@@ -34,12 +35,24 @@ const QuestsView: React.FC<QuestsViewProps> = ({ quests, characters, onSelectQue
           {quests.map((quest) => {
             const character = characters.find(c => c.id === quest.characterId);
             if (!character) return null;
+            const isCompleted = completedQuestIds.includes(quest.id);
 
             return (
-              <div key={quest.id} className="bg-gray-800/50 p-5 rounded-lg border border-gray-700 flex flex-col text-center hover:border-amber-400 transition-colors duration-300">
+              <div
+                key={quest.id}
+                className={`bg-gray-800/50 p-5 rounded-lg border flex flex-col text-center transition-colors duration-300 ${isCompleted ? 'border-emerald-600/80 shadow-lg shadow-emerald-900/40' : 'border-gray-700 hover:border-amber-400'}`}
+              >
                 <img src={character.portraitUrl} alt={character.name} className="w-24 h-24 rounded-full mx-auto mb-4 border-2 border-amber-300" />
                 <h3 className="font-bold text-xl text-amber-300">{quest.title}</h3>
                 <p className="text-sm text-gray-400 mt-1">with {character.name}</p>
+                {isCompleted && (
+                  <div className="mt-2">
+                    <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-700/30 text-emerald-200 text-xs font-semibold uppercase tracking-wide">
+                      <span className="w-2 h-2 rounded-full bg-emerald-300" />
+                      Completed
+                    </span>
+                  </div>
+                )}
                 <div className="mt-3 mb-4">
                   <span className="inline-flex items-center justify-center px-3 py-1 rounded-full bg-amber-500/20 text-amber-200 text-xs font-semibold uppercase tracking-wide">
                     {quest.duration}
@@ -62,9 +75,9 @@ const QuestsView: React.FC<QuestsViewProps> = ({ quests, characters, onSelectQue
                 </div>
                 <button
                     onClick={() => onSelectQuest(quest)}
-                    className="mt-6 bg-amber-600 hover:bg-amber-500 text-black font-bold py-2 px-4 rounded-lg transition-colors w-full"
+                    className={`mt-6 font-bold py-2 px-4 rounded-lg transition-colors w-full ${isCompleted ? 'bg-emerald-600 hover:bg-emerald-500 text-black' : 'bg-amber-600 hover:bg-amber-500 text-black'}`}
                 >
-                    Begin Quest
+                    {isCompleted ? 'Review Quest' : 'Begin Quest'}
                 </button>
               </div>
             );
