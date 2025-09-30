@@ -493,8 +493,8 @@ ${contextTranscript}
   };
 
   return (
-    <div 
-        className="relative flex flex-col md:flex-row gap-4 md:gap-8 max-w-6xl mx-auto w-full flex-grow rounded-lg md:rounded-2xl shadow-2xl border border-gray-700 overflow-hidden bg-gray-900/60 backdrop-blur-lg transition-all duration-1000"
+    <div
+        className="relative flex flex-col md:flex-row gap-4 md:gap-6 max-w-6xl mx-auto w-full flex-grow rounded-2xl shadow-2xl border border-gray-700/80 overflow-hidden bg-gray-900/70 backdrop-blur-xl transition-all duration-1000"
     >
       {isGeneratingVisual && (
          <div className="absolute inset-0 bg-black/80 flex flex-col items-center justify-center z-30 rounded-lg md:rounded-2xl">
@@ -503,23 +503,36 @@ ${contextTranscript}
         </div>
       )}
       
-      <div className="relative z-10 flex flex-col md:flex-row gap-4 md:gap-8 w-full p-2 sm:p-4 md:p-6">
-        <div className="w-full md:w-1/3 md:max-w-sm flex flex-col items-center text-center">
-            <div className="relative w-40 h-40 sm:w-48 sm:h-48 md:w-64 md:h-64 flex-shrink-0">
-                <img
-                    src={character.portraitUrl}
-                    alt={character.name}
-                    className={`w-full h-full object-cover rounded-full border-4 ${connectionState === ConnectionState.SPEAKING ? 'border-teal-400' : 'border-amber-400'} shadow-lg filter grayscale sepia-[0.2] transition-all duration-300`}
-                />
-                <div className="absolute -bottom-4 left-1/2 -translate-x-1/2">
+      <div className="relative z-10 flex flex-col md:flex-row items-stretch gap-4 md:gap-6 w-full p-4 sm:p-6">
+        <div className="w-full md:w-1/3 md:max-w-sm flex flex-col gap-6 bg-gray-900/60 border border-gray-700/70 rounded-xl p-4 sm:p-6 text-center md:text-left">
+            <div className="flex flex-col items-center gap-4 text-center">
+                <div className="relative w-32 h-32 sm:w-40 sm:h-40 md:w-48 md:h-48 mx-auto">
+                    <img
+                        src={character.portraitUrl}
+                        alt={character.name}
+                        className={`w-full h-full object-cover rounded-full border-4 ${connectionState === ConnectionState.SPEAKING ? 'border-teal-400' : 'border-amber-400'} shadow-lg filter grayscale sepia-[0.2] transition-all duration-300`}
+                    />
+                </div>
+                <div className="w-full flex justify-center">
                     <StatusIndicator state={connectionState} isMicActive={isMicActive} />
                 </div>
+                <div className="space-y-1">
+                    <h2 className="text-2xl sm:text-3xl font-bold text-amber-200">{character.name}</h2>
+                    <p className="text-gray-400 italic text-sm sm:text-base">{character.title}</p>
+                    <p className="text-xs uppercase tracking-[0.3em] text-amber-300/80">{character.timeframe}</p>
+                </div>
             </div>
-            <h2 className="text-2xl sm:text-3xl font-bold text-amber-200 mt-8">{character.name}</h2>
-            <p className="text-gray-400 italic">{character.title}</p>
+
+            <div className="bg-black/30 border border-gray-700/60 rounded-lg p-4 text-left text-sm text-gray-300 leading-relaxed max-h-48 overflow-y-auto">
+                <p>{character.bio}</p>
+                <div className="grid grid-cols-1 gap-2 mt-4 text-xs uppercase tracking-wide text-gray-400">
+                    <p><span className="text-gray-200 font-semibold">Expertise:</span> {character.expertise}</p>
+                    <p><span className="text-gray-200 font-semibold">Passion:</span> {character.passion}</p>
+                </div>
+            </div>
 
             {activeQuest && (
-                <div className="mt-4 p-4 w-full max-w-xs bg-amber-900/40 border border-amber-800/80 rounded-lg text-left animate-fade-in space-y-3">
+                <div className="bg-amber-900/40 border border-amber-800/70 rounded-lg text-left animate-fade-in space-y-3 p-4 shadow-inner">
                     <div>
                         <p className="font-bold text-amber-300 text-xs uppercase tracking-wide">Active Quest</p>
                         <p className="text-amber-100 text-lg font-semibold leading-snug">{activeQuest.title}</p>
@@ -539,89 +552,89 @@ ${contextTranscript}
                     </div>
                 </div>
             )}
-            
-            <div className="mt-6 text-left w-full max-w-xs">
-            {transcript.length <= 1 ? (
-                <div className="animate-fade-in">
-                <h4 className="text-md font-bold text-amber-200 mb-2 text-center">Conversation Starters</h4>
-                <div className="space-y-2">
-                    {character.suggestedPrompts.map((prompt, i) => (
-                    <button
-                        key={i}
-                        onClick={() => sendTextMessage(prompt)}
-                        className="w-full text-sm text-left bg-gray-800/60 hover:bg-gray-700/80 p-3 rounded-lg transition-colors duration-200 border border-gray-700 text-gray-300 disabled:opacity-50"
-                        disabled={connectionState !== ConnectionState.LISTENING && connectionState !== ConnectionState.CONNECTED}
-                    >
-                        <span className="text-amber-300 mr-2">»</span>
-                        {prompt}
-                    </button>
-                    ))}
-                </div>
-                </div>
-            ) : (
-                <div className="animate-fade-in">
-                <h4 className="text-md font-bold text-amber-200 mb-2 text-center">Topics to Explore</h4>
-                {isFetchingSuggestions ? (
-                    <div className="space-y-2">
-                    <div className="w-full bg-gray-800/60 p-3 rounded-lg h-[44px] animate-pulse"></div>
-                    <div className="w-full bg-gray-800/60 p-3 rounded-lg h-[44px] animate-pulse" style={{ animationDelay: '75ms' }}></div>
-                    <div className="w-full bg-gray-800/60 p-3 rounded-lg h-[44px] animate-pulse" style={{ animationDelay: '150ms' }}></div>
+
+            <div className="text-left w-full">
+                {transcript.length <= 1 ? (
+                    <div className="animate-fade-in">
+                        <h4 className="text-sm font-bold text-amber-200 mb-2 text-center md:text-left">Conversation Starters</h4>
+                        <div className="space-y-2">
+                            {character.suggestedPrompts.map((prompt, i) => (
+                                <button
+                                    key={i}
+                                    onClick={() => sendTextMessage(prompt)}
+                                    className="w-full text-sm text-left bg-gray-800/60 hover:bg-gray-700/80 p-3 rounded-lg transition-colors duration-200 border border-gray-700 text-gray-300 disabled:opacity-50"
+                                    disabled={connectionState !== ConnectionState.LISTENING && connectionState !== ConnectionState.CONNECTED}
+                                >
+                                    <span className="text-amber-300 mr-2">»</span>
+                                    {prompt}
+                                </button>
+                            ))}
+                        </div>
                     </div>
                 ) : (
-                    <div className="space-y-2">
-                    {(dynamicSuggestions.length > 0 ? dynamicSuggestions : character.suggestedPrompts).map((prompt, i) => (
-                        <button
-                        key={i}
-                        onClick={() => sendTextMessage(prompt)}
-                        className="w-full text-sm text-left bg-gray-800/60 hover:bg-gray-700/80 p-3 rounded-lg transition-colors duration-200 border border-gray-700 text-gray-300 disabled:opacity-50"
-                        disabled={connectionState !== ConnectionState.LISTENING && connectionState !== ConnectionState.CONNECTED}
-                        >
-                        <span className="text-amber-300 mr-2">»</span>
-                        {prompt}
-                        </button>
-                    ))}
+                    <div className="animate-fade-in">
+                        <h4 className="text-sm font-bold text-amber-200 mb-2 text-center md:text-left">Topics to Explore</h4>
+                        {isFetchingSuggestions ? (
+                            <div className="space-y-2">
+                                <div className="w-full bg-gray-800/60 p-3 rounded-lg h-[44px] animate-pulse"></div>
+                                <div className="w-full bg-gray-800/60 p-3 rounded-lg h-[44px] animate-pulse" style={{ animationDelay: '75ms' }}></div>
+                                <div className="w-full bg-gray-800/60 p-3 rounded-lg h-[44px] animate-pulse" style={{ animationDelay: '150ms' }}></div>
+                            </div>
+                        ) : (
+                            <div className="space-y-2">
+                                {(dynamicSuggestions.length > 0 ? dynamicSuggestions : character.suggestedPrompts).map((prompt, i) => (
+                                    <button
+                                        key={i}
+                                        onClick={() => sendTextMessage(prompt)}
+                                        className="w-full text-sm text-left bg-gray-800/60 hover:bg-gray-700/80 p-3 rounded-lg transition-colors duration-200 border border-gray-700 text-gray-300 disabled:opacity-50"
+                                        disabled={connectionState !== ConnectionState.LISTENING && connectionState !== ConnectionState.CONNECTED}
+                                    >
+                                        <span className="text-amber-300 mr-2">»</span>
+                                        {prompt}
+                                    </button>
+                                ))}
+                            </div>
+                        )}
                     </div>
                 )}
-                </div>
-            )}
             </div>
 
-            <div className="flex items-center justify-center gap-4 mt-auto pt-6 flex-wrap">
-              <button
-                  onClick={() => onEndConversation(transcript, sessionIdRef.current)}
-                  disabled={isSaving}
-                  className="bg-red-800/70 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg transition-colors duration-300 border border-red-700 disabled:opacity-50 disabled:cursor-wait"
-              >
-                  {isSaving ? 'Saving...' : 'End'}
-              </button>
-              <button
-                  onClick={handleReset}
-                  disabled={transcript.length === 0 && !environmentImageUrl}
-                  className="bg-amber-800/70 hover:bg-amber-700 text-white font-bold py-2 px-4 rounded-lg transition-colors duration-300 border border-amber-700 disabled:opacity-50"
-              >
-                  Reset
-              </button>
-              <div className="flex items-center gap-2">
+            <div className="flex flex-col sm:flex-row sm:flex-wrap sm:justify-center gap-3 mt-auto pt-2">
                 <button
-                    onClick={() => toggleMicrophone()}
-                    aria-label={isMicActive ? "Mute microphone" : "Unmute microphone"}
-                    className={`p-2 rounded-full transition-colors duration-300 border ${isMicActive ? 'bg-blue-800/70 hover:bg-blue-700 border-blue-700' : 'bg-gray-700 hover:bg-gray-600 border-gray-600'}`}
+                    onClick={() => onEndConversation(transcript, sessionIdRef.current)}
+                    disabled={isSaving}
+                    className="bg-red-800/80 hover:bg-red-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors duration-300 border border-red-700 disabled:opacity-50 disabled:cursor-wait w-full sm:w-auto"
                 >
-                    {isMicActive ? <MicrophoneIcon className="w-6 h-6 text-white" /> : <MicrophoneOffIcon className="w-6 h-6 text-white" />}
+                    {isSaving ? 'Saving...' : 'End Session'}
                 </button>
                 <button
-                    onClick={toggleAmbienceMute}
-                    aria-label={isAmbienceMuted ? "Unmute ambient sound" : "Mute ambient sound"}
-                    className={`p-2 rounded-full transition-colors duration-300 border ${!isAmbienceMuted ? 'bg-green-800/70 hover:bg-green-700 border-green-700' : 'bg-gray-700 hover:bg-gray-600 border-gray-600'}`}
+                    onClick={handleReset}
+                    disabled={transcript.length === 0 && !environmentImageUrl}
+                    className="bg-amber-800/80 hover:bg-amber-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors duration-300 border border-amber-700 disabled:opacity-50 w-full sm:w-auto"
                 >
-                    {isAmbienceMuted ? <MuteIcon className="w-6 h-6 text-white" /> : <UnmuteIcon className="w-6 h-6 text-white" />}
+                    Reset Conversation
                 </button>
-              </div>
+                <div className="flex items-center justify-center gap-2 w-full sm:w-auto">
+                    <button
+                        onClick={() => toggleMicrophone()}
+                        aria-label={isMicActive ? "Mute microphone" : "Unmute microphone"}
+                        className={`p-2 rounded-full transition-colors duration-300 border ${isMicActive ? 'bg-blue-800/70 hover:bg-blue-700 border-blue-700' : 'bg-gray-700 hover:bg-gray-600 border-gray-600'} w-12 h-12 flex items-center justify-center`}
+                    >
+                        {isMicActive ? <MicrophoneIcon className="w-6 h-6 text-white" /> : <MicrophoneOffIcon className="w-6 h-6 text-white" />}
+                    </button>
+                    <button
+                        onClick={toggleAmbienceMute}
+                        aria-label={isAmbienceMuted ? "Unmute ambient sound" : "Mute ambient sound"}
+                        className={`p-2 rounded-full transition-colors duration-300 border ${!isAmbienceMuted ? 'bg-green-800/70 hover:bg-green-700 border-green-700' : 'bg-gray-700 hover:bg-gray-600 border-gray-600'} w-12 h-12 flex items-center justify-center`}
+                    >
+                        {isAmbienceMuted ? <MuteIcon className="w-6 h-6 text-white" /> : <UnmuteIcon className="w-6 h-6 text-white" />}
+                    </button>
+                </div>
             </div>
         </div>
-        <div className="w-full md:w-2/3 bg-gray-900/50 p-4 rounded-lg border border-gray-700 h-[60vh] md:h-auto flex flex-col">
-            <h3 className="text-xl font-semibold mb-4 text-gray-300 border-b border-gray-700 pb-2 flex-shrink-0">Conversation Transcript</h3>
-            <div className="flex-grow space-y-4 overflow-y-auto pr-2">
+        <div className="w-full md:w-2/3 bg-gray-900/60 p-4 sm:p-6 rounded-xl border border-gray-700/70 h-[65vh] sm:h-[70vh] md:h-auto flex flex-col">
+            <h3 className="text-xl font-semibold mb-4 text-gray-300 border-b border-gray-700/70 pb-2 flex-shrink-0">Conversation Transcript</h3>
+            <div className="flex-grow space-y-4 overflow-y-auto pr-2 sm:pr-3">
                 {transcript.map((turn, index) => {
                     const isUser = turn.speaker === 'user';
                     const isOperator = turn.speakerName === 'Matrix Operator';
@@ -663,7 +676,7 @@ ${contextTranscript}
                 </>
                 )}
             </div>
-            <form onSubmit={handleSendText} className="mt-4 flex gap-2 flex-shrink-0">
+            <form onSubmit={handleSendText} className="mt-4 flex gap-2 flex-col sm:flex-row flex-shrink-0">
                 <input
                     type="text"
                     value={textInput}
@@ -674,7 +687,7 @@ ${contextTranscript}
                 />
                 <button
                     type="submit"
-                    className="bg-amber-600 hover:bg-amber-500 text-black font-bold p-3 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="bg-amber-600 hover:bg-amber-500 text-black font-bold p-3 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0"
                     disabled={!textInput.trim() || connectionState === ConnectionState.CONNECTING || connectionState === ConnectionState.SPEAKING || connectionState === ConnectionState.THINKING }
                     aria-label="Send message"
                 >

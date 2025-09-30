@@ -372,11 +372,11 @@ Focus only on the student's contributions. Mark passed=true only if the learner 
       case 'selector':
       default:
         return (
-          <div className="text-center animate-fade-in">
-             <p className="max-w-3xl mx-auto mb-8 text-gray-400 text-lg">
+          <div className="text-center animate-fade-in space-y-8 sm:space-y-12">
+             <p className="max-w-3xl mx-auto text-gray-300 text-base sm:text-lg leading-relaxed px-2">
                 Engage in real-time voice conversations with legendary minds from history, or embark on a guided Learning Quest to master a new subject.
             </p>
-            <div className="max-w-3xl mx-auto mb-8 bg-gray-800/50 border border-gray-700 rounded-lg p-4 text-left">
+            <div className="max-w-3xl mx-auto bg-gray-800/60 border border-gray-700/70 rounded-2xl p-5 sm:p-6 text-left shadow-xl">
               <p className="text-sm text-gray-300 mb-2 font-semibold">Quest Progress</p>
               <p className="text-xs uppercase tracking-wide text-gray-400 mb-3">{completedQuests.length} of {QUESTS.length} quests completed</p>
               <div className="w-full h-2 bg-gray-700 rounded-full overflow-hidden">
@@ -388,7 +388,7 @@ Focus only on the student's contributions. Mark passed=true only if the learner 
             </div>
             {lastQuestOutcome && (
               <div
-                className={`max-w-3xl mx-auto mb-8 rounded-lg border p-5 text-left shadow-lg ${lastQuestOutcome.passed ? 'bg-emerald-900/40 border-emerald-700' : 'bg-red-900/30 border-red-700'}`}
+                className={`max-w-3xl mx-auto rounded-2xl border p-5 sm:p-6 text-left shadow-2xl space-y-4 ${lastQuestOutcome.passed ? 'bg-emerald-900/40 border-emerald-700/80' : 'bg-red-900/30 border-red-700/80'}`}
               >
                 <div className="flex justify-between items-start gap-4">
                   <div>
@@ -399,7 +399,7 @@ Focus only on the student's contributions. Mark passed=true only if the learner 
                     {lastQuestOutcome.passed ? 'Completed' : 'Needs Review'}
                   </span>
                 </div>
-                <p className="text-gray-200 mt-4 leading-relaxed">{lastQuestOutcome.summary}</p>
+                <p className="text-gray-100 leading-relaxed text-sm sm:text-base">{lastQuestOutcome.summary}</p>
                 {lastQuestOutcome.evidence.length > 0 && (
                   <div className="mt-4">
                     <p className="text-sm font-semibold text-emerald-200 uppercase tracking-wide mb-1">Highlights</p>
@@ -422,17 +422,17 @@ Focus only on the student's contributions. Mark passed=true only if the learner 
                 )}
               </div>
             )}
-            <div className="flex flex-col sm:flex-row justify-center items-center gap-4 mb-12">
+            <div className="flex flex-col sm:flex-row justify-center items-stretch sm:items-center gap-4 sm:gap-6">
                 <button
                     onClick={() => setView('quests')}
-                    className="flex items-center gap-3 bg-amber-600 hover:bg-amber-500 text-black font-bold py-3 px-8 rounded-lg transition-colors duration-300 text-lg w-full sm:w-auto"
+                    className="flex items-center justify-center gap-3 bg-amber-600 hover:bg-amber-500 text-black font-semibold py-3 px-6 rounded-xl transition-colors duration-300 text-base sm:text-lg w-full sm:w-auto shadow-lg"
                 >
                     <QuestIcon className="w-6 h-6" />
                     <span>Learning Quests</span>
                 </button>
                 <button
                     onClick={() => setView('history')}
-                    className="bg-gray-700 hover:bg-gray-600 text-amber-300 font-bold py-3 px-8 rounded-lg transition-colors duration-300 border border-gray-600 w-full sm:w-auto"
+                    className="bg-gray-800 hover:bg-gray-700 text-amber-300 font-semibold py-3 px-6 rounded-xl transition-colors duration-300 border border-gray-600/80 w-full sm:w-auto shadow-lg"
                 >
                     View Conversation History
                 </button>
@@ -463,11 +463,11 @@ Focus only on the student's contributions. Mark passed=true only if the learner 
         className="relative z-10 min-h-screen flex flex-col text-gray-200 font-serif p-4 sm:p-6 lg:p-8"
         style={{ background: environmentImageUrl ? 'transparent' : 'linear-gradient(to bottom right, #1a1a1a, #2b2b2b)' }}
       >
-        <header className="text-center mb-8">
-          <h1 className="text-4xl sm:text-5xl md:text-6xl font-bold text-amber-300 tracking-wider" style={{ textShadow: '0 0 10px rgba(252, 211, 77, 0.5)' }}>
+        <header className="text-center mb-8 space-y-2">
+          <h1 className="text-4xl sm:text-5xl md:text-6xl font-bold text-amber-300 tracking-wider leading-tight px-2" style={{ textShadow: '0 0 10px rgba(252, 211, 77, 0.5)' }}>
             School of the Ancients
           </h1>
-          <p className="text-gray-400 mt-2 text-lg">Old world wisdom. New world classroom.</p>
+          <p className="text-gray-400 text-base sm:text-lg px-4">Old world wisdom. New world classroom.</p>
         </header>
         <main className="max-w-7xl w-full mx-auto flex-grow flex flex-col">
           {renderContent()}
