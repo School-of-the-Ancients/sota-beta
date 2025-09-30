@@ -238,7 +238,7 @@ const CharacterCreator: React.FC<CharacterCreatorProps> = ({ onCharacterCreated,
                 <label htmlFor="name" className="block text-sm font-medium text-gray-300 mb-2">Ancient's Name</label>
                 <div className="flex items-center gap-2">
                     <div ref={suggestionBoxRef} className="relative flex-grow">
-                        <input id="name" type="text" placeholder="e.g., Marie Curie" value={name} onChange={handleNameChange} onKeyDown={handleKeyDown} autoComplete="off" required className="w-full bg-gray-800 border border-gray-600 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-amber-400 text-lg" />
+                        <input id="name" type="text" placeholder="e.g., Nikola Tesla" value={name} onChange={handleNameChange} onKeyDown={handleKeyDown} autoComplete="off" required className="w-full bg-gray-800 border border-gray-600 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-amber-400 text-lg" />
                         {showSuggestions && suggestions.length > 0 && (
                             <ul className="absolute z-10 w-full bg-gray-800 border border-gray-600 rounded-lg mt-1 max-h-60 overflow-y-auto shadow-lg">
                                 {suggestions.map((suggestion, index) => (
