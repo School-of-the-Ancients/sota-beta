@@ -372,11 +372,11 @@ Focus only on the student's contributions. Mark passed=true only if the learner 
       case 'selector':
       default:
         return (
-          <div className="text-center animate-fade-in">
-             <p className="max-w-3xl mx-auto mb-8 text-gray-400 text-lg">
+          <div className="text-center animate-fade-in space-y-8 sm:space-y-10">
+             <p className="max-w-3xl mx-auto text-gray-400 text-base sm:text-lg px-4">
                 Engage in real-time voice conversations with legendary minds from history, or embark on a guided Learning Quest to master a new subject.
             </p>
-            <div className="max-w-3xl mx-auto mb-8 bg-gray-800/50 border border-gray-700 rounded-lg p-4 text-left">
+            <div className="max-w-3xl mx-auto bg-gray-800/50 border border-gray-700 rounded-xl p-4 sm:p-5 text-left px-4 sm:px-6">
               <p className="text-sm text-gray-300 mb-2 font-semibold">Quest Progress</p>
               <p className="text-xs uppercase tracking-wide text-gray-400 mb-3">{completedQuests.length} of {QUESTS.length} quests completed</p>
               <div className="w-full h-2 bg-gray-700 rounded-full overflow-hidden">
@@ -388,7 +388,7 @@ Focus only on the student's contributions. Mark passed=true only if the learner 
             </div>
             {lastQuestOutcome && (
               <div
-                className={`max-w-3xl mx-auto mb-8 rounded-lg border p-5 text-left shadow-lg ${lastQuestOutcome.passed ? 'bg-emerald-900/40 border-emerald-700' : 'bg-red-900/30 border-red-700'}`}
+                className={`max-w-3xl mx-auto rounded-xl border p-5 text-left shadow-lg px-4 sm:px-6 ${lastQuestOutcome.passed ? 'bg-emerald-900/40 border-emerald-700' : 'bg-red-900/30 border-red-700'}`}
               >
                 <div className="flex justify-between items-start gap-4">
                   <div>
@@ -422,7 +422,7 @@ Focus only on the student's contributions. Mark passed=true only if the learner 
                 )}
               </div>
             )}
-            <div className="flex flex-col sm:flex-row justify-center items-center gap-4 mb-12">
+            <div className="flex flex-col sm:flex-row justify-center items-center gap-4 px-4">
                 <button
                     onClick={() => setView('quests')}
                     className="flex items-center gap-3 bg-amber-600 hover:bg-amber-500 text-black font-bold py-3 px-8 rounded-lg transition-colors duration-300 text-lg w-full sm:w-auto"
