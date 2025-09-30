@@ -11,8 +11,6 @@ interface CharacterCreatorProps {
   onBack: () => void;
 }
 
-type Step = 'IDENTITY' | 'PERSONA' | 'PORTRAIT';
-
 interface PersonaData {
   title: string;
   bio: string;
@@ -40,42 +38,10 @@ const LoadingOverlay: React.FC<{ message: string }> = ({ message }) => (
   </div>
 );
 
-const Stepper: React.FC<{ currentStep: Step }> = ({ currentStep }) => {
-  const steps: { id: Step, title: string }[] = [
-    { id: 'IDENTITY', title: 'Identity' },
-    { id: 'PERSONA', title: 'Persona' },
-    { id: 'PORTRAIT', title: 'Portrait' },
-  ];
-  const currentStepIndex = steps.findIndex(s => s.id === currentStep);
-
-  return (
-    <div className="flex items-center justify-between mb-8 w-full">
-      {steps.map((step, index) => (
-        <React.Fragment key={step.id}>
-          <div className="flex flex-col sm:flex-row items-center gap-2 sm:gap-3">
-            <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold flex-shrink-0 ${index <= currentStepIndex ? 'bg-amber-400 text-black' : 'bg-gray-700 text-gray-400'}`}>
-              {index + 1}
-            </div>
-            <span className={`font-semibold text-center sm:text-left text-sm sm:text-base ${index <= currentStepIndex ? 'text-amber-300' : 'text-gray-500'}`}>{step.title}</span>
-          </div>
-          {index < steps.length - 1 && (
-            <div className={`flex-1 h-1 mx-2 sm:mx-4 ${index < currentStepIndex ? 'bg-amber-400' : 'bg-gray-700'}`} />
-          )}
-        </React.Fragment>
-      ))}
-    </div>
-  );
-};
-
 
 const CharacterCreator: React.FC<CharacterCreatorProps> = ({ onCharacterCreated, onBack }) => {
-  const [step, setStep] = useState<Step>('IDENTITY');
   const [name, setName] = useState('');
   const [focus, setFocus] = useState('');
-  const [persona, setPersona] = useState<PersonaData | null>(null);
-  const [portraitStyle, setPortraitStyle] = useState('A realistic, academic portrait');
-  const [portraitOptions, setPortraitOptions] = useState<string[]>([]);
-  const [selectedPortrait, setSelectedPortrait] = useState<string | null>(null);
 
   const [isLoading, setIsLoading] = useState(false);
   const [loadingMessage, setLoadingMessage] = useState('');
@@ -139,14 +105,15 @@ const CharacterCreator: React.FC<CharacterCreatorProps> = ({ onCharacterCreated,
     setName(HISTORICAL_FIGURES_SUGGESTIONS[randomIndex]);
   };
 
-  const handlePersonaGeneration = async () => {
+  const handleCreateCharacter = async () => {
     if (!name.trim()) {
-      setError("Please enter a name for the ancient.");
+      setError("Please enter a name for the historical figure.");
       return;
     }
     setError(null);
     setIsLoading(true);
-    setLoadingMessage('Researching historical figure...');
+
+    let personaData: PersonaData | null = null;
 
     try {
       if (!process.env.API_KEY) throw new Error("API_KEY not set.");
@@ -182,9 +149,8 @@ const CharacterCreator: React.FC<CharacterCreatorProps> = ({ onCharacterCreated,
         },
       });
 
-      const data = JSON.parse(response.text);
-      setPersona(data);
-      setStep('PERSONA');
+      personaData = JSON.parse(response.text);
+      setLoadingMessage('Painting portrait...');
     } catch (err) {
       console.error("Failed to generate persona:", err);
       setError("An error occurred while researching this figure. They may be too obscure or there could be a service issue. Please try another name.");
@@ -192,202 +158,33 @@ const CharacterCreator: React.FC<CharacterCreatorProps> = ({ onCharacterCreated,
       setIsLoading(false);
     }
   };
-
-  const handlePortraitsGeneration = async () => {
-    if (!persona) return;
-    setError(null);
-    setIsLoading(true);
-    setLoadingMessage('Painting portraits...');
-    setPortraitOptions([]);
-    setSelectedPortrait(null);
-
+  
+    if (!personaData) return;
+  
     try {
       if (!process.env.API_KEY) throw new Error("API_KEY not set.");
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       const response = await ai.models.generateImages({
         model: 'imagen-4.0-generate-001',
-        prompt: `${portraitStyle} of ${name}, ${persona.title}. Dignified and historical.`,
-        config: { numberOfImages: 2, outputMimeType: 'image/jpeg', aspectRatio: '1:1' },
+        prompt: `A realistic, academic portrait of ${name}, ${personaData.title}. Dignified and historical.`,
+        config: { numberOfImages: 1, outputMimeType: 'image/jpeg', aspectRatio: '1:1' },
       });
 
-      const urls = response.generatedImages.map(img => `data:image/jpeg;base64,${img.image.imageBytes}`);
-      setPortraitOptions(urls);
+      const portraitUrl = `data:image/jpeg;base64,${response.generatedImages[0].image.imageBytes}`;
+      
+      const finalCharacter: Character = {
+        id: `custom_${Date.now()}`,
+        name: name,
+        ...personaData,
+        portraitUrl: portraitUrl,
+      };
+      onCharacterCreated(finalCharacter);
+
     } catch (err) {
       console.error("Failed to generate portraits:", err);
       setError("An error occurred while painting the portraits. Please try generating them again.");
-    } finally {
       setIsLoading(false);
     }
-  };
-
-  const handleFinalizeCharacter = () => {
-    if (!persona || !selectedPortrait) return;
-    const finalCharacter: Character = {
-      id: `custom_${Date.now()}`,
-      name: name,
-      ...persona,
-      portraitUrl: selectedPortrait,
-    };
-    onCharacterCreated(finalCharacter);
-  };
-
-  const renderIdentityStep = () => (
-    <div className="space-y-6 animate-fade-in">
-        <div>
-            <h3 className="text-2xl font-semibold text-amber-300 mb-2">{identityPrompt}</h3>
-            <p className="text-gray-400">Start with a name. You can add a focus to guide the AI's research.</p>
-        </div>
-        <div>
-            <label htmlFor="name" className="block text-sm font-medium text-gray-300 mb-2">Ancient's Name</label>
-            <div className="flex items-center gap-2">
-                <div ref={suggestionBoxRef} className="relative flex-grow">
-                    <input id="name" type="text" placeholder="e.g., Nikola Tesla" value={name} onChange={handleNameChange} onKeyDown={handleKeyDown} autoComplete="off" required className="w-full bg-gray-800 border border-gray-600 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-amber-400 text-lg" />
-                    {showSuggestions && suggestions.length > 0 && (
-                        <ul className="absolute z-10 w-full bg-gray-800 border border-gray-600 rounded-lg mt-1 max-h-60 overflow-y-auto shadow-lg">
-                            {suggestions.map((suggestion, index) => (
-                                <li key={suggestion} onClick={() => handleSuggestionClick(suggestion)} className={`px-4 py-2 cursor-pointer hover:bg-amber-600/20 ${index === activeSuggestionIndex ? 'bg-amber-600/20' : ''}`}>
-                                    {suggestion}
-                                </li>
-                            ))}
-                        </ul>
-                    )}
-                </div>
-                <button type="button" onClick={handleRandomName} title="Suggest a random ancient" aria-label="Suggest a random ancient" className="flex-shrink-0 p-3 bg-gray-700 hover:bg-gray-600 text-amber-300 rounded-lg transition-colors border border-gray-600 h-[52px]">
-                    <DiceIcon className="w-6 h-6" />
-                </button>
-            </div>
-        </div>
-        <div>
-            <label htmlFor="focus" className="block text-sm font-medium text-gray-300 mb-2">Character Focus <span className="text-gray-500">(Optional)</span></label>
-            <textarea id="focus" value={focus} onChange={(e) => setFocus(e.target.value)} placeholder="e.g., 'Focus on his later years as an inventor', 'as a young, revolutionary artist'" rows={3} className="w-full bg-gray-800 border border-gray-600 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-amber-400 text-lg" />
-        </div>
-        <button onClick={handlePersonaGeneration} disabled={!name.trim()} className="w-full bg-amber-600 hover:bg-amber-500 text-black font-bold py-3 px-6 rounded-lg transition-colors text-lg disabled:opacity-50">
-            Next: Create Persona
-        </button>
-    </div>
-  );
-
-  const renderPersonaStep = () => {
-    if (!persona) return null;
-    const handlePersonaChange = (field: keyof PersonaData, value: string | string[]) => {
-      setPersona(prev => prev ? { ...prev, [field]: value } : null);
-    };
-
-    return (
-        <div className="space-y-4 animate-fade-in">
-            <div>
-                <h3 className="text-2xl font-semibold text-amber-300 mb-2">Review Their Persona</h3>
-                <p className="text-gray-400">The AI has drafted a personality. Feel free to edit any detail to match your vision.</p>
-            </div>
-            <div className="space-y-4 max-h-[50vh] overflow-y-auto pr-2">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="md:col-span-2">
-                        <label className="block text-sm font-medium text-gray-300">Title</label>
-                        <input type="text" value={persona.title} onChange={e => handlePersonaChange('title', e.target.value)} className="mt-1 w-full bg-gray-800 border border-gray-600 rounded-lg px-3 py-2" />
-                    </div>
-                     <div className="md:col-span-2">
-                        <label className="block text-sm font-medium text-gray-300">Greeting</label>
-                        <textarea value={persona.greeting} onChange={e => handlePersonaChange('greeting', e.target.value)} rows={3} className="mt-1 w-full bg-gray-800 border border-gray-600 rounded-lg px-3 py-2" />
-                    </div>
-                    <div className="md:col-span-2">
-                        <label className="block text-sm font-medium text-gray-300">Bio (in first person)</label>
-                        <textarea value={persona.bio} onChange={e => handlePersonaChange('bio', e.target.value)} rows={4} className="mt-1 w-full bg-gray-800 border border-gray-600 rounded-lg px-3 py-2" />
-                    </div>
-                    <div>
-                        <label className="block text-sm font-medium text-gray-300">Timeframe</label>
-                        <input type="text" value={persona.timeframe} onChange={e => handlePersonaChange('timeframe', e.target.value)} className="mt-1 w-full bg-gray-800 border border-gray-600 rounded-lg px-3 py-2" />
-                    </div>
-                    <div>
-                        <label className="block text-sm font-medium text-gray-300">Expertise</label>
-                        <input type="text" value={persona.expertise} onChange={e => handlePersonaChange('expertise', e.target.value)} className="mt-1 w-full bg-gray-800 border border-gray-600 rounded-lg px-3 py-2" />
-                    </div>
-                    <div>
-                        <label className="block text-sm font-medium text-gray-300">Passion</label>
-                        <input type="text" value={persona.passion} onChange={e => handlePersonaChange('passion', e.target.value)} className="mt-1 w-full bg-gray-800 border border-gray-600 rounded-lg px-3 py-2" />
-                    </div>
-                    <div>
-                        <label className="block text-sm font-medium text-gray-300">Voice</label>
-                        <select value={persona.voiceName} onChange={e => handlePersonaChange('voiceName', e.target.value)} className="mt-1 w-full bg-gray-800 border border-gray-600 rounded-lg px-3 py-2">
-                            {AVAILABLE_VOICES.map(v => <option key={v} value={v}>{v}</option>)}
-                        </select>
-                    </div>
-                    <div className="md:col-span-2 space-y-2">
-                        <label className="block text-sm font-medium text-gray-300">Suggested Prompts</label>
-                        {persona.suggestedPrompts.map((prompt, i) => (
-                            <input key={i} type="text" value={prompt} onChange={e => handlePersonaChange('suggestedPrompts', persona.suggestedPrompts.map((p, j) => i === j ? e.target.value : p))} className="w-full bg-gray-800 border border-gray-600 rounded-lg px-3 py-2" />
-                        ))}
-                    </div>
-                </div>
-
-                <div className="pt-4">
-                    <label className="block text-sm font-medium text-gray-300 mb-2">Default Ambience</label>
-                    <div className="space-y-2">
-                        {AMBIENCE_LIBRARY.map(ambience => (
-                             <button 
-                                key={ambience.tag} 
-                                onClick={() => handlePersonaChange('ambienceTag', ambience.tag)}
-                                className={`w-full text-left p-3 rounded-lg border-2 flex items-center gap-4 transition-colors ${persona.ambienceTag === ambience.tag ? 'bg-amber-900/40 border-amber-400' : 'bg-gray-800 border-gray-600 hover:border-gray-500'}`}
-                            >
-                                <SoundIcon className={`w-6 h-6 flex-shrink-0 ${persona.ambienceTag === ambience.tag ? 'text-amber-300' : 'text-gray-400'}`} />
-                                <span className={`${persona.ambienceTag === ambience.tag ? 'text-amber-200' : 'text-gray-300'}`}>{ambience.description}</span>
-                            </button>
-                        ))}
-                    </div>
-                </div>
-            </div>
-            <div className="flex flex-col sm:flex-row gap-4 pt-4">
-                <button onClick={handlePersonaGeneration} className="w-full bg-gray-600 hover:bg-gray-500 text-white font-bold py-3 px-6 rounded-lg transition-colors text-lg">
-                    Regenerate Persona
-                </button>
-                <button onClick={() => setStep('PORTRAIT')} className="w-full bg-amber-600 hover:bg-amber-500 text-black font-bold py-3 px-6 rounded-lg transition-colors text-lg">
-                    Next: Create Portrait
-                </button>
-            </div>
-        </div>
-    );
-  };
-
-  const renderPortraitStep = () => {
-    const portraitStyles = [
-      { name: 'Portrait', prompt: 'A realistic, academic portrait' },
-      { name: 'Oil Painting', prompt: 'An oil painting portrait' },
-      { name: 'Sketch', prompt: 'A detailed charcoal sketch portrait' },
-      { name: 'Statue', prompt: 'A weathered marble statue' },
-    ];
-    return (
-        <div className="space-y-6 animate-fade-in">
-            <div>
-                <h3 className="text-2xl font-semibold text-amber-300 mb-2">Choose Their Appearance</h3>
-                <p className="text-gray-400">Select an artistic style, then generate portraits. Pick the one that best fits your ancient.</p>
-            </div>
-            <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">Portrait Style</label>
-                <div className="flex flex-wrap gap-2">
-                    {portraitStyles.map(style => (
-                        <button key={style.name} onClick={() => setPortraitStyle(style.prompt)} className={`px-4 py-2 rounded-lg border-2 text-sm font-semibold transition-colors ${portraitStyle === style.prompt ? 'bg-amber-400 border-amber-400 text-black' : 'bg-gray-700 border-gray-600 hover:border-gray-500 text-gray-300'}`}>
-                            {style.name}
-                        </button>
-                    ))}
-                </div>
-            </div>
-            <button onClick={handlePortraitsGeneration} className="w-full bg-blue-700 hover:bg-blue-600 text-white font-bold py-3 px-6 rounded-lg transition-colors text-lg">
-                Generate Portraits
-            </button>
-            {portraitOptions.length > 0 && (
-                <div className="space-y-4">
-                    <label className="block text-sm font-medium text-gray-300">Select a Portrait</label>
-                    <div className="grid grid-cols-2 gap-4">
-                        {portraitOptions.map((url, i) => (
-                            <img key={i} src={url} alt={`Portrait option ${i + 1}`} onClick={() => setSelectedPortrait(url)} className={`w-full h-auto object-cover rounded-lg cursor-pointer border-4 transition-all ${selectedPortrait === url ? 'border-amber-400 scale-105' : 'border-transparent hover:border-gray-600'}`} />
-                        ))}
-                    </div>
-                </div>
-            )}
-            <button onClick={handleFinalizeCharacter} disabled={!selectedPortrait} className="w-full bg-amber-600 hover:bg-amber-500 text-black font-bold py-3 px-6 rounded-lg transition-colors text-lg disabled:opacity-50">
-                Finalize Ancient
-            </button>
-        </div>
-    );
   };
 
   return (
@@ -397,21 +194,47 @@ const CharacterCreator: React.FC<CharacterCreatorProps> = ({ onCharacterCreated,
         <div className="flex justify-between items-start mb-4">
           <div>
             <h2 className="text-3xl font-bold text-amber-200">The Historical Archive</h2>
-            <p className="text-gray-400">Bring a new mind to the school, step by step.</p>
+            <p className="text-gray-400">Bring a new mind to the school.</p>
           </div>
           <button onClick={onBack} className="bg-gray-700 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded-lg transition-colors flex-shrink-0">
             Back
           </button>
         </div>
 
-        <Stepper currentStep={step} />
-
         {error && <div className="bg-red-900/50 border border-red-700 text-red-300 p-3 rounded-lg mb-6">{error}</div>}
 
-        <div className="mt-6">
-            {step === 'IDENTITY' && renderIdentityStep()}
-            {step === 'PERSONA' && renderPersonaStep()}
-            {step === 'PORTRAIT' && renderPortraitStep()}
+        <div className="mt-8 space-y-6">
+            <div>
+                <h3 className="text-2xl font-semibold text-amber-300 mb-2">{identityPrompt}</h3>
+                <p className="text-gray-400">Enter the name of a historical figure. You can also add an optional focus to guide the AI's research.</p>
+            </div>
+            <div>
+                <label htmlFor="name" className="block text-sm font-medium text-gray-300 mb-2">Ancient's Name</label>
+                <div className="flex items-center gap-2">
+                    <div ref={suggestionBoxRef} className="relative flex-grow">
+                        <input id="name" type="text" placeholder="e.g., Marie Curie" value={name} onChange={handleNameChange} onKeyDown={handleKeyDown} autoComplete="off" required className="w-full bg-gray-800 border border-gray-600 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-amber-400 text-lg" />
+                        {showSuggestions && suggestions.length > 0 && (
+                            <ul className="absolute z-10 w-full bg-gray-800 border border-gray-600 rounded-lg mt-1 max-h-60 overflow-y-auto shadow-lg">
+                                {suggestions.map((suggestion, index) => (
+                                    <li key={suggestion} onClick={() => handleSuggestionClick(suggestion)} className={`px-4 py-2 cursor-pointer hover:bg-amber-600/20 ${index === activeSuggestionIndex ? 'bg-amber-600/20' : ''}`}>
+                                        {suggestion}
+                                    </li>
+                                ))}
+                            </ul>
+                        )}
+                    </div>
+                    <button type="button" onClick={handleRandomName} title="Suggest a random ancient" aria-label="Suggest a random ancient" className="flex-shrink-0 p-3 bg-gray-700 hover:bg-gray-600 text-amber-300 rounded-lg transition-colors border border-gray-600 h-[52px]">
+                        <DiceIcon className="w-6 h-6" />
+                    </button>
+                </div>
+            </div>
+            <div>
+                <label htmlFor="focus" className="block text-sm font-medium text-gray-300 mb-2">Character Focus <span className="text-gray-500">(Optional)</span></label>
+                <textarea id="focus" value={focus} onChange={(e) => setFocus(e.target.value)} placeholder="e.g., 'Focus on her work with radioactivity', 'as a young, revolutionary scientist'" rows={3} className="w-full bg-gray-800 border border-gray-600 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-amber-400 text-lg" />
+            </div>
+            <button onClick={handleCreateCharacter} disabled={!name.trim()} className="w-full bg-amber-600 hover:bg-amber-500 text-black font-bold py-3 px-6 rounded-lg transition-colors text-lg disabled:opacity-50">
+                Create Ancient
+            </button>
         </div>
       </div>
     </div>
