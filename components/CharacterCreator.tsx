@@ -112,6 +112,7 @@ const CharacterCreator: React.FC<CharacterCreatorProps> = ({ onCharacterCreated,
     }
     setError(null);
     setIsLoading(true);
+    setLoadingMessage('Researching historical figure...');
 
     let personaData: PersonaData | null = null;
 
@@ -157,33 +158,35 @@ const CharacterCreator: React.FC<CharacterCreatorProps> = ({ onCharacterCreated,
     } finally {
       setIsLoading(false);
     }
-  };
-  
-    if (!personaData) return;
-  
-    try {
-      if (!process.env.API_KEY) throw new Error("API_KEY not set.");
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-      const response = await ai.models.generateImages({
-        model: 'imagen-4.0-generate-001',
-        prompt: `A realistic, academic portrait of ${name}, ${personaData.title}. Dignified and historical.`,
-        config: { numberOfImages: 1, outputMimeType: 'image/jpeg', aspectRatio: '1:1' },
-      });
 
-      const portraitUrl = `data:image/jpeg;base64,${response.generatedImages[0].image.imageBytes}`;
-      
-      const finalCharacter: Character = {
-        id: `custom_${Date.now()}`,
-        name: name,
-        ...personaData,
-        portraitUrl: portraitUrl,
-      };
-      onCharacterCreated(finalCharacter);
-
-    } catch (err) {
-      console.error("Failed to generate portraits:", err);
-      setError("An error occurred while painting the portraits. Please try generating them again.");
+    if (!personaData) {
       setIsLoading(false);
+      return;
+    }
+
+    // Part 2: Generate Portrait
+    try {
+        if (!process.env.API_KEY) throw new Error("API_KEY not set.");
+        const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+        const response = await ai.models.generateImages({
+            model: 'imagen-4.0-generate-001',
+            prompt: `A realistic, academic portrait of ${name}, ${personaData.title}. Dignified and historical.`,
+            config: { numberOfImages: 1, outputMimeType: 'image/jpeg', aspectRatio: '1:1' },
+        });
+
+        const portraitUrl = `data:image/jpeg;base64,${response.generatedImages[0].image.imageBytes}`;
+        
+        const finalCharacter: Character = {
+            id: `custom_${Date.now()}`,
+            name: name,
+            ...personaData,
+            portraitUrl: portraitUrl,
+        };
+        onCharacterCreated(finalCharacter);
+    } catch (err) {
+        console.error("Failed to generate portraits:", err);
+        setError("An error occurred while painting the portraits. Please try generating them again.");
+        setIsLoading(false);
     }
   };
 
