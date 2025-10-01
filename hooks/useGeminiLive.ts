@@ -91,6 +91,7 @@ const changeEnvironmentFunctionDeclaration: FunctionDeclaration = {
 export const useGeminiLive = (
     systemInstruction: string,
     voiceName: string,
+    voiceAccent: string,
     onTurnComplete: (turn: { user: string; model: string }) => void,
     onEnvironmentChangeRequest: (description: string) => void,
     onArtifactDisplayRequest: (name: string, description: string) => void,
@@ -187,8 +188,12 @@ export const useGeminiLive = (
             const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
             
             let finalSystemInstruction = systemInstruction;
+            if (voiceAccent?.trim()) {
+                const accentDirective = `VOICE & DELIVERY GUIDANCE: Maintain a consistent performance using ${voiceAccent}. Do not shift accents, pitch, or presentation away from this specification, and ensure the delivery aligns with the character's identity.`;
+                finalSystemInstruction = `${accentDirective}\n\n${finalSystemInstruction}`;
+            }
             if (activeQuest) {
-                finalSystemInstruction = `YOUR CURRENT MISSION: As a mentor, your primary goal is to guide the student to understand the following: "${activeQuest.objective}". Tailor your questions and explanations to lead them towards this goal.\n\n---\n\n${systemInstruction}`;
+                finalSystemInstruction = `YOUR CURRENT MISSION: As a mentor, your primary goal is to guide the student to understand the following: "${activeQuest.objective}". Tailor your questions and explanations to lead them towards this goal.\n\n---\n\n${finalSystemInstruction}`;
             }
 
             const sessionPromise = ai.live.connect({
@@ -345,7 +350,7 @@ export const useGeminiLive = (
             console.error('Failed to connect to Gemini Live:', error);
             setConnectionState(ConnectionState.ERROR);
         }
-    }, [systemInstruction, voiceName, activeQuest]);
+    }, [systemInstruction, voiceName, voiceAccent, activeQuest]);
 
     const disconnect = useCallback(() => {
         sessionPromiseRef.current?.then((session) => session.close()).catch(err => {

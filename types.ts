@@ -13,7 +13,8 @@ export interface Character {
   bio: string;
   greeting: string;
   systemInstruction: string;
-  voiceName:string;
+  voiceName: string;
+  voiceAccent: string;
   timeframe: string;
   expertise: string;
   passion: string;

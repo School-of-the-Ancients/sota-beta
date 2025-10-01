@@ -20,6 +20,7 @@ interface PersonaData {
   systemInstruction: string;
   suggestedPrompts: string[];
   voiceName: string;
+  voiceAccent: string;
   ambienceTag: string;
 }
 
@@ -93,11 +94,12 @@ displayArtifact(name, description)
 , instructing the AI to only generate the function call when using them. It must also specify an authentic accent and tone.
         - suggestedPrompts: Three engaging, open-ended questions a user could ask this character.
         - voiceName: Suggest the most suitable voice from this list: ${AVAILABLE_VOICES.join(', ')}.
+        - voiceAccent: Describe the exact accent, vocal tone, and gender presentation the character must consistently perform with (e.g., "a confident Hellenistic queen with a Greek-inflected mezzo-soprano").
         - ambienceTag: Select the most fitting keyword from this list: ${availableAmbienceTags}.`;
 
       const personaResponse = await ai.models.generateContent({
         model: "gemini-2.5-flash",
-        config: { responseMimeType: "application/json", responseSchema: { type: Type.OBJECT, properties: { title: { type: Type.STRING }, bio: { type: Type.STRING }, greeting: { type: Type.STRING }, timeframe: { type: Type.STRING }, expertise: { type: Type.STRING }, passion: { type: Type.STRING }, systemInstruction: { type: Type.STRING }, suggestedPrompts: { type: Type.ARRAY, items: { type: Type.STRING } }, voiceName: { type: Type.STRING }, ambienceTag: { type: Type.STRING } }, required: ["title", "bio", "greeting", "timeframe", "expertise", "passion", "systemInstruction", "suggestedPrompts", "voiceName", "ambienceTag"] } },
+        config: { responseMimeType: "application/json", responseSchema: { type: Type.OBJECT, properties: { title: { type: Type.STRING }, bio: { type: Type.STRING }, greeting: { type: Type.STRING }, timeframe: { type: Type.STRING }, expertise: { type: Type.STRING }, passion: { type: Type.STRING }, systemInstruction: { type: Type.STRING }, suggestedPrompts: { type: Type.ARRAY, items: { type: Type.STRING } }, voiceName: { type: Type.STRING }, voiceAccent: { type: Type.STRING }, ambienceTag: { type: Type.STRING } }, required: ["title", "bio", "greeting", "timeframe", "expertise", "passion", "systemInstruction", "suggestedPrompts", "voiceName", "voiceAccent", "ambienceTag"] } },
         contents: personaPrompt,
       });
       personaData = JSON.parse(personaResponse.text);
