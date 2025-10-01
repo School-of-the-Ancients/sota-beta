@@ -20,6 +20,7 @@ interface PersonaData {
   systemInstruction: string;
   suggestedPrompts: string[];
   voiceName: string;
+  voiceAccent: string;
   ambienceTag: string;
 }
 
@@ -85,19 +86,20 @@ const QuestCreator: React.FC<QuestCreatorProps> = ({ onQuestCreated, onBack }) =
         - timeframe: The centuries they were active in (e.g., 17th and 18th centuries).
         - expertise: A comma-separated list of their key areas of expertise.
         - passion: A short phrase describing their core motivation or passion.
-        - systemInstruction: A detailed prompt for an AI voice model to act as a conversational mentor, balancing knowledge sharing with guiding questions and periodically checking understanding. It must mention the special abilities 
+        - systemInstruction: A detailed prompt for an AI voice model to act as a conversational mentor, balancing knowledge sharing with guiding questions and periodically checking understanding. It must mention the special abilities
 changeEnvironment(description)
- and 
+ and
 
 displayArtifact(name, description)
 , instructing the AI to only generate the function call when using them. It must also specify an authentic accent and tone.
         - suggestedPrompts: Three engaging, open-ended questions a user could ask this character.
         - voiceName: Suggest the most suitable voice from this list: ${AVAILABLE_VOICES.join(', ')}.
+        - voiceAccent: A short description of the specific accent or vocal quality they should use (e.g., "a precise, upper-class 19th-century English accent").
         - ambienceTag: Select the most fitting keyword from this list: ${availableAmbienceTags}.`;
 
       const personaResponse = await ai.models.generateContent({
         model: "gemini-2.5-flash",
-        config: { responseMimeType: "application/json", responseSchema: { type: Type.OBJECT, properties: { title: { type: Type.STRING }, bio: { type: Type.STRING }, greeting: { type: Type.STRING }, timeframe: { type: Type.STRING }, expertise: { type: Type.STRING }, passion: { type: Type.STRING }, systemInstruction: { type: Type.STRING }, suggestedPrompts: { type: Type.ARRAY, items: { type: Type.STRING } }, voiceName: { type: Type.STRING }, ambienceTag: { type: Type.STRING } }, required: ["title", "bio", "greeting", "timeframe", "expertise", "passion", "systemInstruction", "suggestedPrompts", "voiceName", "ambienceTag"] } },
+        config: { responseMimeType: "application/json", responseSchema: { type: Type.OBJECT, properties: { title: { type: Type.STRING }, bio: { type: Type.STRING }, greeting: { type: Type.STRING }, timeframe: { type: Type.STRING }, expertise: { type: Type.STRING }, passion: { type: Type.STRING }, systemInstruction: { type: Type.STRING }, suggestedPrompts: { type: Type.ARRAY, items: { type: Type.STRING } }, voiceName: { type: Type.STRING }, voiceAccent: { type: Type.STRING }, ambienceTag: { type: Type.STRING } }, required: ["title", "bio", "greeting", "timeframe", "expertise", "passion", "systemInstruction", "suggestedPrompts", "voiceName", "voiceAccent", "ambienceTag"] } },
         contents: personaPrompt,
       });
       personaData = JSON.parse(personaResponse.text);
