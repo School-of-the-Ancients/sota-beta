@@ -1,6 +1,4 @@
-
-import React, { useState, useEffect } from 'react';
-// Fix: Add necessary imports for summary generation and conversation saving.
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { GoogleGenAI, Type } from '@google/genai';
 import type {
   Character,
@@ -18,55 +16,35 @@ import QuestsView from './components/QuestsView';
 import Instructions from './components/Instructions';
 import { CHARACTERS, QUESTS } from './constants';
 import QuestIcon from './components/icons/QuestIcon';
+import AuthGate from './components/AuthGate';
+import { supabase } from './supabaseClient';
+import type { Session } from '@supabase/supabase-js';
 
-const CUSTOM_CHARACTERS_KEY = 'school-of-the-ancients-custom-characters';
-// Fix: Add history key constant for conversation management.
-const HISTORY_KEY = 'school-of-the-ancients-history';
-const COMPLETED_QUESTS_KEY = 'school-of-the-ancients-completed-quests';
+interface ConversationRow {
+  id: string;
+  character_id: string;
+  character_name: string;
+  portrait_url: string;
+  occurred_at: string | null;
+  transcript: ConversationTurn[] | null;
+  environment_image_url: string | null;
+  summary: Summary | null;
+  quest_id: string | null;
+  quest_title: string | null;
+  quest_assessment: QuestAssessment | null;
+}
 
-// Fix: Add helper functions to manage conversation history in localStorage.
-const loadConversations = (): SavedConversation[] => {
-  try {
-    const rawHistory = localStorage.getItem(HISTORY_KEY);
-    return rawHistory ? JSON.parse(rawHistory) : [];
-  } catch (error) {
-    console.error("Failed to load conversation history:", error);
-    return [];
-  }
-};
+interface CustomCharacterRow {
+  id: string;
+  character: Character;
+}
 
-const saveConversationToLocalStorage = (conversation: SavedConversation) => {
-  try {
-    const history = loadConversations();
-    const existingIndex = history.findIndex(c => c.id === conversation.id);
-    if (existingIndex > -1) {
-      history[existingIndex] = conversation;
-    } else {
-      history.unshift(conversation);
-    }
-    localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
-  } catch (error) {
-    console.error("Failed to save conversation:", error);
-  }
-};
+interface CompletedQuestRow {
+  quest_id: string;
+}
 
-const loadCompletedQuests = (): string[] => {
-  try {
-    const stored = localStorage.getItem(COMPLETED_QUESTS_KEY);
-    return stored ? JSON.parse(stored) : [];
-  } catch (error) {
-    console.error('Failed to load completed quests:', error);
-    return [];
-  }
-};
-
-const saveCompletedQuests = (questIds: string[]) => {
-  try {
-    localStorage.setItem(COMPLETED_QUESTS_KEY, JSON.stringify(questIds));
-  } catch (error) {
-    console.error('Failed to save completed quests:', error);
-  }
-};
+const sortConversations = (items: SavedConversation[]) =>
+  [...items].sort((a, b) => b.timestamp - a.timestamp);
 
 const App: React.FC = () => {
   const [selectedCharacter, setSelectedCharacter] = useState<Character | null>(null);
@@ -74,40 +52,207 @@ const App: React.FC = () => {
   const [customCharacters, setCustomCharacters] = useState<Character[]>([]);
   const [environmentImageUrl, setEnvironmentImageUrl] = useState<string | null>(null);
   const [activeQuest, setActiveQuest] = useState<Quest | null>(null);
-  // Fix: Add isSaving state to manage the end conversation flow.
   const [isSaving, setIsSaving] = useState(false);
   const [completedQuests, setCompletedQuests] = useState<string[]>([]);
   const [lastQuestOutcome, setLastQuestOutcome] = useState<QuestAssessment | null>(null);
+  const [conversations, setConversations] = useState<SavedConversation[]>([]);
+  const [session, setSession] = useState<Session | null>(null);
+  const [authChecked, setAuthChecked] = useState(false);
+  const [isDataLoading, setIsDataLoading] = useState(false);
 
   useEffect(() => {
-    // Load custom characters from local storage
-    try {
-      const storedCharacters = localStorage.getItem(CUSTOM_CHARACTERS_KEY);
-      if (storedCharacters) {
-        setCustomCharacters(JSON.parse(storedCharacters));
-      }
-    } catch (e) {
-      console.error("Failed to load custom characters:", e);
+    if (!supabase) {
+      setAuthChecked(true);
+      return;
     }
 
+    let isMounted = true;
+    supabase.auth.getSession().then(({ data }) => {
+      if (isMounted) {
+        setSession(data.session);
+        setAuthChecked(true);
+      }
+    });
+
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, newSession) => {
+      setSession(newSession);
+      setAuthChecked(true);
+    });
+
+    return () => {
+      isMounted = false;
+      listener?.subscription.unsubscribe();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!supabase || !session?.user) {
+      setCustomCharacters([]);
+      setConversations([]);
+      setCompletedQuests([]);
+      setIsDataLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    const loadData = async () => {
+      setIsDataLoading(true);
+      try {
+        const [charactersResult, conversationsResult, questsResult] = await Promise.all([
+          supabase
+            .from('custom_characters')
+            .select('id, character')
+            .eq('user_id', session.user.id)
+            .order('created_at', { ascending: false }),
+          supabase
+            .from('conversations')
+            .select(
+              'id, character_id, character_name, portrait_url, occurred_at, transcript, environment_image_url, summary, quest_id, quest_title, quest_assessment'
+            )
+            .eq('user_id', session.user.id)
+            .order('occurred_at', { ascending: false }),
+          supabase
+            .from('completed_quests')
+            .select('quest_id')
+            .eq('user_id', session.user.id),
+        ]);
+
+        if (charactersResult.error) throw charactersResult.error;
+        if (conversationsResult.error) throw conversationsResult.error;
+        if (questsResult.error) throw questsResult.error;
+
+        if (cancelled) return;
+
+        const loadedCharacters = (charactersResult.data as CustomCharacterRow[] | null)?.map(row => row.character) ?? [];
+        const loadedConversations = (conversationsResult.data as ConversationRow[] | null)?.map(row => ({
+          id: row.id,
+          characterId: row.character_id,
+          characterName: row.character_name,
+          portraitUrl: row.portrait_url,
+          timestamp: row.occurred_at ? new Date(row.occurred_at).getTime() : Date.now(),
+          transcript: (row.transcript ?? []) as ConversationTurn[],
+          environmentImageUrl: row.environment_image_url ?? undefined,
+          summary: row.summary ?? undefined,
+          questId: row.quest_id ?? undefined,
+          questTitle: row.quest_title ?? undefined,
+          questAssessment: row.quest_assessment ?? undefined,
+        })) ?? [];
+        const loadedQuestIds = (questsResult.data as CompletedQuestRow[] | null)?.map(row => row.quest_id) ?? [];
+
+        setCustomCharacters(loadedCharacters);
+        setConversations(sortConversations(loadedConversations));
+        setCompletedQuests(loadedQuestIds);
+      } catch (error) {
+        console.error('Failed to load Supabase data:', error);
+      } finally {
+        if (!cancelled) {
+          setIsDataLoading(false);
+        }
+      }
+    };
+
+    loadData();
+    return () => {
+      cancelled = true;
+    };
+  }, [session]);
+
+  useEffect(() => {
+    if (!session) return;
     const urlParams = new URLSearchParams(window.location.search);
     const characterId = urlParams.get('character');
-    if (characterId) {
-      const allCharacters = [...customCharacters, ...CHARACTERS];
-      const characterFromUrl = allCharacters.find(c => c.id === characterId);
-      if (characterFromUrl) {
-        setSelectedCharacter(characterFromUrl);
-        setView('conversation');
-      }
+    if (!characterId) return;
+    const allCharacters = [...customCharacters, ...CHARACTERS];
+    const characterFromUrl = allCharacters.find(c => c.id === characterId);
+    if (characterFromUrl) {
+      setSelectedCharacter(characterFromUrl);
+      setView('conversation');
     }
+  }, [customCharacters, session]);
 
-    setCompletedQuests(loadCompletedQuests());
-  }, []); // customCharacters dependency is intentionally omitted to avoid re-running on delete
+  useEffect(() => {
+    if (!session) {
+      setSelectedCharacter(null);
+      setView('selector');
+      setEnvironmentImageUrl(null);
+      setActiveQuest(null);
+      setLastQuestOutcome(null);
+    }
+  }, [session]);
+
+  const persistConversation = useCallback(
+    async (conversation: SavedConversation) => {
+      setConversations(prev => sortConversations([conversation, ...prev.filter(item => item.id !== conversation.id)]));
+
+      if (!supabase || !session?.user) {
+        return;
+      }
+
+      const payload = {
+        id: conversation.id,
+        user_id: session.user.id,
+        character_id: conversation.characterId,
+        character_name: conversation.characterName,
+        portrait_url: conversation.portraitUrl,
+        occurred_at: new Date(conversation.timestamp).toISOString(),
+        transcript: conversation.transcript,
+        environment_image_url: conversation.environmentImageUrl ?? null,
+        summary: conversation.summary ?? null,
+        quest_id: conversation.questId ?? null,
+        quest_title: conversation.questTitle ?? null,
+        quest_assessment: conversation.questAssessment ?? null,
+        updated_at: new Date().toISOString(),
+      };
+
+      const { error } = await supabase.from('conversations').upsert(payload, { onConflict: 'id' });
+      if (error) {
+        console.error('Failed to persist conversation:', error);
+      }
+    },
+    [session?.user]
+  );
+
+  const markQuestCompletion = useCallback(
+    async (questId: string, completed: boolean) => {
+      if (!supabase || !session?.user) {
+        return;
+      }
+
+      if (completed) {
+        const { error } = await supabase.from('completed_quests').upsert({
+          user_id: session.user.id,
+          quest_id: questId,
+          completed_at: new Date().toISOString(),
+        });
+        if (error) {
+          console.error('Failed to record quest completion:', error);
+        }
+      } else {
+        const { error } = await supabase
+          .from('completed_quests')
+          .delete()
+          .eq('user_id', session.user.id)
+          .eq('quest_id', questId);
+        if (error) {
+          console.error('Failed to remove quest completion:', error);
+        }
+      }
+    },
+    [session?.user]
+  );
+
+  const handleSignOut = async () => {
+    if (!supabase) return;
+    const { error } = await supabase.auth.signOut();
+    if (error) {
+      console.error('Failed to sign out:', error);
+    }
+  };
 
   const handleSelectCharacter = (character: Character) => {
     setSelectedCharacter(character);
     setView('conversation');
-    setActiveQuest(null); // Clear quest if a character is selected manually
+    setActiveQuest(null);
     const url = new URL(window.location.href);
     url.searchParams.set('character', character.id);
     window.history.pushState({}, '', url);
@@ -128,38 +273,62 @@ const App: React.FC = () => {
     }
   };
 
-  const handleCharacterCreated = (newCharacter: Character) => {
-    const updatedCharacters = [newCharacter, ...customCharacters];
-    setCustomCharacters(updatedCharacters);
-    try {
-      localStorage.setItem(CUSTOM_CHARACTERS_KEY, JSON.stringify(updatedCharacters));
-    } catch (e) {
-      console.error("Failed to save custom character:", e);
+  const handleCharacterCreated = async (newCharacter: Character) => {
+    setCustomCharacters(prev => [newCharacter, ...prev.filter(c => c.id !== newCharacter.id)]);
+    if (supabase && session?.user) {
+      const { error } = await supabase.from('custom_characters').upsert({
+        id: newCharacter.id,
+        user_id: session.user.id,
+        character: newCharacter,
+      });
+      if (error) {
+        console.error('Failed to save custom character:', error);
+      }
     }
     handleSelectCharacter(newCharacter);
   };
 
-  const handleDeleteCharacter = (characterId: string) => {
-    if (window.confirm('Are you sure you want to permanently delete this ancient?')) {
-      const updatedCharacters = customCharacters.filter(c => c.id !== characterId);
-      setCustomCharacters(updatedCharacters);
-      try {
-        localStorage.setItem(CUSTOM_CHARACTERS_KEY, JSON.stringify(updatedCharacters));
-      } catch (e) {
-        console.error("Failed to delete custom character:", e);
+  const handleDeleteCharacter = async (characterId: string) => {
+    if (!window.confirm('Are you sure you want to permanently delete this ancient?')) {
+      return;
+    }
+    setCustomCharacters(prev => prev.filter(c => c.id !== characterId));
+    if (supabase && session?.user) {
+      const { error } = await supabase
+        .from('custom_characters')
+        .delete()
+        .eq('user_id', session.user.id)
+        .eq('id', characterId);
+      if (error) {
+        console.error('Failed to delete custom character:', error);
       }
     }
   };
 
-  // Fix: Implement summary generation and state reset on conversation end.
+  const handleDeleteConversation = useCallback(
+    async (id: string) => {
+      setConversations(prev => prev.filter(conversation => conversation.id !== id));
+      if (supabase && session?.user) {
+        const { error } = await supabase
+          .from('conversations')
+          .delete()
+          .eq('user_id', session.user.id)
+          .eq('id', id);
+        if (error) {
+          console.error('Failed to delete conversation:', error);
+        }
+      }
+    },
+    [session?.user]
+  );
+
   const handleEndConversation = async (transcript: ConversationTurn[], sessionId: string) => {
     if (!selectedCharacter) return;
     setIsSaving(true);
     let questAssessment: QuestAssessment | null = null;
 
     try {
-      const conversationHistory = loadConversations();
-      const existingConversation = conversationHistory.find(c => c.id === sessionId);
+      const existingConversation = conversations.find(c => c.id === sessionId);
 
       let updatedConversation: SavedConversation = existingConversation ?? {
         id: sessionId,
@@ -200,10 +369,7 @@ const App: React.FC = () => {
           .join('\n\n');
 
         if (transcriptText.trim()) {
-          const prompt = `Please summarize the following educational dialogue with ${selectedCharacter.name}. Provide a concise one-paragraph overview of the key topics discussed, and then list 3-5 of the most important takeaways or concepts as bullet points.
-
-Dialogue:
-${transcriptText}`;
+          const prompt = `Please summarize the following educational dialogue with ${selectedCharacter.name}. Provide a concise one-paragraph overview of the key topics discussed, and then list 3-5 of the most important takeaways or concepts as bullet points.\n\nDialogue:\n${transcriptText}`;
 
           const response = await ai.models.generateContent({
             model: 'gemini-2.5-flash',
@@ -240,17 +406,7 @@ ${transcriptText}`;
           .join('\n\n');
 
         if (questTranscriptText.trim()) {
-          const evaluationPrompt = `You are a meticulous mentor evaluating whether a student has mastered the quest "${activeQuest.title}". Review the conversation transcript between the mentor and student. Determine if the student demonstrates a working understanding of the quest objective: "${activeQuest.objective}".
-
-Return a JSON object with this structure:
-{
-  "passed": boolean,
-  "summary": string, // one or two sentences explaining your verdict in plain language
-  "evidence": string[], // bullet-friendly phrases citing what the student said that shows understanding
-  "improvements": string[] // actionable suggestions if the student has gaps (empty if passed)
-}
-
-Focus only on the student's contributions. Mark passed=true only if the learner clearly articulates key ideas from the objective.`;
+          const evaluationPrompt = `You are a meticulous mentor evaluating whether a student has mastered the quest "${activeQuest.title}". Review the conversation transcript between the mentor and student. Determine if the student demonstrates a working understanding of the quest objective: "${activeQuest.objective}".\n\nReturn a JSON object with this structure:\n{\n  "passed": boolean,\n  "summary": string, // one or two sentences explaining your verdict in plain language\n  "evidence": string[], // bullet-friendly phrases citing what the student said that shows understanding\n  "improvements": string[] // actionable suggestions if the student has gaps (empty if passed)\n}\n\nFocus only on the student's contributions. Mark passed=true only if the learner clearly articulates key ideas from the objective.`;
 
           const evaluationResponse = await ai.models.generateContent({
             model: 'gemini-2.5-flash',
@@ -294,27 +450,24 @@ Focus only on the student's contributions. Mark passed=true only if the learner 
           if (questAssessment.passed) {
             setCompletedQuests(prev => {
               if (prev.includes(activeQuest.id)) {
-                saveCompletedQuests(prev);
                 return prev;
               }
               const updated = [...prev, activeQuest.id];
-              saveCompletedQuests(updated);
               return updated;
             });
+            void markQuestCompletion(activeQuest.id, true);
           } else {
             setCompletedQuests(prev => {
               if (!prev.includes(activeQuest.id)) {
-                saveCompletedQuests(prev);
                 return prev;
               }
               const updated = prev.filter(id => id !== activeQuest.id);
-              saveCompletedQuests(updated);
               return updated;
             });
+            void markQuestCompletion(activeQuest.id, false);
           }
         }
       } else if (activeQuest) {
-        // Ensure quest metadata is retained even without AI assistance.
         updatedConversation = {
           ...updatedConversation,
           questId: activeQuest.id,
@@ -322,7 +475,7 @@ Focus only on the student's contributions. Mark passed=true only if the learner 
         };
       }
 
-      saveConversationToLocalStorage(updatedConversation);
+      await persistConversation(updatedConversation);
     } catch (error) {
       console.error('Failed to finalize conversation:', error);
     } finally {
@@ -340,6 +493,11 @@ Focus only on the student's contributions. Mark passed=true only if the learner 
     }
   };
 
+  const existingConversationForSelection = useMemo(() => {
+    if (!selectedCharacter) return null;
+    return conversations.find(conversation => conversation.characterId === selectedCharacter.id) ?? null;
+  }, [conversations, selectedCharacter]);
+
   const renderContent = () => {
     switch (view) {
       case 'conversation':
@@ -350,12 +508,20 @@ Focus only on the student's contributions. Mark passed=true only if the learner 
             environmentImageUrl={environmentImageUrl}
             onEnvironmentUpdate={setEnvironmentImageUrl}
             activeQuest={activeQuest}
-            // Fix: Pass the isSaving prop to ConversationView.
             isSaving={isSaving}
+            existingConversation={existingConversationForSelection}
+            onAutosave={persistConversation}
           />
         ) : null;
       case 'history':
-        return <HistoryView onBack={() => setView('selector')} />;
+        return (
+          <HistoryView
+            onBack={() => setView('selector')}
+            conversations={conversations}
+            onDeleteConversation={handleDeleteConversation}
+            isLoading={isDataLoading}
+          />
+        );
       case 'creator':
         return <CharacterCreator onCharacterCreated={handleCharacterCreated} onBack={() => setView('selector')} />;
       case 'quests':
@@ -423,19 +589,19 @@ Focus only on the student's contributions. Mark passed=true only if the learner 
               </div>
             )}
             <div className="flex flex-col sm:flex-row justify-center items-center gap-4 mb-12">
-                <button
-                    onClick={() => setView('quests')}
-                    className="flex items-center gap-3 bg-amber-600 hover:bg-amber-500 text-black font-bold py-3 px-8 rounded-lg transition-colors duration-300 text-lg w-full sm:w-auto"
-                >
-                    <QuestIcon className="w-6 h-6" />
-                    <span>Learning Quests</span>
-                </button>
-                <button
-                    onClick={() => setView('history')}
-                    className="bg-gray-700 hover:bg-gray-600 text-amber-300 font-bold py-3 px-8 rounded-lg transition-colors duration-300 border border-gray-600 w-full sm:w-auto"
-                >
-                    View Conversation History
-                </button>
+              <button
+                onClick={() => setView('quests')}
+                className="flex items-center gap-3 bg-amber-600 hover:bg-amber-500 text-black font-bold py-3 px-8 rounded-lg transition-colors duration-300 text-lg w-full sm:w-auto"
+              >
+                <QuestIcon className="w-6 h-6" />
+                <span>Learning Quests</span>
+              </button>
+              <button
+                onClick={() => setView('history')}
+                className="bg-gray-700 hover:bg-gray-600 text-amber-300 font-bold py-3 px-8 rounded-lg transition-colors duration-300 border border-gray-600 w-full sm:w-auto"
+              >
+                View Conversation History
+              </button>
             </div>
 
             <Instructions />
@@ -451,15 +617,51 @@ Focus only on the student's contributions. Mark passed=true only if the learner 
     }
   };
 
+  if (!supabase) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[#1a1a1a] text-gray-200">
+        <div className="max-w-md text-center space-y-4">
+          <h1 className="text-2xl font-bold text-amber-300">Supabase Not Configured</h1>
+          <p className="text-gray-400">
+            Set the VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY environment variables to enable authentication and cloud storage.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!authChecked) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[#1a1a1a] text-gray-300">
+        Loading...
+      </div>
+    );
+  }
+
+  if (!session) {
+    return <AuthGate />;
+  }
+
   return (
     <div className="relative min-h-screen bg-[#1a1a1a]">
+      {session.user && (
+        <div className="absolute top-4 right-4 z-20 flex items-center gap-3 bg-gray-900/70 border border-gray-700 px-4 py-2 rounded-full text-sm text-gray-300">
+          <span>{session.user.email}</span>
+          <button
+            onClick={handleSignOut}
+            className="text-amber-300 hover:text-amber-200 font-semibold"
+          >
+            Sign out
+          </button>
+        </div>
+      )}
       <div
         className="absolute inset-0 bg-cover bg-center transition-opacity duration-1000 z-0"
         style={{ backgroundImage: environmentImageUrl ? `url(${environmentImageUrl})` : 'none' }}
       />
       {environmentImageUrl && <div className="absolute inset-0 bg-black/50 z-0" />}
 
-      <div 
+      <div
         className="relative z-10 min-h-screen flex flex-col text-gray-200 font-serif p-4 sm:p-6 lg:p-8"
         style={{ background: environmentImageUrl ? 'transparent' : 'linear-gradient(to bottom right, #1a1a1a, #2b2b2b)' }}
       >

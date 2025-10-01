@@ -1,32 +1,9 @@
-
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import type { SavedConversation, ConversationTurn } from '../types';
 import DownloadIcon from './icons/DownloadIcon';
 
-const HISTORY_KEY = 'school-of-the-ancients-history';
-
-const loadConversations = (): SavedConversation[] => {
-  try {
-    const rawHistory = localStorage.getItem(HISTORY_KEY);
-    return rawHistory ? JSON.parse(rawHistory) : [];
-  } catch (error) {
-    console.error("Failed to load conversation history:", error);
-    return [];
-  }
-};
-
-const deleteConversationFromLocalStorage = (id: string) => {
-  try {
-    let history = loadConversations();
-    history = history.filter(c => c.id !== id);
-    localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
-  } catch (error) {
-    console.error("Failed to delete conversation:", error);
-  }
-};
-
 const ArtifactDisplay: React.FC<{ artifact: NonNullable<ConversationTurn['artifact']> }> = ({ artifact }) => {
-  if (!artifact.imageUrl || artifact.loading) return null; // Don't show incomplete artifacts in history
+  if (!artifact.imageUrl || artifact.loading) return null;
   return (
     <div className="mt-2 border-t border-teal-800/50 pt-3">
       <p className="text-sm font-semibold text-teal-300 mb-2">{artifact.name}</p>
@@ -35,36 +12,56 @@ const ArtifactDisplay: React.FC<{ artifact: NonNullable<ConversationTurn['artifa
   );
 };
 
-
 interface HistoryViewProps {
   onBack: () => void;
+  conversations: SavedConversation[];
+  onDeleteConversation: (id: string) => Promise<void> | void;
+  isLoading: boolean;
 }
 
-const HistoryView: React.FC<HistoryViewProps> = ({ onBack }) => {
-  const [history, setHistory] = useState<SavedConversation[]>([]);
-  const [selectedConversation, setSelectedConversation] = useState<SavedConversation | null>(null);
+const HistoryView: React.FC<HistoryViewProps> = ({ onBack, conversations, onDeleteConversation, isLoading }) => {
+  const [selectedConversationId, setSelectedConversationId] = useState<string | null>(null);
 
   useEffect(() => {
-    setHistory(loadConversations());
-  }, []);
+    if (conversations.length === 0) {
+      setSelectedConversationId(null);
+      return;
+    }
 
-  const handleDelete = (id: string) => {
-    if (window.confirm('Are you sure you want to delete this conversation?')) {
-      deleteConversationFromLocalStorage(id);
-      setHistory(loadConversations());
-      if (selectedConversation?.id === id) {
-        setSelectedConversation(null);
-      }
+    if (!selectedConversationId) {
+      setSelectedConversationId(conversations[0].id);
+      return;
+    }
+
+    const exists = conversations.some(conversation => conversation.id === selectedConversationId);
+    if (!exists) {
+      setSelectedConversationId(conversations[0].id);
+    }
+  }, [conversations, selectedConversationId]);
+
+  const selectedConversation = useMemo(() => {
+    if (!selectedConversationId) return null;
+    return conversations.find(conversation => conversation.id === selectedConversationId) ?? null;
+  }, [conversations, selectedConversationId]);
+
+  const handleDelete = async (id: string) => {
+    if (!window.confirm('Are you sure you want to delete this conversation?')) {
+      return;
+    }
+
+    await onDeleteConversation(id);
+    if (selectedConversationId === id) {
+      setSelectedConversationId(null);
     }
   };
 
   const handleDownload = () => {
     if (!selectedConversation) return;
-  
+
     let content = `Study Guide: Conversation with ${selectedConversation.characterName}\n`;
     content += `Date: ${new Date(selectedConversation.timestamp).toLocaleString()}\n`;
     content += `==================================================\n\n`;
-  
+
     if (selectedConversation.summary) {
       content += `SUMMARY\n---------------------\n`;
       content += `${selectedConversation.summary.overview}\n\n`;
@@ -74,7 +71,7 @@ const HistoryView: React.FC<HistoryViewProps> = ({ onBack }) => {
       });
       content += `\n==================================================\n\n`;
     }
-  
+
     content += `FULL TRANSCRIPT\n---------------------\n\n`;
     selectedConversation.transcript.forEach(turn => {
       content += `${turn.speakerName}:\n${turn.text}\n\n`;
@@ -82,7 +79,7 @@ const HistoryView: React.FC<HistoryViewProps> = ({ onBack }) => {
         content += `[Artifact Displayed: ${turn.artifact.name}]\n\n`;
       }
     });
-  
+
     const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
@@ -97,8 +94,8 @@ const HistoryView: React.FC<HistoryViewProps> = ({ onBack }) => {
   };
 
   const sortedHistory = useMemo(() => {
-    return [...history].sort((a, b) => b.timestamp - a.timestamp);
-  }, [history]);
+    return [...conversations].sort((a, b) => b.timestamp - a.timestamp);
+  }, [conversations]);
 
   if (selectedConversation) {
     return (
@@ -114,7 +111,7 @@ const HistoryView: React.FC<HistoryViewProps> = ({ onBack }) => {
               <p className="text-gray-400 text-sm">{new Date(selectedConversation.timestamp).toLocaleString()}</p>
             </div>
           </div>
-          
+
           {selectedConversation.questTitle && (
             <div
               className={`mb-4 p-4 rounded-lg border ${selectedConversation.questAssessment?.passed ? 'bg-emerald-900/30 border-emerald-700' : 'bg-amber-900/30 border-amber-700'}`}
@@ -173,7 +170,7 @@ const HistoryView: React.FC<HistoryViewProps> = ({ onBack }) => {
             ))}
           </div>
           <div className="flex flex-col sm:flex-row gap-4 mt-6">
-            <button onClick={() => setSelectedConversation(null)} className="bg-amber-600 hover:bg-amber-500 text-black font-bold py-2 px-6 rounded-lg transition-colors">
+            <button onClick={() => setSelectedConversationId(null)} className="bg-amber-600 hover:bg-amber-500 text-black font-bold py-2 px-6 rounded-lg transition-colors">
               Back to History
             </button>
             <button onClick={handleDownload} className="flex items-center justify-center gap-2 bg-blue-800/70 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded-lg transition-colors">
@@ -194,32 +191,39 @@ const HistoryView: React.FC<HistoryViewProps> = ({ onBack }) => {
           Back to Ancients
         </button>
       </div>
-      {sortedHistory.length === 0 ? (
+      {isLoading ? (
+        <p className="text-center text-gray-400 bg-gray-800/50 p-8 rounded-lg">Loading your conversations...</p>
+      ) : sortedHistory.length === 0 ? (
         <p className="text-center text-gray-400 bg-gray-800/50 p-8 rounded-lg">No saved conversations yet.</p>
       ) : (
         <div className="space-y-4">
-          {sortedHistory.map((conv) => (
-            <div key={conv.id} className="bg-gray-800/50 p-4 rounded-lg border border-gray-700 flex flex-col sm:flex-row items-center justify-between gap-4 hover:bg-gray-700/50 transition-colors">
-              <div className="flex items-center self-start sm:self-center">
-                <img src={conv.portraitUrl} alt={conv.characterName} className="w-12 h-12 rounded-full mr-4" />
+          {sortedHistory.map(conversation => (
+            <div
+              key={conversation.id}
+              className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 p-4 bg-gray-800/60 border border-gray-700 rounded-xl hover:border-amber-400 transition-colors"
+            >
+              <div className="flex items-center gap-4 cursor-pointer" onClick={() => setSelectedConversationId(conversation.id)}>
+                <img src={conversation.portraitUrl} alt={conversation.characterName} className="w-16 h-16 rounded-full border-2 border-amber-300" />
                 <div>
-                  <p className="font-bold text-lg text-amber-300">{conv.characterName}</p>
-                  <p className="text-sm text-gray-400">{new Date(conv.timestamp).toLocaleString()}</p>
-                  {conv.questTitle && (
-                    <p className="text-xs text-gray-400 mt-1">
-                      Quest: <span className="text-gray-200">{conv.questTitle}</span>{' '}
-                      {conv.questAssessment && (
-                        <span className={`ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wide ${conv.questAssessment.passed ? 'bg-emerald-700/40 text-emerald-200' : 'bg-red-700/40 text-red-200'}`}>
-                          {conv.questAssessment.passed ? 'Completed' : 'Needs Review'}
-                        </span>
-                      )}
-                    </p>
+                  <h3 className="text-lg font-semibold text-amber-200">{conversation.characterName}</h3>
+                  <p className="text-sm text-gray-400">{new Date(conversation.timestamp).toLocaleString()}</p>
+                  {conversation.summary && (
+                    <p className="text-sm text-gray-300 mt-1 line-clamp-2">{conversation.summary.overview}</p>
                   )}
                 </div>
               </div>
-              <div className="flex gap-2 self-end sm:self-center">
-                <button onClick={() => setSelectedConversation(conv)} className="bg-blue-800/70 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition-colors">View</button>
-                <button onClick={() => handleDelete(conv.id)} className="bg-red-800/70 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg transition-colors">Delete</button>
+              <div className="flex items-center gap-3">
+                {conversation.questTitle && (
+                  <span className={`text-xs font-semibold px-3 py-1 rounded-full ${conversation.questAssessment?.passed ? 'bg-emerald-600/60 text-emerald-100' : 'bg-amber-600/40 text-amber-100'}`}>
+                    {conversation.questAssessment?.passed ? 'Quest Completed' : 'Quest In Progress'}
+                  </span>
+                )}
+                <button
+                  onClick={() => handleDelete(conversation.id)}
+                  className="text-sm text-red-300 hover:text-red-200 font-semibold"
+                >
+                  Delete
+                </button>
               </div>
             </div>
           ))}
