@@ -13,7 +13,7 @@ import SendIcon from './icons/SendIcon';
 import MuteIcon from './icons/MuteIcon';
 import UnmuteIcon from './icons/UnmuteIcon';
 
-const HISTORY_KEY = 'school-of-the-ancients-history';
+const HISTORY_KEY_BASE = 'school-of-the-ancients-history';
 
 interface ConversationViewProps {
   character: Character;
@@ -22,11 +22,12 @@ interface ConversationViewProps {
   onEnvironmentUpdate: (url: string | null) => void;
   activeQuest: Quest | null;
   isSaving: boolean;
+  historyStorageKey?: string;
 }
 
-const loadConversations = (): SavedConversation[] => {
+const loadConversations = (storageKey: string): SavedConversation[] => {
   try {
-    const rawHistory = localStorage.getItem(HISTORY_KEY);
+    const rawHistory = localStorage.getItem(storageKey);
     return rawHistory ? JSON.parse(rawHistory) : [];
   } catch (error) {
     console.error("Failed to load conversation history:", error);
@@ -34,16 +35,16 @@ const loadConversations = (): SavedConversation[] => {
   }
 };
 
-const saveConversationToLocalStorage = (conversation: SavedConversation) => {
+const saveConversationToLocalStorage = (storageKey: string, conversation: SavedConversation) => {
   try {
-    const history = loadConversations();
+    const history = loadConversations(storageKey);
     const existingIndex = history.findIndex(c => c.id === conversation.id);
     if (existingIndex > -1) {
       history[existingIndex] = conversation;
     } else {
       history.unshift(conversation);
     }
-    localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
+    localStorage.setItem(storageKey, JSON.stringify(history));
   } catch (error) {
     console.error("Failed to save conversation:", error);
   }
@@ -99,7 +100,15 @@ const ArtifactDisplay: React.FC<{ artifact: NonNullable<ConversationTurn['artifa
     );
   };
 
-const ConversationView: React.FC<ConversationViewProps> = ({ character, onEndConversation, environmentImageUrl, onEnvironmentUpdate, activeQuest, isSaving }) => {
+const ConversationView: React.FC<ConversationViewProps> = ({
+  character,
+  onEndConversation,
+  environmentImageUrl,
+  onEnvironmentUpdate,
+  activeQuest,
+  isSaving,
+  historyStorageKey = HISTORY_KEY_BASE,
+}) => {
   const [transcript, setTranscript] = useState<ConversationTurn[]>([]);
   const [textInput, setTextInput] = useState('');
   const [dynamicSuggestions, setDynamicSuggestions] = useState<string[]>([]);
@@ -157,12 +166,12 @@ const ConversationView: React.FC<ConversationViewProps> = ({ character, onEndCon
       onEnvironmentUpdate(null);
       sessionIdRef.current = `quest_${activeQuest.id}_${Date.now()}`;
     } else {
-      const history = loadConversations();
+      const history = loadConversations(historyStorageKey);
       const existingConversation = history.find(c => c.characterId === character.id);
       if (existingConversation && existingConversation.transcript.length > 0) {
           setTranscript(existingConversation.transcript);
           onEnvironmentUpdate(existingConversation.environmentImageUrl || null);
-          sessionIdRef.current = existingConversation.id; 
+          sessionIdRef.current = existingConversation.id;
       } else {
           // This is a new conversation or an empty one from history
           setTranscript([greetingTurn]);
@@ -447,7 +456,7 @@ ${contextTranscript}
           }
         : {}),
     };
-    saveConversationToLocalStorage(conversation);
+    saveConversationToLocalStorage(historyStorageKey, conversation);
   }, [transcript, character, environmentImageUrl, activeQuest]);
 
   const handleReset = () => {
@@ -480,7 +489,7 @@ ${contextTranscript}
                 }
               : {}),
         };
-        saveConversationToLocalStorage(clearedConversation);
+        saveConversationToLocalStorage(historyStorageKey, clearedConversation);
     }
   };
 

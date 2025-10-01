@@ -3,11 +3,11 @@ import React, { useState, useEffect, useMemo } from 'react';
 import type { SavedConversation, ConversationTurn } from '../types';
 import DownloadIcon from './icons/DownloadIcon';
 
-const HISTORY_KEY = 'school-of-the-ancients-history';
+const HISTORY_KEY_BASE = 'school-of-the-ancients-history';
 
-const loadConversations = (): SavedConversation[] => {
+const loadConversations = (storageKey: string): SavedConversation[] => {
   try {
-    const rawHistory = localStorage.getItem(HISTORY_KEY);
+    const rawHistory = localStorage.getItem(storageKey);
     return rawHistory ? JSON.parse(rawHistory) : [];
   } catch (error) {
     console.error("Failed to load conversation history:", error);
@@ -15,11 +15,11 @@ const loadConversations = (): SavedConversation[] => {
   }
 };
 
-const deleteConversationFromLocalStorage = (id: string) => {
+const deleteConversationFromLocalStorage = (storageKey: string, id: string) => {
   try {
-    let history = loadConversations();
+    let history = loadConversations(storageKey);
     history = history.filter(c => c.id !== id);
-    localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
+    localStorage.setItem(storageKey, JSON.stringify(history));
   } catch (error) {
     console.error("Failed to delete conversation:", error);
   }
@@ -38,20 +38,22 @@ const ArtifactDisplay: React.FC<{ artifact: NonNullable<ConversationTurn['artifa
 
 interface HistoryViewProps {
   onBack: () => void;
+  storageKey?: string;
 }
 
-const HistoryView: React.FC<HistoryViewProps> = ({ onBack }) => {
+const HistoryView: React.FC<HistoryViewProps> = ({ onBack, storageKey }) => {
+  const resolvedStorageKey = storageKey ?? HISTORY_KEY_BASE;
   const [history, setHistory] = useState<SavedConversation[]>([]);
   const [selectedConversation, setSelectedConversation] = useState<SavedConversation | null>(null);
 
   useEffect(() => {
-    setHistory(loadConversations());
-  }, []);
+    setHistory(loadConversations(resolvedStorageKey));
+  }, [resolvedStorageKey]);
 
   const handleDelete = (id: string) => {
     if (window.confirm('Are you sure you want to delete this conversation?')) {
-      deleteConversationFromLocalStorage(id);
-      setHistory(loadConversations());
+      deleteConversationFromLocalStorage(resolvedStorageKey, id);
+      setHistory(loadConversations(resolvedStorageKey));
       if (selectedConversation?.id === id) {
         setSelectedConversation(null);
       }

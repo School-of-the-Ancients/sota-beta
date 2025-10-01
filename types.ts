@@ -72,6 +72,14 @@ export interface SavedConversation {
   questAssessment?: QuestAssessment;
 }
 
+export interface UserProfile {
+  id: string;
+  email: string | null;
+  displayName: string | null;
+  avatarUrl: string | null;
+  createdAt: string | null;
+}
+
 export interface Quest {
   id: string;
   title: string;
