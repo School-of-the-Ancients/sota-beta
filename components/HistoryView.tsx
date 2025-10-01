@@ -1,29 +1,6 @@
-
 import React, { useState, useEffect, useMemo } from 'react';
 import type { SavedConversation, ConversationTurn } from '../types';
 import DownloadIcon from './icons/DownloadIcon';
-
-const HISTORY_KEY = 'school-of-the-ancients-history';
-
-const loadConversations = (): SavedConversation[] => {
-  try {
-    const rawHistory = localStorage.getItem(HISTORY_KEY);
-    return rawHistory ? JSON.parse(rawHistory) : [];
-  } catch (error) {
-    console.error("Failed to load conversation history:", error);
-    return [];
-  }
-};
-
-const deleteConversationFromLocalStorage = (id: string) => {
-  try {
-    let history = loadConversations();
-    history = history.filter(c => c.id !== id);
-    localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
-  } catch (error) {
-    console.error("Failed to delete conversation:", error);
-  }
-};
 
 const ArtifactDisplay: React.FC<{ artifact: NonNullable<ConversationTurn['artifact']> }> = ({ artifact }) => {
   if (!artifact.imageUrl || artifact.loading) return null; // Don't show incomplete artifacts in history
@@ -35,36 +12,47 @@ const ArtifactDisplay: React.FC<{ artifact: NonNullable<ConversationTurn['artifa
   );
 };
 
-
 interface HistoryViewProps {
   onBack: () => void;
+  conversations: SavedConversation[];
+  onDelete: (id: string) => Promise<void>;
+  isLoading: boolean;
 }
 
-const HistoryView: React.FC<HistoryViewProps> = ({ onBack }) => {
-  const [history, setHistory] = useState<SavedConversation[]>([]);
-  const [selectedConversation, setSelectedConversation] = useState<SavedConversation | null>(null);
+const HistoryView: React.FC<HistoryViewProps> = ({ onBack, conversations, onDelete, isLoading }) => {
+  const [selectedId, setSelectedId] = useState<string | null>(null);
 
   useEffect(() => {
-    setHistory(loadConversations());
-  }, []);
+    if (selectedId && !conversations.some(conversation => conversation.id === selectedId)) {
+      setSelectedId(null);
+    }
+  }, [conversations, selectedId]);
 
-  const handleDelete = (id: string) => {
+  const sortedHistory = useMemo(() => {
+    return [...conversations].sort((a, b) => b.timestamp - a.timestamp);
+  }, [conversations]);
+
+  const selectedConversation = useMemo(() => {
+    if (!selectedId) return null;
+    return sortedHistory.find(conversation => conversation.id === selectedId) ?? null;
+  }, [sortedHistory, selectedId]);
+
+  const handleDelete = async (id: string) => {
     if (window.confirm('Are you sure you want to delete this conversation?')) {
-      deleteConversationFromLocalStorage(id);
-      setHistory(loadConversations());
-      if (selectedConversation?.id === id) {
-        setSelectedConversation(null);
+      await onDelete(id);
+      if (selectedId === id) {
+        setSelectedId(null);
       }
     }
   };
 
   const handleDownload = () => {
     if (!selectedConversation) return;
-  
+
     let content = `Study Guide: Conversation with ${selectedConversation.characterName}\n`;
     content += `Date: ${new Date(selectedConversation.timestamp).toLocaleString()}\n`;
     content += `==================================================\n\n`;
-  
+
     if (selectedConversation.summary) {
       content += `SUMMARY\n---------------------\n`;
       content += `${selectedConversation.summary.overview}\n\n`;
@@ -74,7 +62,7 @@ const HistoryView: React.FC<HistoryViewProps> = ({ onBack }) => {
       });
       content += `\n==================================================\n\n`;
     }
-  
+
     content += `FULL TRANSCRIPT\n---------------------\n\n`;
     selectedConversation.transcript.forEach(turn => {
       content += `${turn.speakerName}:\n${turn.text}\n\n`;
@@ -82,7 +70,7 @@ const HistoryView: React.FC<HistoryViewProps> = ({ onBack }) => {
         content += `[Artifact Displayed: ${turn.artifact.name}]\n\n`;
       }
     });
-  
+
     const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
@@ -96,13 +84,10 @@ const HistoryView: React.FC<HistoryViewProps> = ({ onBack }) => {
     URL.revokeObjectURL(url);
   };
 
-  const sortedHistory = useMemo(() => {
-    return [...history].sort((a, b) => b.timestamp - a.timestamp);
-  }, [history]);
-
   if (selectedConversation) {
     return (
-      <div className="max-w-4xl mx-auto bg-cover bg-center bg-[#202020] p-4 md:p-6 rounded-2xl shadow-2xl border border-gray-700 animate-fade-in relative"
+      <div
+        className="max-w-4xl mx-auto bg-cover bg-center bg-[#202020] p-4 md:p-6 rounded-2xl shadow-2xl border border-gray-700 animate-fade-in relative"
         style={{ backgroundImage: selectedConversation.environmentImageUrl ? `url(${selectedConversation.environmentImageUrl})` : 'none' }}
       >
         {selectedConversation.environmentImageUrl && <div className="absolute inset-0 bg-black/60 backdrop-blur-md rounded-2xl"></div>}
@@ -114,7 +99,7 @@ const HistoryView: React.FC<HistoryViewProps> = ({ onBack }) => {
               <p className="text-gray-400 text-sm">{new Date(selectedConversation.timestamp).toLocaleString()}</p>
             </div>
           </div>
-          
+
           {selectedConversation.questTitle && (
             <div
               className={`mb-4 p-4 rounded-lg border ${selectedConversation.questAssessment?.passed ? 'bg-emerald-900/30 border-emerald-700' : 'bg-amber-900/30 border-amber-700'}`}
@@ -158,14 +143,19 @@ const HistoryView: React.FC<HistoryViewProps> = ({ onBack }) => {
               <h3 className="text-lg font-bold text-amber-300 mb-2">Key Takeaways</h3>
               <p className="text-gray-300 mb-3">{selectedConversation.summary.overview}</p>
               <ul className="list-disc list-inside space-y-1 text-gray-300">
-                {selectedConversation.summary.takeaways.map((item, i) => <li key={i}>{item}</li>)}
+                {selectedConversation.summary.takeaways.map((item, index) => (
+                  <li key={index}>{item}</li>
+                ))}
               </ul>
             </div>
           )}
 
           <div className="bg-gray-900/50 p-4 rounded-lg border border-gray-700 max-h-[60vh] overflow-y-auto space-y-4">
             {selectedConversation.transcript.map((turn, index) => (
-              <div key={index} className={`p-3 rounded-lg border ${turn.speaker === 'user' ? 'bg-blue-900/20 border-blue-800/50' : 'bg-teal-900/20 border-teal-800/50'}`}>
+              <div
+                key={index}
+                className={`p-3 rounded-lg border ${turn.speaker === 'user' ? 'bg-blue-900/20 border-blue-800/50' : 'bg-teal-900/20 border-teal-800/50'}`}
+              >
                 <p className={`font-bold text-sm mb-1 ${turn.speaker === 'user' ? 'text-blue-300' : 'text-teal-300'}`}>{turn.speakerName}</p>
                 <p className="text-gray-300 whitespace-pre-wrap">{turn.text}</p>
                 {turn.artifact && <ArtifactDisplay artifact={turn.artifact} />}
@@ -173,7 +163,7 @@ const HistoryView: React.FC<HistoryViewProps> = ({ onBack }) => {
             ))}
           </div>
           <div className="flex flex-col sm:flex-row gap-4 mt-6">
-            <button onClick={() => setSelectedConversation(null)} className="bg-amber-600 hover:bg-amber-500 text-black font-bold py-2 px-6 rounded-lg transition-colors">
+            <button onClick={() => setSelectedId(null)} className="bg-amber-600 hover:bg-amber-500 text-black font-bold py-2 px-6 rounded-lg transition-colors">
               Back to History
             </button>
             <button onClick={handleDownload} className="flex items-center justify-center gap-2 bg-blue-800/70 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded-lg transition-colors">
@@ -194,23 +184,30 @@ const HistoryView: React.FC<HistoryViewProps> = ({ onBack }) => {
           Back to Ancients
         </button>
       </div>
-      {sortedHistory.length === 0 ? (
+      {isLoading ? (
+        <p className="text-center text-gray-400 bg-gray-800/50 p-8 rounded-lg">Loading conversation history...</p>
+      ) : sortedHistory.length === 0 ? (
         <p className="text-center text-gray-400 bg-gray-800/50 p-8 rounded-lg">No saved conversations yet.</p>
       ) : (
         <div className="space-y-4">
-          {sortedHistory.map((conv) => (
-            <div key={conv.id} className="bg-gray-800/50 p-4 rounded-lg border border-gray-700 flex flex-col sm:flex-row items-center justify-between gap-4 hover:bg-gray-700/50 transition-colors">
+          {sortedHistory.map(conversation => (
+            <div
+              key={conversation.id}
+              className="bg-gray-800/50 p-4 rounded-lg border border-gray-700 flex flex-col sm:flex-row items-center justify-between gap-4 hover:bg-gray-700/50 transition-colors"
+            >
               <div className="flex items-center self-start sm:self-center">
-                <img src={conv.portraitUrl} alt={conv.characterName} className="w-12 h-12 rounded-full mr-4" />
+                <img src={conversation.portraitUrl} alt={conversation.characterName} className="w-12 h-12 rounded-full mr-4" />
                 <div>
-                  <p className="font-bold text-lg text-amber-300">{conv.characterName}</p>
-                  <p className="text-sm text-gray-400">{new Date(conv.timestamp).toLocaleString()}</p>
-                  {conv.questTitle && (
+                  <p className="font-bold text-lg text-amber-300">{conversation.characterName}</p>
+                  <p className="text-sm text-gray-400">{new Date(conversation.timestamp).toLocaleString()}</p>
+                  {conversation.questTitle && (
                     <p className="text-xs text-gray-400 mt-1">
-                      Quest: <span className="text-gray-200">{conv.questTitle}</span>{' '}
-                      {conv.questAssessment && (
-                        <span className={`ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wide ${conv.questAssessment.passed ? 'bg-emerald-700/40 text-emerald-200' : 'bg-red-700/40 text-red-200'}`}>
-                          {conv.questAssessment.passed ? 'Completed' : 'Needs Review'}
+                      Quest: <span className="text-gray-200">{conversation.questTitle}</span>{' '}
+                      {conversation.questAssessment && (
+                        <span
+                          className={`ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wide ${conversation.questAssessment.passed ? 'bg-emerald-700/40 text-emerald-200' : 'bg-red-700/40 text-red-200'}`}
+                        >
+                          {conversation.questAssessment.passed ? 'Completed' : 'Needs Review'}
                         </span>
                       )}
                     </p>
@@ -218,8 +215,18 @@ const HistoryView: React.FC<HistoryViewProps> = ({ onBack }) => {
                 </div>
               </div>
               <div className="flex gap-2 self-end sm:self-center">
-                <button onClick={() => setSelectedConversation(conv)} className="bg-blue-800/70 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition-colors">View</button>
-                <button onClick={() => handleDelete(conv.id)} className="bg-red-800/70 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg transition-colors">Delete</button>
+                <button
+                  onClick={() => setSelectedId(conversation.id)}
+                  className="bg-blue-800/70 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition-colors"
+                >
+                  View
+                </button>
+                <button
+                  onClick={() => handleDelete(conversation.id)}
+                  className="bg-red-800/70 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg transition-colors"
+                >
+                  Delete
+                </button>
               </div>
             </div>
           ))}
