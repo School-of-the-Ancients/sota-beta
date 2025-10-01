@@ -21,6 +21,7 @@ interface PersonaData {
   systemInstruction: string;
   suggestedPrompts: string[];
   voiceName: string;
+  voiceAccent: string;
   ambienceTag: string;
 }
 
@@ -156,6 +157,7 @@ const CharacterCreator: React.FC<CharacterCreatorProps> = ({ onCharacterCreated,
         - systemInstruction: A detailed prompt for an AI voice model. This must instruct the character to act as a conversational mentor. Their teaching style should be a balanced blend of sharing their own knowledge and insights, followed by asking insightful questions to guide the student's thinking and encourage discovery. They should not exclusively ask questions. It must also instruct them to periodically check the student's understanding. Crucially, it must inform them of two special abilities: \`changeEnvironment(description)\` to change the scene, and \`displayArtifact(name, description)\` to show an image. It must instruct them: "When you decide to use one of these abilities, generate ONLY the function call and do not provide any accompanying speech. You can describe what is being shown after the visual has been generated." The prompt must also specify a distinct, authentic-sounding accent based on their origin. The tone should match their personality.
         - suggestedPrompts: Three engaging, open-ended questions a user could ask this character. At least one should suggest using a visual ability (e.g., "Take me to...", "Show me...").
         - voiceName: Based on their personality and historical context, suggest the most suitable voice from this list: ${AVAILABLE_VOICES.join(', ')}. Return only the name of the voice.
+        - voiceAccent: Describe the exact accent and vocal qualities they should maintain (e.g., "Warm, authentic Italian accent with artistic flair").
         - ambienceTag: Based on the character's typical environment, select the most fitting keyword from this list: ${availableAmbienceTags}.`;
 
       const response = await ai.models.generateContent({
@@ -168,9 +170,10 @@ const CharacterCreator: React.FC<CharacterCreatorProps> = ({ onCharacterCreated,
               title: { type: Type.STRING }, bio: { type: Type.STRING }, greeting: { type: Type.STRING }, timeframe: { type: Type.STRING }, expertise: { type: Type.STRING }, passion: { type: Type.STRING }, systemInstruction: { type: Type.STRING },
               suggestedPrompts: { type: Type.ARRAY, items: { type: Type.STRING } },
               voiceName: { type: Type.STRING },
+              voiceAccent: { type: Type.STRING },
               ambienceTag: { type: Type.STRING },
             },
-            required: ["title", "bio", "greeting", "timeframe", "expertise", "passion", "systemInstruction", "suggestedPrompts", "voiceName", "ambienceTag"]
+            required: ["title", "bio", "greeting", "timeframe", "expertise", "passion", "systemInstruction", "suggestedPrompts", "voiceName", "voiceAccent", "ambienceTag"]
           },
         },
         contents: prompt,

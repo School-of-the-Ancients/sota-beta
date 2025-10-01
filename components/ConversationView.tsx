@@ -371,7 +371,7 @@ const ConversationView: React.FC<ConversationViewProps> = ({ character, onEndCon
     isMicActive,
     toggleMicrophone,
     sendTextMessage
-  } = useGeminiLive(character.systemInstruction, character.voiceName, handleTurnComplete, handleEnvironmentChange, handleArtifactDisplay, activeQuest);
+  } = useGeminiLive(character.systemInstruction, character.voiceName, character.voiceAccent, handleTurnComplete, handleEnvironmentChange, handleArtifactDisplay, activeQuest);
 
   const updateDynamicSuggestions = useCallback(async (currentTranscript: ConversationTurn[]) => {
     if (currentTranscript.length === 0) return;
