@@ -9,13 +9,21 @@
 ## Table of Contents
 
 - [Overview](#overview)
-- [Core Features](#core-features)
+- [Feature Overview](#feature-overview)
+  - [Conversational Core](#conversational-core)
+  - [Immersive Worlds & Artifacts](#immersive-worlds--artifacts)
+  - [Quest-Driven Learning](#quest-driven-learning)
+  - [Custom Mentors & Quest Builder](#custom-mentors--quest-builder)
+  - [Progression & Reflection](#progression--reflection)
 - [Architecture Highlights](#architecture-highlights)
 - [Getting Started](#getting-started)
   - [Prerequisites](#prerequisites)
   - [Installation](#installation)
   - [Running Locally](#running-locally)
   - [Building for Production](#building-for-production)
+- [Using Learning Quests](#using-learning-quests)
+  - [Joining Curated Quests](#joining-curated-quests)
+  - [Creating Quests from Your Own Prompts](#creating-quests-from-your-own-prompts)
 - [Development Tips](#development-tips)
 - [Project Resources](#project-resources)
 - [Troubleshooting](#troubleshooting)
@@ -26,15 +34,37 @@
 
 School of the Ancients is a modern web application that pairs immersive visuals with live audio conversations. Powered by the Google Gemini API, you can speak with legendary minds like Leonardo da Vinci, Socrates, and Cleopatra. Mentors converse in their authentic voice, adapt the scenery around you, and display custom artifacts to support the lesson. The result is a "Matrix Operator"-style learning environment that blends dialogue, imagery, and exploration.
 
-## Core Features
+## Feature Overview
+
+### Conversational Core
 
 - **AI-emulated mentors** &mdash; Each historical figure is defined by a richly crafted system prompt that captures personality, accent, and teaching style.
-- **Dynamic voice conversations** &mdash; Uses the Gemini Live API for low-latency, two-way audio with real-time transcription and speech synthesis.
-- **Socratic dialogue** &mdash; Mentors avoid blunt answers, instead guiding you with probing questions and comprehension checks.
-- **Immersive worlds** &mdash; Ask the Operator to change the environment (e.g., "Take me to the Roman Forum") and watch the background update in real time.
-- **Visual artifacts** &mdash; Request images or diagrams (e.g., "Show me a sketch of your flying machine") and the mentor will display the generated result.
-- **Custom character creator** &mdash; A multi-step workflow that helps you design brand new mentors, including portrait generation.
-- **Conversation history** &mdash; Sessions, transcripts, artifacts, and environments are stored in browser `localStorage` for later review.
+- **Dynamic voice conversations** &mdash; The Gemini Live API powers low-latency, two-way audio with real-time transcription and speech synthesis so you can speak naturally.
+- **Socratic dialogue** &mdash; Mentors avoid blunt answers, instead guiding you with probing questions, comprehension checks, and follow-up challenges.
+
+### Immersive Worlds & Artifacts
+
+- **Environment control** &mdash; Ask the Operator to change the scenery (e.g., "Take me to the Roman Forum") and the background updates instantly.
+- **Generated artifacts** &mdash; Request images or diagrams (e.g., "Show me a sketch of your flying machine") and the mentor will display bespoke visuals.
+- **Ambient soundscapes** &mdash; Persona ambience tags pair each mentor with mood-setting audio beds for deeper immersion.
+
+### Quest-Driven Learning
+
+- **Curated quest board** &mdash; Pick from ready-to-run quests, each linking a legendary mentor with a focused learning objective and estimated duration.
+- **Quest-aware conversations** &mdash; When a quest is active, the mentor keeps you on track, surfaces scene changes, and captures artifacts tied to the objective.
+- **Automatic mastery reviews** &mdash; Ending a quest triggers an AI assessment of your transcript, summarizing what you grasped, what evidence proves it, and what to revisit.
+- **Progress tracking** &mdash; Completed quest IDs persist in `localStorage`, powering progress meters and keeping your accomplishments pinned between sessions.
+
+### Custom Mentors & Quest Builder
+
+- **Character creator** &mdash; A guided flow assembles brand new mentors with Gemini-authored backstories, greetings, Socratic instructions, and Imagen-powered portraits.
+- **Prompt-crafted quests** &mdash; Describe any learning goal ("Learn jazz improvisation from the greatest saxophonist") and the Quest Architect designs a quest, selects the ideal mentor, and even forges a new persona if none exists.
+- **Personalized parameters** &mdash; Tune quest difficulty, teaching style, or session length and the builder adapts the objective, focus points, and pacing.
+
+### Progression & Reflection
+
+- **Conversation history** &mdash; Sessions, transcripts, artifacts, and environments are stored in browser `localStorage` for later review or resuming quests.
+- **Quest dossiers** &mdash; Each AI review summarizes mastery, highlights evidence, and recommends improvements so you can iterate on your learning plan.
 - **Responsive design** &mdash; Tailwind CSS keeps the UI beautiful and accessible on mobile, tablet, and desktop displays.
 
 ## Architecture Highlights
@@ -87,6 +117,23 @@ npm run preview
 ```
 
 Deploy the contents of `dist/` to your static hosting platform of choice.
+
+## Using Learning Quests
+
+### Joining Curated Quests
+
+1. Open the **Learning Quests** view from the sidebar.
+2. Browse the curated quest list to see recommended mentors, objectives, and estimated commitment.
+3. Select a quest to automatically load the paired mentor, ambient environment, and contextual artifacts.
+4. Engage in conversation. When you end the session, the AI mentor will evaluate your mastery, mark the quest complete if you passed, and save the transcript to history.
+
+### Creating Quests from Your Own Prompts
+
+1. Choose **Create a Quest from Goal** in the quest view to launch the Quest Architect.
+2. Describe what you want to learn ("Master Renaissance perspective drawing" or "Understand quantum field theory from the world's greatest physicist").
+3. Optionally set difficulty, teaching style, or time preferences. Leave fields as `auto` to let the AI decide.
+4. The builder will generate a full quest brief, pick the most qualified mentor (or synthesize a new one with portrait, voice, and ambience), and queue the conversation.
+5. Start the quest immediately; progress and mastery assessments are tracked the same way as curated quests.
 
 ## Development Tips
 
