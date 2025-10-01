@@ -64,7 +64,7 @@ const QuestsView: React.FC<QuestsViewProps> = ({
               className="inline-flex items-center justify-center gap-2 self-start bg-teal-600 hover:bg-teal-500 text-black font-semibold py-2 px-4 rounded-lg transition-colors"
             >
               <QuestIcon className="w-5 h-5" />
-              Craft Your Own Quest
+              Create Your Quest
             </button>
           </div>
         </div>
