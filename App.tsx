@@ -18,6 +18,7 @@ import QuestsView from './components/QuestsView';
 import Instructions from './components/Instructions';
 import { CHARACTERS, QUESTS } from './constants';
 import QuestIcon from './components/icons/QuestIcon';
+import useSupabaseAuth from './hooks/useSupabaseAuth';
 
 const CUSTOM_CHARACTERS_KEY = 'school-of-the-ancients-custom-characters';
 // Fix: Add history key constant for conversation management.
@@ -69,6 +70,15 @@ const saveCompletedQuests = (questIds: string[]) => {
 };
 
 const App: React.FC = () => {
+  const {
+    user,
+    profile,
+    isLoading: authLoading,
+    error: authErrorFromHook,
+    signInWithGoogle,
+    signInWithSSO,
+    signOut,
+  } = useSupabaseAuth();
   const [selectedCharacter, setSelectedCharacter] = useState<Character | null>(null);
   const [view, setView] = useState<'selector' | 'conversation' | 'history' | 'creator' | 'quests'>('selector');
   const [customCharacters, setCustomCharacters] = useState<Character[]>([]);
@@ -78,6 +88,8 @@ const App: React.FC = () => {
   const [isSaving, setIsSaving] = useState(false);
   const [completedQuests, setCompletedQuests] = useState<string[]>([]);
   const [lastQuestOutcome, setLastQuestOutcome] = useState<QuestAssessment | null>(null);
+  const [ssoDomain, setSsoDomain] = useState('');
+  const [authErrorMessage, setAuthErrorMessage] = useState<string | null>(null);
 
   useEffect(() => {
     // Load custom characters from local storage
@@ -103,6 +115,124 @@ const App: React.FC = () => {
 
     setCompletedQuests(loadCompletedQuests());
   }, []); // customCharacters dependency is intentionally omitted to avoid re-running on delete
+
+  useEffect(() => {
+    if (authErrorFromHook) {
+      setAuthErrorMessage(authErrorFromHook);
+    }
+  }, [authErrorFromHook]);
+
+  const handleGoogleSignIn = async () => {
+    setAuthErrorMessage(null);
+    try {
+      await signInWithGoogle();
+    } catch (error) {
+      if (error instanceof Error) {
+        setAuthErrorMessage(error.message);
+      } else {
+        setAuthErrorMessage('Failed to start Google sign-in. Please try again.');
+      }
+    }
+  };
+
+  const handleSsoSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setAuthErrorMessage(null);
+    try {
+      await signInWithSSO(ssoDomain);
+    } catch (error) {
+      if (error instanceof Error) {
+        setAuthErrorMessage(error.message);
+      } else {
+        setAuthErrorMessage('Failed to start SSO sign-in. Please try again.');
+      }
+    }
+  };
+
+  const handleSignOut = async () => {
+    setAuthErrorMessage(null);
+    try {
+      await signOut();
+    } catch (error) {
+      if (error instanceof Error) {
+        setAuthErrorMessage(error.message);
+      } else {
+        setAuthErrorMessage('Unable to sign out. Please try again.');
+      }
+    }
+  };
+
+  const metadataName =
+    typeof user?.user_metadata?.full_name === 'string'
+      ? user.user_metadata.full_name
+      : undefined;
+  const userDisplayName =
+    profile?.displayName ||
+    profile?.email ||
+    metadataName ||
+    user?.email ||
+    'Explorer';
+  const userEmail = profile?.email || (user?.email ?? '');
+  const userInitial = userDisplayName.charAt(0).toUpperCase();
+
+  if (authLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[#0b1221] text-amber-200">
+        <div className="text-center space-y-2">
+          <p className="text-xl font-semibold tracking-wide">Summoning the ancients...</p>
+          <p className="text-sm text-amber-200/70">Preparing your portal.</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[#0b1221] px-4">
+        <div className="w-full max-w-md bg-black/60 border border-amber-400/40 rounded-2xl shadow-xl p-8 text-center space-y-6">
+          <div className="space-y-2">
+            <h1 className="text-3xl font-bold text-amber-300 tracking-wide">School of the Ancients</h1>
+            <p className="text-gray-300 text-sm">
+              Sign in with your organization or Google account to continue your quests.
+            </p>
+          </div>
+          {authErrorMessage && (
+            <div className="bg-red-900/60 border border-red-600 text-red-100 px-4 py-3 rounded-lg text-sm">
+              {authErrorMessage}
+            </div>
+          )}
+          <div className="space-y-3">
+            <button
+              onClick={handleGoogleSignIn}
+              className="w-full flex items-center justify-center gap-3 bg-amber-500 hover:bg-amber-400 text-black font-semibold py-3 rounded-lg transition-colors duration-200"
+            >
+              <span className="text-lg">Continue with Google</span>
+            </button>
+            <div className="text-xs uppercase tracking-widest text-gray-400">or</div>
+            <form onSubmit={handleSsoSubmit} className="space-y-3 text-left">
+              <label htmlFor="sso-domain" className="block text-sm font-semibold text-gray-300">
+                Organization domain
+              </label>
+              <input
+                id="sso-domain"
+                type="text"
+                value={ssoDomain}
+                onChange={event => setSsoDomain(event.target.value)}
+                placeholder="example.edu"
+                className="w-full rounded-lg border border-gray-700 bg-black/70 px-4 py-2 text-gray-200 placeholder-gray-500 focus:border-amber-400 focus:outline-none focus:ring-2 focus:ring-amber-400/40"
+              />
+              <button
+                type="submit"
+                className="w-full bg-gray-200 text-gray-900 font-semibold py-2.5 rounded-lg hover:bg-white transition-colors duration-200"
+              >
+                Continue with SSO
+              </button>
+            </form>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   const handleSelectCharacter = (character: Character) => {
     setSelectedCharacter(character);
@@ -459,15 +589,50 @@ Focus only on the student's contributions. Mark passed=true only if the learner 
       />
       {environmentImageUrl && <div className="absolute inset-0 bg-black/50 z-0" />}
 
-      <div 
+      <div
         className="relative z-10 min-h-screen flex flex-col text-gray-200 font-serif p-4 sm:p-6 lg:p-8"
         style={{ background: environmentImageUrl ? 'transparent' : 'linear-gradient(to bottom right, #1a1a1a, #2b2b2b)' }}
       >
-        <header className="text-center mb-8">
-          <h1 className="text-4xl sm:text-5xl md:text-6xl font-bold text-amber-300 tracking-wider" style={{ textShadow: '0 0 10px rgba(252, 211, 77, 0.5)' }}>
-            School of the Ancients
-          </h1>
-          <p className="text-gray-400 mt-2 text-lg">Old world wisdom. New world classroom.</p>
+        {authErrorMessage && (
+          <div className="max-w-3xl w-full mx-auto mb-4">
+            <div className="bg-red-900/60 border border-red-600 text-red-100 px-4 py-3 rounded-lg text-sm text-center">
+              {authErrorMessage}
+            </div>
+          </div>
+        )}
+        <header className="mb-8 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 text-center sm:text-left">
+          <div>
+            <h1
+              className="text-4xl sm:text-5xl md:text-6xl font-bold text-amber-300 tracking-wider"
+              style={{ textShadow: '0 0 10px rgba(252, 211, 77, 0.5)' }}
+            >
+              School of the Ancients
+            </h1>
+            <p className="text-gray-400 mt-2 text-lg">Old world wisdom. New world classroom.</p>
+          </div>
+          <div className="self-center sm:self-start bg-black/40 border border-amber-400/20 rounded-xl px-4 py-3 shadow-lg flex items-center gap-3">
+            {profile?.avatarUrl ? (
+              <img
+                src={profile.avatarUrl}
+                alt={userDisplayName}
+                className="w-12 h-12 rounded-full object-cover border border-amber-400/40"
+              />
+            ) : (
+              <div className="w-12 h-12 rounded-full bg-amber-500/20 border border-amber-400/40 flex items-center justify-center text-amber-200 font-semibold">
+                {userInitial}
+              </div>
+            )}
+            <div className="text-left">
+              <p className="text-sm font-semibold text-amber-200 leading-tight">{userDisplayName}</p>
+              {userEmail && <p className="text-xs text-gray-400 leading-tight">{userEmail}</p>}
+              <button
+                onClick={handleSignOut}
+                className="mt-2 text-xs font-semibold text-amber-300 hover:text-amber-200 transition-colors"
+              >
+                Sign out
+              </button>
+            </div>
+          </div>
         </header>
         <main className="max-w-7xl w-full mx-auto flex-grow flex flex-col">
           {renderContent()}
