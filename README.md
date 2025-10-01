@@ -2,60 +2,112 @@
 
 **Engage in real-time, voice-driven conversations with AI-emulated historical figures and explore their worlds.**
 
-This project is a dynamic web application that allows you to speak with legendary minds like Leonardo da Vinci, Socrates, and Cleopatra. Powered by the Google Gemini API, these AI mentors teach in their authentic style, using the Socratic method to guide you through complex topics. More than just a chatbot, this is an immersive learning environment where the AI can change the visual scenery and display artifacts on command, creating a "Matrix Operator" style experience.
-
-![School of the Ancients Screenshot](https://raw.githubusercontent.com/School-of-the-Ancients/sota-beta/9b4eedaf1b6af2165d08bacdf8a4e506dac43e15/sota-beta.png)
+![School of the Ancients screenshot](sota-beta.png)
 
 ---
+
+## Table of Contents
+
+- [Overview](#overview)
+- [Core Features](#core-features)
+- [Architecture Highlights](#architecture-highlights)
+- [Getting Started](#getting-started)
+  - [Prerequisites](#prerequisites)
+  - [Installation](#installation)
+  - [Running Locally](#running-locally)
+  - [Building for Production](#building-for-production)
+- [Development Tips](#development-tips)
+- [Project Resources](#project-resources)
+- [Troubleshooting](#troubleshooting)
+
+---
+
+## Overview
+
+School of the Ancients is a modern web application that pairs immersive visuals with live audio conversations. Powered by the Google Gemini API, you can speak with legendary minds like Leonardo da Vinci, Socrates, and Cleopatra. Mentors converse in their authentic voice, adapt the scenery around you, and display custom artifacts to support the lesson. The result is a "Matrix Operator"-style learning environment that blends dialogue, imagery, and exploration.
 
 ## Core Features
 
-*   **AI-Emulated Mentors**: Interact with a curated list of historical figures, each with a unique personality, voice, accent, and teaching style defined by sophisticated system instructions.
-*   **Dynamic Voice Conversations**: Utilizes the Gemini Live API for low-latency, real-time, two-way audio conversations. The application handles audio input, transcription, and spoken audio output from the model.
-*   **Socratic Dialogue**: Mentors are engineered to teach using the Socratic method. They avoid direct answers, instead asking probing questions to help you explore concepts and arrive at your own conclusions.
-*   **Immersive Worlds (The "Matrix Operator")**: A key feature where the AI can dynamically change the application's background to a relevant scene. Simply ask, "**Operator, take me to the Roman Forum**," and the environment will transform.
-*   **Visual Artifacts**: The AI can generate and display images of objects, diagrams, or concepts directly within the conversation. For example, asking Ada Lovelace to "**Show me a diagram of the Analytical Engine**" will produce a visual aid.
-*   **Custom Character Creator**: A powerful multi-step tool that uses generative AI to allow you to create, define, and generate a portrait for any historical figure you can imagine, bringing them to life as a new mentor.
-*   **Conversation History**: All conversations, including the generated transcript, artifacts, and environments, are automatically saved to your browser's local storage for later review.
-*   **Fully Responsive UI**: The interface is designed to be beautiful and functional across all devices, from mobile phones to desktop monitors.
+- **AI-emulated mentors** &mdash; Each historical figure is defined by a richly crafted system prompt that captures personality, accent, and teaching style.
+- **Dynamic voice conversations** &mdash; Uses the Gemini Live API for low-latency, two-way audio with real-time transcription and speech synthesis.
+- **Socratic dialogue** &mdash; Mentors avoid blunt answers, instead guiding you with probing questions and comprehension checks.
+- **Immersive worlds** &mdash; Ask the Operator to change the environment (e.g., "Take me to the Roman Forum") and watch the background update in real time.
+- **Visual artifacts** &mdash; Request images or diagrams (e.g., "Show me a sketch of your flying machine") and the mentor will display the generated result.
+- **Custom character creator** &mdash; A multi-step workflow that helps you design brand new mentors, including portrait generation.
+- **Conversation history** &mdash; Sessions, transcripts, artifacts, and environments are stored in browser `localStorage` for later review.
+- **Responsive design** &mdash; Tailwind CSS keeps the UI beautiful and accessible on mobile, tablet, and desktop displays.
+
+## Architecture Highlights
+
+- **Frontend stack**: React 19, TypeScript, Tailwind CSS, and Vite for development and bundling.
+- **Gemini integrations**:
+  - `gemini-2.5-flash-native-audio-preview-09-2025` drives live, bi-directional voice chat and function calling.
+  - `imagen-4.0-generate-001` renders portraits, environments, and historical artifacts.
+  - `gemini-2.5-flash` supports structured JSON output for the Character Creator and dynamic prompt generation.
+- **Function calling workflow**: The frontend exposes `changeEnvironment` and `displayArtifact`. When the mentor decides to alter the scene, Gemini issues a structured call that triggers new imagery and UI updates instead of plain text.
+- **Prompt engineering**: Persona prompts enforce the Socratic method, proactive tool use, and regular comprehension checks so every conversation feels guided and intentional.
+
+## Getting Started
+
+### Prerequisites
+
+- **Node.js** 20 or later
+- **npm** 10 or later (ships with modern Node releases)
+- A Google Gemini API key with access to the realtime and Imagen models
+
+### Installation
+
+1. Clone the repository.
+2. Install dependencies:
+   ```bash
+   npm install
+   ```
+3. Create a `.env` file in the project root and add your Gemini credentials:
+   ```bash
+   GEMINI_API_KEY=your_api_key_here
+   ```
+
+### Running Locally
+
+Start the Vite development server:
+
+```bash
+npm run dev
+```
+
+Visit the printed URL (defaults to http://localhost:3000) and grant the browser microphone access when prompted.
+
+### Building for Production
+
+Create an optimized build and preview it locally:
+
+```bash
+npm run build
+npm run preview
+```
+
+Deploy the contents of `dist/` to your static hosting platform of choice.
+
+## Development Tips
+
+- Vite exposes `process.env.API_KEY` and `process.env.GEMINI_API_KEY` based on the `GEMINI_API_KEY` entry in your `.env` file. Be sure not to commit this file.
+- Shared UI components live in `components/`, while feature views are registered in `App.tsx`.
+- Hooks such as `useGeminiLive` encapsulate audio capture, streaming, and playback logic.
+- Tailwind utility classes handle layout; extend the Tailwind config before introducing custom CSS.
+- No automated tests exist yet. If you add Vitest or other tooling, expose it through an `npm run test` script.
+
+## Project Resources
+
+- [`implementation.md`](implementation.md) &mdash; Deep-dive notes about system design choices and future ideas.
+- [`docs/`](docs/) &mdash; Additional reference material and design explorations.
+- [`audio/`](audio/) &mdash; Placeholder directory for local experimentation (do not commit generated artifacts).
+
+## Troubleshooting
+
+- **"API_KEY not set" errors**: Ensure your `.env` file is present and you restarted `npm run dev` after adding it.
+- **Microphone permissions**: Clear browser permissions if you accidentally deny access; audio capture is required for real-time chat.
+- **Slow or missing visuals**: Imagen requests can take a few seconds. Watch the developer console for network errors if images do not appear.
 
 ---
 
-## How It Works
-
-This application is built with a modern frontend stack and leverages multiple modalities of the Google Gemini API to create its interactive experience.
-
-### Technology Stack
-
-*   **Frontend**: React, TypeScript, Tailwind CSS
-*   **AI & Generative Models**: Google Gemini API
-    *   **Real-time Conversation**: `gemini-2.5-flash-native-audio-preview-09-2025` is used for the core voice-to-voice interaction, including real-time transcription and function calling.
-    *   **Image Generation**: `imagen-4.0-generate-001` powers the creation of character portraits, immersive environments, and historical artifacts.
-    *   **Text Generation**: `gemini-2.5-flash` is used for structured JSON generation in the Character Creator and for generating dynamic conversational prompts.
-
-### Key Concepts
-
-#### Function Calling
-
-The "Matrix Operator" feature is powered by Gemini's **Function Calling** ability. The frontend code defines two functions, `changeEnvironment` and `displayArtifact`. The AI's system instructions make it aware of these tools. When a user's voice command matches the purpose of a tool, the model doesn't just respond with text; it issues a structured command to the frontend to execute the function, which then triggers an API call to generate the required image and update the UI.
-
-#### Advanced Prompt Engineering
-
-Each character's persona is meticulously crafted in their `systemInstruction`. This prompt guides the AI's behavior, instructing it to:
-1.  Adopt a specific personality, accent, and teaching style.
-2.  Adhere strictly to the Socratic method.
-3.  Proactively use its `changeEnvironment` and `displayArtifact` abilities to make lessons more engaging.
-4.  Periodically check the user's understanding of a topic before moving on.
-
----
-
-## How to Use the Application
-
-1.  **Select an Ancient**: Choose a character from the main screen to begin a conversation.
-2.  **Grant Microphone Access**: The browser will ask for permission to use your microphone. This is required for the voice conversation.
-3.  **Start Talking**: You can start the conversation by speaking, or by clicking one of the "Conversation Starter" prompts.
-4.  **Explore Immersive Features**:
-    *   To change the scene, try saying things like: "**Take me to your workshop**" or "**Show me the Library of Alexandria**."
-    *   To see an artifact, try: "**Can you show me a sketch of your flying machine?**"
-5.  **Create Your Own**: Click the "Create a New Ancient" card to launch the Character Creator and build your own AI mentor.
-6.  **Review History**: Click "View Conversation History" to see all your past discussions.
+Ready to explore? Launch the Operator, pick a mentor, and start your journey through history.
