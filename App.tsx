@@ -20,6 +20,7 @@ import QuestIcon from './components/icons/QuestIcon';
 import QuestCreator from './components/QuestCreator'; // NEW
 
 import { CHARACTERS, QUESTS } from './constants';
+import { ensureAccentInSystemInstruction } from './utils/voice';
 
 const CUSTOM_CHARACTERS_KEY = 'school-of-the-ancients-custom-characters';
 const HISTORY_KEY = 'school-of-the-ancients-history';
@@ -93,7 +94,19 @@ const App: React.FC = () => {
     try {
       const storedCharacters = localStorage.getItem(CUSTOM_CHARACTERS_KEY);
       if (storedCharacters) {
-        setCustomCharacters(JSON.parse(storedCharacters));
+        const parsed: Partial<Character>[] = JSON.parse(storedCharacters);
+        const normalized = parsed.map(raw => {
+          const accent = typeof raw.voiceAccent === 'string' && raw.voiceAccent.trim()
+            ? raw.voiceAccent.trim()
+            : `an accent authentic to ${raw.name ?? 'the mentor'}'s historical background`;
+          const instruction = ensureAccentInSystemInstruction(raw.systemInstruction ?? '', accent);
+          return {
+            ...raw,
+            voiceAccent: accent,
+            systemInstruction: instruction,
+          } as Character;
+        });
+        setCustomCharacters(normalized);
       }
     } catch (e) {
       console.error('Failed to load custom characters:', e);

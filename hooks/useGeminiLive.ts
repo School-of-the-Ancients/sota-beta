@@ -2,6 +2,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { GoogleGenAI, LiveServerMessage, Modality, Blob, FunctionDeclaration, Type } from '@google/genai';
 import { ConnectionState, Quest } from '../types';
+import { ensureAccentInSystemInstruction } from '../utils/voice';
 
 // Audio Encoding & Decoding functions
 function encode(bytes: Uint8Array): string {
@@ -91,6 +92,7 @@ const changeEnvironmentFunctionDeclaration: FunctionDeclaration = {
 export const useGeminiLive = (
     systemInstruction: string,
     voiceName: string,
+    voiceAccent: string,
     onTurnComplete: (turn: { user: string; model: string }) => void,
     onEnvironmentChangeRequest: (description: string) => void,
     onArtifactDisplayRequest: (name: string, description: string) => void,
@@ -186,9 +188,10 @@ export const useGeminiLive = (
         try {
             const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
             
-            let finalSystemInstruction = systemInstruction;
+            const baseInstruction = ensureAccentInSystemInstruction(systemInstruction, voiceAccent);
+            let finalSystemInstruction = baseInstruction;
             if (activeQuest) {
-                finalSystemInstruction = `YOUR CURRENT MISSION: As a mentor, your primary goal is to guide the student to understand the following: "${activeQuest.objective}". Tailor your questions and explanations to lead them towards this goal.\n\n---\n\n${systemInstruction}`;
+                finalSystemInstruction = `YOUR CURRENT MISSION: As a mentor, your primary goal is to guide the student to understand the following: "${activeQuest.objective}". Tailor your questions and explanations to lead them towards this goal.\n\n---\n\n${baseInstruction}`;
             }
 
             const sessionPromise = ai.live.connect({
@@ -345,7 +348,7 @@ export const useGeminiLive = (
             console.error('Failed to connect to Gemini Live:', error);
             setConnectionState(ConnectionState.ERROR);
         }
-    }, [systemInstruction, voiceName, activeQuest]);
+    }, [systemInstruction, voiceName, voiceAccent, activeQuest]);
 
     const disconnect = useCallback(() => {
         sessionPromiseRef.current?.then((session) => session.close()).catch(err => {

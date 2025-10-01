@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { GoogleGenAI, Type } from '@google/genai';
-import type { Character } from '../types';
+import type { Character, PersonaData } from '../types';
 import { AMBIENCE_LIBRARY, AVAILABLE_VOICES } from '../constants';
+import { ensureAccentInSystemInstruction } from '../utils/voice';
 
 interface CharacterCreatorProps {
   onCharacterCreated: (character: Character) => void;
@@ -64,6 +65,7 @@ const CharacterCreator: React.FC<CharacterCreatorProps> = ({ onCharacterCreated,
 - systemInstruction (act as mentor; emphasize Socratic prompts; may call changeEnvironment() or displayArtifact() as function-only lines)
 - suggestedPrompts (3, one must be environmental/visual)
 - voiceName (one of: ${AVAILABLE_VOICES.join(', ')})
+- voiceAccent (describe the accent and vocal qualities, matching the figure's identity)
 - ambienceTag (one of: ${availableAmbienceTags})`;
 
       const personaResp = await ai.models.generateContent({
@@ -82,6 +84,7 @@ const CharacterCreator: React.FC<CharacterCreatorProps> = ({ onCharacterCreated,
               systemInstruction: { type: Type.STRING },
               suggestedPrompts: { type: Type.ARRAY, items: { type: Type.STRING } },
               voiceName: { type: Type.STRING },
+              voiceAccent: { type: Type.STRING },
               ambienceTag: { type: Type.STRING },
             },
             required: [
@@ -94,6 +97,7 @@ const CharacterCreator: React.FC<CharacterCreatorProps> = ({ onCharacterCreated,
               'systemInstruction',
               'suggestedPrompts',
               'voiceName',
+              'voiceAccent',
               'ambienceTag',
             ],
           },
@@ -101,7 +105,10 @@ const CharacterCreator: React.FC<CharacterCreatorProps> = ({ onCharacterCreated,
         contents: personaPrompt,
       });
 
-      const persona = JSON.parse(personaResp.text);
+      const persona: PersonaData = JSON.parse(personaResp.text);
+
+      const voiceAccent = persona.voiceAccent?.trim() || `an accent authentic to ${clean}'s historical background`;
+      const systemInstruction = ensureAccentInSystemInstruction(persona.systemInstruction, voiceAccent);
 
       // --- SAFE portrait generation with fallback ---
       let portraitUrl = makeFallbackAvatar(clean, persona.title);
@@ -136,9 +143,10 @@ const CharacterCreator: React.FC<CharacterCreatorProps> = ({ onCharacterCreated,
         timeframe: persona.timeframe,
         expertise: persona.expertise,
         passion: persona.passion,
-        systemInstruction: persona.systemInstruction,
+        systemInstruction,
         suggestedPrompts: persona.suggestedPrompts,
         voiceName: persona.voiceName,
+        voiceAccent,
         ambienceTag: persona.ambienceTag,
         portraitUrl,
       };
