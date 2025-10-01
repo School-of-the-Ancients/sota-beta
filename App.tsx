@@ -386,6 +386,7 @@ Focus only on the student's contributions. Mark passed=true only if the learner 
             quests={QUESTS}
             characters={allCharacters}
             completedQuestIds={completedQuests}
+            onCreateQuest={() => setView('questCreator')}
           />
         );
       }
