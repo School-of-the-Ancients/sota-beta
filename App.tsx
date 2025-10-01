@@ -501,7 +501,7 @@ Focus only on the student's contributions. Mark passed=true only if the learner 
                 onClick={() => setView('questCreator')}
                 className="bg-teal-700 hover:bg-teal-600 text-white font-bold py-3 px-8 rounded-lg transition-colors duration-300 w-full sm:w-auto"
               >
-                Create a Quest from Goal
+                Create Your Quest
               </button>
             </div>
 
