@@ -57,14 +57,14 @@ const QuestsView: React.FC<QuestsViewProps> = ({
           </ol>
           <div className="flex flex-col justify-between gap-4 bg-gray-800/60 border border-gray-700 rounded-lg p-4 text-sm text-gray-300">
             <p>
-              Use <span className="font-semibold text-amber-200">Create a Quest from Goal</span> to craft a bespoke path. Share what you want to master, choose optional preferences, and we will pair you with a new mentor and quest outline.
+              Use <span className="font-semibold text-amber-200">Create Your Quest</span> to craft a bespoke path. Share what you want to master, choose optional preferences, and we will pair you with a new mentor and quest outline.
             </p>
             <button
               onClick={onCreateQuest}
               className="inline-flex items-center justify-center gap-2 self-start bg-teal-600 hover:bg-teal-500 text-black font-semibold py-2 px-4 rounded-lg transition-colors"
             >
               <QuestIcon className="w-5 h-5" />
-              Craft Your Own Quest
+              Create Your Quest
             </button>
           </div>
         </div>
