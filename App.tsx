@@ -14,12 +14,14 @@ import CharacterSelector from './components/CharacterSelector';
 import ConversationView from './components/ConversationView';
 import HistoryView from './components/HistoryView';
 import CharacterCreator from './components/CharacterCreator';
+import QuestCreator from './components/QuestCreator';
 import QuestsView from './components/QuestsView';
 import Instructions from './components/Instructions';
 import { CHARACTERS, QUESTS } from './constants';
 import QuestIcon from './components/icons/QuestIcon';
 
 const CUSTOM_CHARACTERS_KEY = 'school-of-the-ancients-custom-characters';
+const CUSTOM_QUESTS_KEY = 'school-of-the-ancients-custom-quests';
 // Fix: Add history key constant for conversation management.
 const HISTORY_KEY = 'school-of-the-ancients-history';
 const COMPLETED_QUESTS_KEY = 'school-of-the-ancients-completed-quests';
@@ -70,8 +72,9 @@ const saveCompletedQuests = (questIds: string[]) => {
 
 const App: React.FC = () => {
   const [selectedCharacter, setSelectedCharacter] = useState<Character | null>(null);
-  const [view, setView] = useState<'selector' | 'conversation' | 'history' | 'creator' | 'quests'>('selector');
+  const [view, setView] = useState<'selector' | 'conversation' | 'history' | 'creator' | 'quests' | 'quest-creator'>('selector');
   const [customCharacters, setCustomCharacters] = useState<Character[]>([]);
+  const [quests, setQuests] = useState<Quest[]>(QUESTS);
   const [environmentImageUrl, setEnvironmentImageUrl] = useState<string | null>(null);
   const [activeQuest, setActiveQuest] = useState<Quest | null>(null);
   // Fix: Add isSaving state to manage the end conversation flow.
@@ -86,8 +89,12 @@ const App: React.FC = () => {
       if (storedCharacters) {
         setCustomCharacters(JSON.parse(storedCharacters));
       }
+      const storedQuests = localStorage.getItem(CUSTOM_QUESTS_KEY);
+      if (storedQuests) {
+        setQuests(prevQuests => [...prevQuests, ...JSON.parse(storedQuests)]);
+      }
     } catch (e) {
-      console.error("Failed to load custom characters:", e);
+      console.error("Failed to load custom data:", e);
     }
 
     const urlParams = new URLSearchParams(window.location.search);
@@ -137,6 +144,21 @@ const App: React.FC = () => {
       console.error("Failed to save custom character:", e);
     }
     handleSelectCharacter(newCharacter);
+  };
+
+  const handleQuestCreated = (newQuest: Quest, newCharacter: Character) => {
+    const updatedCharacters = [newCharacter, ...customCharacters];
+    setCustomCharacters(updatedCharacters);
+    const updatedQuests = [newQuest, ...quests];
+    setQuests(updatedQuests);
+    try {
+      localStorage.setItem(CUSTOM_CHARACTERS_KEY, JSON.stringify(updatedCharacters));
+      const customQuests = updatedQuests.filter(q => !QUESTS.includes(q));
+      localStorage.setItem(CUSTOM_QUESTS_KEY, JSON.stringify(customQuests));
+    } catch (e) {
+      console.error("Failed to save custom data:", e);
+    }
+    setView('quests');
   };
 
   const handleDeleteCharacter = (characterId: string) => {
@@ -358,15 +380,18 @@ Focus only on the student's contributions. Mark passed=true only if the learner 
         return <HistoryView onBack={() => setView('selector')} />;
       case 'creator':
         return <CharacterCreator onCharacterCreated={handleCharacterCreated} onBack={() => setView('selector')} />;
+      case 'quest-creator':
+        return <QuestCreator onQuestCreated={handleQuestCreated} onBack={() => setView('quests')} />;
       case 'quests':
         const allCharacters = [...customCharacters, ...CHARACTERS];
         return (
           <QuestsView
             onBack={() => setView('selector')}
             onSelectQuest={handleSelectQuest}
-            quests={QUESTS}
+            quests={quests}
             characters={allCharacters}
             completedQuestIds={completedQuests}
+            onStartCreation={() => setView('quest-creator')}
           />
         );
       case 'selector':
@@ -378,11 +403,11 @@ Focus only on the student's contributions. Mark passed=true only if the learner 
             </p>
             <div className="max-w-3xl mx-auto mb-8 bg-gray-800/50 border border-gray-700 rounded-lg p-4 text-left">
               <p className="text-sm text-gray-300 mb-2 font-semibold">Quest Progress</p>
-              <p className="text-xs uppercase tracking-wide text-gray-400 mb-3">{completedQuests.length} of {QUESTS.length} quests completed</p>
+              <p className="text-xs uppercase tracking-wide text-gray-400 mb-3">{completedQuests.length} of {quests.length} quests completed</p>
               <div className="w-full h-2 bg-gray-700 rounded-full overflow-hidden">
                 <div
                   className="h-full bg-amber-500 transition-all duration-500"
-                  style={{ width: `${Math.min(100, Math.round((completedQuests.length / Math.max(QUESTS.length, 1)) * 100))}%` }}
+                  style={{ width: `${Math.min(100, Math.round((completedQuests.length / Math.max(quests.length, 1)) * 100))}%` }}
                 />
               </div>
             </div>

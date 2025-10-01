@@ -9,9 +9,10 @@ interface QuestsViewProps {
   completedQuestIds: string[];
   onSelectQuest: (quest: Quest) => void;
   onBack: () => void;
+  onStartCreation: () => void;
 }
 
-const QuestsView: React.FC<QuestsViewProps> = ({ quests, characters, completedQuestIds, onSelectQuest, onBack }) => {
+const QuestsView: React.FC<QuestsViewProps> = ({ quests, characters, completedQuestIds, onSelectQuest, onBack, onStartCreation }) => {
   return (
     <div className="max-w-4xl mx-auto animate-fade-in">
       <div className="flex justify-between items-center mb-6">
@@ -19,9 +20,14 @@ const QuestsView: React.FC<QuestsViewProps> = ({ quests, characters, completedQu
             <QuestIcon className="w-8 h-8 text-amber-300"/>
             <h2 className="text-3xl font-bold text-amber-200">Learning Quests</h2>
         </div>
-        <button onClick={onBack} className="bg-gray-700 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded-lg transition-colors">
-          Back to Ancients
-        </button>
+        <div className="flex items-center gap-4">
+          <button onClick={onStartCreation} className="bg-amber-600 hover:bg-amber-500 text-black font-bold py-2 px-4 rounded-lg transition-colors">
+            Design New Quest
+          </button>
+          <button onClick={onBack} className="bg-gray-700 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded-lg transition-colors">
+            Back to Ancients
+          </button>
+        </div>
       </div>
 
       <p className="text-center text-gray-400 mb-8">
