@@ -45,8 +45,8 @@ School of the Ancients is a modern web application that pairs immersive visuals 
 ### Immersive Worlds & Artifacts
 
 - **Environment control** &mdash; Ask the Operator to change the scenery (e.g., "Take me to the Roman Forum") and the background updates instantly.
-- **Generated artifacts** &mdash; Request images or diagrams (e.g., "Show me a sketch of your flying machine") and the mentor will display bespoke visuals.
-- **Ambient soundscapes** &mdash; Persona ambience tags pair each mentor with mood-setting audio beds for deeper immersion.
+- **Generated artifacts** &mdash; Request images or diagrams (e.g., "Show me a sketch of your flying machine", "Operator, show me leoarndo's flying machine") and the mentor will display bespoke visuals.
+- **Ambient soundscapes** &mdash; Persona ambience tags pair each mentor with mood-setting audio for deeper immersion.
 
 ### Quest-Driven Learning
 
@@ -58,7 +58,7 @@ School of the Ancients is a modern web application that pairs immersive visuals 
 ### Custom Mentors & Quest Builder
 
 - **Character creator** &mdash; A guided flow assembles brand new mentors with Gemini-authored backstories, greetings, Socratic instructions, and Imagen-powered portraits.
-- **Prompt-crafted quests** &mdash; Describe any learning goal ("Learn jazz improvisation from the greatest saxophonist") and the Quest Architect designs a quest, selects the ideal mentor, and even forges a new persona if none exists.
+- **Prompt-crafted quests** &mdash; Describe any learning goal ("Learn how to use github") and the Quest Architect designs a quest, selects the ideal mentor, and even forges a new persona if none exists.
 - **Personalized parameters** &mdash; Tune quest difficulty, teaching style, or session length and the builder adapts the objective, focus points, and pacing.
 
 ### Progression & Reflection
@@ -74,8 +74,25 @@ School of the Ancients is a modern web application that pairs immersive visuals 
   - `gemini-2.5-flash-native-audio-preview-09-2025` drives live, bi-directional voice chat and function calling.
   - `imagen-4.0-generate-001` renders portraits, environments, and historical artifacts.
   - `gemini-2.5-flash` supports structured JSON output for the Character Creator and dynamic prompt generation.
-- **Function calling workflow**: The frontend exposes `changeEnvironment` and `displayArtifact`. When the mentor decides to alter the scene, Gemini issues a structured call that triggers new imagery and UI updates instead of plain text.
+- **Function calling workflow**: The frontend exposes `changeEnvironment` and `displayArtifact`. When the mentor or student decides to alter the scene, Gemini issues a structured call that triggers new imagery and UI updates instead of plain text.
 - **Prompt engineering**: Persona prompts enforce the Socratic method, proactive tool use, and regular comprehension checks so every conversation feels guided and intentional.
+
+## Using Learning Quests
+
+### Joining Curated Quests
+
+1. Open **Learning Quests** .
+2. Browse the curated quest list to see recommended mentors, objectives, and estimated commitment.
+3. Select a quest to automatically load the paired mentor, ambient environment, and contextual artifacts.
+4. Engage in conversation. When you end the session, the AI mentor will evaluate your mastery, mark the quest complete if you passed, and save the transcript to history.
+
+### Creating Quests
+
+1. Choose **Create Your Quest** in the quest view to launch the Quest Architect.
+2. Describe what you want to learn ("Master Renaissance perspective drawing" or "Understand quantum field theory from the world's greatest physicist").
+3. Optionally set difficulty, teaching style, or time preferences. Leave fields as `auto` to let the AI decide.
+4. The builder will generate a full quest brief, pick the most qualified mentor (or synthesize a new one with portrait, voice, and ambience), and queue the conversation.
+5. Start the quest immediately; progress and mastery assessments are tracked the same way as curated quests.
 
 ## Getting Started
 
@@ -117,23 +134,6 @@ npm run preview
 ```
 
 Deploy the contents of `dist/` to your static hosting platform of choice.
-
-## Using Learning Quests
-
-### Joining Curated Quests
-
-1. Open the **Learning Quests** view from the sidebar.
-2. Browse the curated quest list to see recommended mentors, objectives, and estimated commitment.
-3. Select a quest to automatically load the paired mentor, ambient environment, and contextual artifacts.
-4. Engage in conversation. When you end the session, the AI mentor will evaluate your mastery, mark the quest complete if you passed, and save the transcript to history.
-
-### Creating Quests from Your Own Prompts
-
-1. Choose **Create a Quest from Goal** in the quest view to launch the Quest Architect.
-2. Describe what you want to learn ("Master Renaissance perspective drawing" or "Understand quantum field theory from the world's greatest physicist").
-3. Optionally set difficulty, teaching style, or time preferences. Leave fields as `auto` to let the AI decide.
-4. The builder will generate a full quest brief, pick the most qualified mentor (or synthesize a new one with portrait, voice, and ambience), and queue the conversation.
-5. Start the quest immediately; progress and mastery assessments are tracked the same way as curated quests.
 
 ## Development Tips
 
