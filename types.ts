@@ -81,3 +81,11 @@ export interface Quest {
   duration: string;
   focusPoints: string[];
 }
+
+export interface UserProfile {
+  id: string;
+  email: string | null;
+  displayName: string | null;
+  avatarUrl: string | null;
+  createdAt?: string;
+}
