@@ -9,24 +9,67 @@ interface QuestsViewProps {
   completedQuestIds: string[];
   onSelectQuest: (quest: Quest) => void;
   onBack: () => void;
+  onCreateQuest: () => void;
 }
 
-const QuestsView: React.FC<QuestsViewProps> = ({ quests, characters, completedQuestIds, onSelectQuest, onBack }) => {
+const QuestsView: React.FC<QuestsViewProps> = ({ quests, characters, completedQuestIds, onSelectQuest, onBack, onCreateQuest }) => {
   return (
     <div className="max-w-4xl mx-auto animate-fade-in">
-      <div className="flex justify-between items-center mb-6">
+      <div className="flex flex-col md:flex-row justify-between md:items-center gap-4 mb-6">
         <div className="flex items-center gap-4">
-            <QuestIcon className="w-8 h-8 text-amber-300"/>
-            <h2 className="text-3xl font-bold text-amber-200">Learning Quests</h2>
+          <QuestIcon className="w-8 h-8 text-amber-300" />
+          <h2 className="text-3xl font-bold text-amber-200">Learning Quests</h2>
         </div>
-        <button onClick={onBack} className="bg-gray-700 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded-lg transition-colors">
-          Back to Ancients
-        </button>
+        <div className="flex flex-col sm:flex-row gap-3">
+          <button
+            onClick={onCreateQuest}
+            className="bg-teal-700 hover:bg-teal-600 text-white font-bold py-2 px-4 rounded-lg transition-colors"
+          >
+            Create Custom Quest
+          </button>
+          <button
+            onClick={onBack}
+            className="bg-gray-700 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded-lg transition-colors"
+          >
+            Back to Ancients
+          </button>
+        </div>
       </div>
 
-      <p className="text-center text-gray-400 mb-8">
-        Embark on a guided journey to explore a specific topic. Your mentor will steer the conversation towards a defined learning objective.
-      </p>
+      <div className="bg-gray-900/40 border border-gray-800 rounded-xl p-6 mb-10 text-left text-gray-300">
+        <p className="text-xs font-semibold uppercase tracking-wide text-amber-200">How Learning Quests Work</p>
+        <h3 className="text-2xl font-semibold text-white mt-2">Follow a guided path or craft your own adventure</h3>
+        <div className="grid md:grid-cols-2 gap-6 mt-6 text-sm">
+          <div className="space-y-3">
+            <div>
+              <p className="font-semibold text-amber-200 uppercase tracking-wide text-xs mb-1">Pick a Quest</p>
+              <p className="leading-relaxed text-gray-300/90">
+                Browse the curated quests below to dive into a focused lesson with a historical mentor. Each quest keeps the conversation anchored to a clear learning objective and timed checkpoints.
+              </p>
+            </div>
+            <div>
+              <p className="font-semibold text-amber-200 uppercase tracking-wide text-xs mb-1">Stay on Track</p>
+              <p className="leading-relaxed text-gray-300/90">
+                Your mentor highlights milestones and focus points along the way. Completed quests are marked so you can revisit them for reinforcement or move on to the next topic.
+              </p>
+            </div>
+          </div>
+          <div className="space-y-3">
+            <div>
+              <p className="font-semibold text-teal-300 uppercase tracking-wide text-xs mb-1">Create a Learning Quest</p>
+              <p className="leading-relaxed text-gray-300/90">
+                Want something tailor-made? Select <span className="text-white font-semibold">Create Custom Quest</span> to launch the quest builder. Describe your goal, choose a mentor, and set the skills or checkpoints you want covered.
+              </p>
+            </div>
+            <div>
+              <p className="font-semibold text-teal-300 uppercase tracking-wide text-xs mb-1">Launch & Iterate</p>
+              <p className="leading-relaxed text-gray-300/90">
+                After you generate the quest, start the conversation immediately or return here to compare it with existing journeys. You can refine custom quests anytime to sharpen your learning plan.
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
 
       {quests.length === 0 ? (
         <p className="text-center text-gray-400 bg-gray-800/50 p-8 rounded-lg">No quests available yet.</p>

@@ -382,6 +382,7 @@ Focus only on the student's contributions. Mark passed=true only if the learner 
         return (
           <QuestsView
             onBack={() => setView('selector')}
+            onCreateQuest={() => setView('questCreator')}
             onSelectQuest={handleSelectQuest}
             quests={QUESTS}
             characters={allCharacters}
