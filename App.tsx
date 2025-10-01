@@ -18,6 +18,7 @@ import QuestsView from './components/QuestsView';
 import Instructions from './components/Instructions';
 import { CHARACTERS, QUESTS } from './constants';
 import QuestIcon from './components/icons/QuestIcon';
+import { useSupabaseAuth } from '@/hooks/useSupabaseAuth';
 
 const CUSTOM_CHARACTERS_KEY = 'school-of-the-ancients-custom-characters';
 // Fix: Add history key constant for conversation management.
@@ -69,6 +70,14 @@ const saveCompletedQuests = (questIds: string[]) => {
 };
 
 const App: React.FC = () => {
+  const {
+    user,
+    profile,
+    loading: authLoading,
+    error: authError,
+    signInWithGoogle,
+    signOut,
+  } = useSupabaseAuth();
   const [selectedCharacter, setSelectedCharacter] = useState<Character | null>(null);
   const [view, setView] = useState<'selector' | 'conversation' | 'history' | 'creator' | 'quests'>('selector');
   const [customCharacters, setCustomCharacters] = useState<Character[]>([]);
@@ -78,6 +87,37 @@ const App: React.FC = () => {
   const [isSaving, setIsSaving] = useState(false);
   const [completedQuests, setCompletedQuests] = useState<string[]>([]);
   const [lastQuestOutcome, setLastQuestOutcome] = useState<QuestAssessment | null>(null);
+  const accountName = profile?.displayName ?? profile?.email ?? user?.email ?? 'Adventurer';
+
+  if (authLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[#0f172a] text-gray-100">
+        <p className="text-lg font-semibold tracking-wide">Preparing your classroom...</p>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[#0f172a] text-gray-100 p-6">
+        <div className="max-w-md w-full text-center space-y-6 bg-gray-900/60 border border-gray-700 rounded-2xl p-8 shadow-xl">
+          <h1 className="text-3xl font-bold text-amber-300 tracking-wide">School of the Ancients</h1>
+          <p className="text-gray-300">Sign in to unlock saved conversations, quests, and progress tracking.</p>
+          {authError && (
+            <p className="text-sm text-red-400 bg-red-900/40 border border-red-700 rounded-lg px-3 py-2">
+              {authError}
+            </p>
+          )}
+          <button
+            onClick={signInWithGoogle}
+            className="w-full flex items-center justify-center gap-3 bg-amber-500 hover:bg-amber-400 text-black font-semibold py-3 px-6 rounded-lg transition-colors duration-200"
+          >
+            <span className="text-lg">Continue with Google</span>
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   useEffect(() => {
     // Load custom characters from local storage
@@ -463,7 +503,32 @@ Focus only on the student's contributions. Mark passed=true only if the learner 
         className="relative z-10 min-h-screen flex flex-col text-gray-200 font-serif p-4 sm:p-6 lg:p-8"
         style={{ background: environmentImageUrl ? 'transparent' : 'linear-gradient(to bottom right, #1a1a1a, #2b2b2b)' }}
       >
-        <header className="text-center mb-8">
+        <header className="relative text-center mb-8">
+          <div className="absolute top-0 right-0 flex items-center gap-3 bg-gray-900/50 border border-gray-700 rounded-full pl-3 pr-4 py-2 shadow-lg">
+            {profile?.avatarUrl ? (
+              <img
+                src={profile.avatarUrl}
+                alt={`${accountName}'s avatar`}
+                className="w-10 h-10 rounded-full border border-amber-300 object-cover"
+              />
+            ) : (
+              <div className="w-10 h-10 rounded-full border border-amber-300 bg-amber-500/20 flex items-center justify-center text-amber-200 font-semibold">
+                {accountName.charAt(0).toUpperCase()}
+              </div>
+            )}
+            <div className="flex flex-col items-end leading-tight">
+              <span className="text-sm font-semibold text-amber-200">{accountName}</span>
+              {profile?.email && (
+                <span className="text-xs text-gray-300">{profile.email}</span>
+              )}
+              <button
+                onClick={signOut}
+                className="text-xs text-gray-400 hover:text-amber-300 transition-colors"
+              >
+                Sign out
+              </button>
+            </div>
+          </div>
           <h1 className="text-4xl sm:text-5xl md:text-6xl font-bold text-amber-300 tracking-wider" style={{ textShadow: '0 0 10px rgba(252, 211, 77, 0.5)' }}>
             School of the Ancients
           </h1>

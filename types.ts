@@ -21,6 +21,14 @@ export interface Character {
   ambienceTag: string;
 }
 
+export interface Profile {
+  id: string;
+  email: string | null;
+  displayName: string | null;
+  avatarUrl: string | null;
+  createdAt: string;
+}
+
 export enum ConnectionState {
   IDLE = 'IDLE',
   CONNECTING = 'CONNECTING',
