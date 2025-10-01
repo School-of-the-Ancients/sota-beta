@@ -1,29 +1,7 @@
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import type { SavedConversation, ConversationTurn } from '../types';
 import DownloadIcon from './icons/DownloadIcon';
-
-const HISTORY_KEY = 'school-of-the-ancients-history';
-
-const loadConversations = (): SavedConversation[] => {
-  try {
-    const rawHistory = localStorage.getItem(HISTORY_KEY);
-    return rawHistory ? JSON.parse(rawHistory) : [];
-  } catch (error) {
-    console.error("Failed to load conversation history:", error);
-    return [];
-  }
-};
-
-const deleteConversationFromLocalStorage = (id: string) => {
-  try {
-    let history = loadConversations();
-    history = history.filter(c => c.id !== id);
-    localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
-  } catch (error) {
-    console.error("Failed to delete conversation:", error);
-  }
-};
 
 const ArtifactDisplay: React.FC<{ artifact: NonNullable<ConversationTurn['artifact']> }> = ({ artifact }) => {
   if (!artifact.imageUrl || artifact.loading) return null; // Don't show incomplete artifacts in history
@@ -38,57 +16,62 @@ const ArtifactDisplay: React.FC<{ artifact: NonNullable<ConversationTurn['artifa
 
 interface HistoryViewProps {
   onBack: () => void;
+  history: SavedConversation[];
+  onDeleteConversation: (id: string) => void | Promise<void>;
 }
 
-const HistoryView: React.FC<HistoryViewProps> = ({ onBack }) => {
-  const [history, setHistory] = useState<SavedConversation[]>([]);
-  const [selectedConversation, setSelectedConversation] = useState<SavedConversation | null>(null);
+const HistoryView: React.FC<HistoryViewProps> = ({ onBack, history, onDeleteConversation }) => {
+  const [selectedConversationId, setSelectedConversationId] = useState<string | null>(null);
 
   useEffect(() => {
-    setHistory(loadConversations());
-  }, []);
+    if (!selectedConversationId) return;
+    const exists = history.some(conversation => conversation.id === selectedConversationId);
+    if (!exists) {
+      setSelectedConversationId(null);
+    }
+  }, [history, selectedConversationId]);
 
   const handleDelete = (id: string) => {
     if (window.confirm('Are you sure you want to delete this conversation?')) {
-      deleteConversationFromLocalStorage(id);
-      setHistory(loadConversations());
-      if (selectedConversation?.id === id) {
-        setSelectedConversation(null);
+      void onDeleteConversation(id);
+      if (selectedConversationId === id) {
+        setSelectedConversationId(null);
       }
     }
   };
 
   const handleDownload = () => {
-    if (!selectedConversation) return;
-  
-    let content = `Study Guide: Conversation with ${selectedConversation.characterName}\n`;
-    content += `Date: ${new Date(selectedConversation.timestamp).toLocaleString()}\n`;
+    const conversation = history.find(item => item.id === selectedConversationId);
+    if (!conversation) return;
+
+    let content = `Study Guide: Conversation with ${conversation.characterName}\n`;
+    content += `Date: ${new Date(conversation.timestamp).toLocaleString()}\n`;
     content += `==================================================\n\n`;
-  
-    if (selectedConversation.summary) {
+
+    if (conversation.summary) {
       content += `SUMMARY\n---------------------\n`;
-      content += `${selectedConversation.summary.overview}\n\n`;
+      content += `${conversation.summary.overview}\n\n`;
       content += `Key Takeaways:\n`;
-      selectedConversation.summary.takeaways.forEach(item => {
+      conversation.summary.takeaways.forEach(item => {
         content += `- ${item}\n`;
       });
       content += `\n==================================================\n\n`;
     }
-  
+
     content += `FULL TRANSCRIPT\n---------------------\n\n`;
-    selectedConversation.transcript.forEach(turn => {
+    conversation.transcript.forEach(turn => {
       content += `${turn.speakerName}:\n${turn.text}\n\n`;
       if (turn.artifact && turn.artifact.imageUrl && !turn.artifact.loading) {
         content += `[Artifact Displayed: ${turn.artifact.name}]\n\n`;
       }
     });
-  
+
     const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    const characterNameForFile = selectedConversation.characterName.replace(/\s+/g, '-');
-    const dateForFile = new Date(selectedConversation.timestamp).toISOString().split('T')[0];
+    const characterNameForFile = conversation.characterName.replace(/\s+/g, '-');
+    const dateForFile = new Date(conversation.timestamp).toISOString().split('T')[0];
     link.download = `SotA-Guide-${characterNameForFile}-${dateForFile}.txt`;
     document.body.appendChild(link);
     link.click();
@@ -99,6 +82,10 @@ const HistoryView: React.FC<HistoryViewProps> = ({ onBack }) => {
   const sortedHistory = useMemo(() => {
     return [...history].sort((a, b) => b.timestamp - a.timestamp);
   }, [history]);
+
+  const selectedConversation = useMemo(() => {
+    return sortedHistory.find(conversation => conversation.id === selectedConversationId) ?? null;
+  }, [sortedHistory, selectedConversationId]);
 
   if (selectedConversation) {
     return (
@@ -172,10 +159,10 @@ const HistoryView: React.FC<HistoryViewProps> = ({ onBack }) => {
               </div>
             ))}
           </div>
-          <div className="flex flex-col sm:flex-row gap-4 mt-6">
-            <button onClick={() => setSelectedConversation(null)} className="bg-amber-600 hover:bg-amber-500 text-black font-bold py-2 px-6 rounded-lg transition-colors">
-              Back to History
-            </button>
+            <div className="flex flex-col sm:flex-row gap-4 mt-6">
+              <button onClick={() => setSelectedConversationId(null)} className="bg-amber-600 hover:bg-amber-500 text-black font-bold py-2 px-6 rounded-lg transition-colors">
+                Back to History
+              </button>
             <button onClick={handleDownload} className="flex items-center justify-center gap-2 bg-blue-800/70 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded-lg transition-colors">
               <DownloadIcon className="w-5 h-5" />
               Download Study Guide
@@ -218,7 +205,7 @@ const HistoryView: React.FC<HistoryViewProps> = ({ onBack }) => {
                 </div>
               </div>
               <div className="flex gap-2 self-end sm:self-center">
-                <button onClick={() => setSelectedConversation(conv)} className="bg-blue-800/70 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition-colors">View</button>
+                <button onClick={() => setSelectedConversationId(conv.id)} className="bg-blue-800/70 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition-colors">View</button>
                 <button onClick={() => handleDelete(conv.id)} className="bg-red-800/70 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg transition-colors">Delete</button>
               </div>
             </div>
