@@ -5,6 +5,7 @@ import { useGeminiLive } from '../hooks/useGeminiLive';
 import { useAmbientAudio } from '../hooks/useAmbientAudio';
 import { ConnectionState } from '../types';
 import { AMBIENCE_LIBRARY } from '../constants';
+import { ensureAccentInstruction } from '../utils/voice';
 import MicrophoneIcon from './icons/MicrophoneIcon';
 import MicrophoneOffIcon from './icons/MicrophoneOffIcon';
 import WaveformIcon from './icons/WaveformIcon';
@@ -364,6 +365,11 @@ const ConversationView: React.FC<ConversationViewProps> = ({ character, onEndCon
   }, [character]);
 
 
+  const personaSystemInstruction = useMemo(
+    () => ensureAccentInstruction(character.systemInstruction, character.voiceAccent),
+    [character.systemInstruction, character.voiceAccent]
+  );
+
   const {
     connectionState,
     userTranscription,
@@ -371,7 +377,7 @@ const ConversationView: React.FC<ConversationViewProps> = ({ character, onEndCon
     isMicActive,
     toggleMicrophone,
     sendTextMessage
-  } = useGeminiLive(character.systemInstruction, character.voiceName, handleTurnComplete, handleEnvironmentChange, handleArtifactDisplay, activeQuest);
+  } = useGeminiLive(personaSystemInstruction, character.voiceName, handleTurnComplete, handleEnvironmentChange, handleArtifactDisplay, activeQuest);
 
   const updateDynamicSuggestions = useCallback(async (currentTranscript: ConversationTurn[]) => {
     if (currentTranscript.length === 0) return;

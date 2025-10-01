@@ -5,6 +5,20 @@ export interface Ambience {
   audioSrc: string;
 }
 
+export interface PersonaData {
+  title: string;
+  bio: string;
+  greeting: string;
+  timeframe: string;
+  expertise: string;
+  passion: string;
+  systemInstruction: string;
+  suggestedPrompts: string[];
+  voiceName: string;
+  voiceAccent: string;
+  ambienceTag: string;
+}
+
 export interface Character {
   id: string;
   name: string;
@@ -13,7 +27,8 @@ export interface Character {
   bio: string;
   greeting: string;
   systemInstruction: string;
-  voiceName:string;
+  voiceName: string;
+  voiceAccent: string;
   timeframe: string;
   expertise: string;
   passion: string;
