@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useState } from 'react';
 import { GoogleGenAI, Type } from '@google/genai';
 import type { Character, Quest } from '../types';
 import { AMBIENCE_LIBRARY, AVAILABLE_VOICES } from '../constants';
@@ -8,19 +8,51 @@ type QuestDraft = {
   description: string;
   objective: string;
   focusPoints: string[];
-  duration: string; // e.g., "15–20 min"
-  mentorName: string; // model's top pick
+  duration: string;
+  mentorName: string;
   alternates?: string[];
 };
 
 interface QuestCreatorProps {
-  characters: Character[];                // [...customCharacters, ...CHARACTERS]
+  characters: Character[];
   onBack: () => void;
-  onQuestReady: (quest: Quest, character: Character) => void; // navigate to chat with quest active
-  onCharacterCreated: (character: Character) => void;         // reuse creator behavior
+  onQuestReady: (quest: Quest, character: Character) => void;
+  onCharacterCreated: (character: Character) => void;
 }
 
-const QuestCreator: React.FC<QuestCreatorProps> = ({ characters, onBack, onQuestReady, onCharacterCreated }) => {
+/** Pretty, branded SVG fallback if portrait generation fails */
+function makeFallbackAvatar(name: string, title?: string) {
+  const initials = name
+    .split(/\s+/)
+    .map(w => w[0])
+    .join('')
+    .slice(0, 2)
+    .toUpperCase();
+
+  const subtitle = (title || 'Mentor').replace(/"/g, '&quot;');
+
+  const svg = encodeURIComponent(
+    `<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512">
+      <defs>
+        <linearGradient id="g" x1="0" x2="1" y1="0" y2="1">
+          <stop offset="0%" stop-color="#4b2e1f"/>
+          <stop offset="100%" stop-color="#a36b21"/>
+        </linearGradient>
+      </defs>
+      <rect width="100%" height="100%" fill="url(#g)"/>
+      <text x="50%" y="52%" text-anchor="middle" font-family="serif" font-size="180" fill="#fcd34d">${initials}</text>
+      <text x="50%" y="86%" text-anchor="middle" font-family="serif" font-size="28" fill="#fde68a" opacity="0.85">${subtitle}</text>
+    </svg>`
+  );
+  return `data:image/svg+xml;charset=utf-8,${svg}`;
+}
+
+const QuestCreator: React.FC<QuestCreatorProps> = ({
+  characters,
+  onBack,
+  onQuestReady,
+  onCharacterCreated,
+}) => {
   const [goal, setGoal] = useState('');
   const [prefs, setPrefs] = useState({ difficulty: 'auto', style: 'auto', time: 'auto' });
   const [loading, setLoading] = useState(false);
@@ -32,21 +64,21 @@ const QuestCreator: React.FC<QuestCreatorProps> = ({ characters, onBack, onQuest
     return characters.find(c => c.name.trim().toLowerCase() === lower) ?? null;
   };
 
-  // clone of your CharacterCreator persona generator, trimmed for reuse
+  /** Persona generator reused from your character creator, with a SAFE portrait step */
   const createPersonaFor = async (name: string): Promise<Character> => {
     if (!process.env.API_KEY) throw new Error('API_KEY not set.');
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
     const availableAmbienceTags = AMBIENCE_LIBRARY.map(a => a.tag).join(', ');
-    const prompt = `Based on the historical figure "${name}", return JSON with:
+    const personaPrompt = `Based on the historical figure "${name}", return JSON with:
 - title
 - bio (first person)
 - greeting (first person, short)
 - timeframe (centuries)
 - expertise (comma list)
 - passion (short phrase)
-- systemInstruction (act as mentor; balance share+Socratic; include special abilities: changeEnvironment() and displayArtifact(); only emit the function call when using those; specify authentic accent; check understanding periodically)
-- suggestedPrompts (3, one must be visual/environmental)
+- systemInstruction (act as mentor; emphasize Socratic prompts; may call changeEnvironment() or displayArtifact() as function-only lines)
+- suggestedPrompts (3, one must be environmental/visual)
 - voiceName (one of: ${AVAILABLE_VOICES.join(', ')})
 - ambienceTag (one of: ${availableAmbienceTags})`;
 
@@ -68,22 +100,48 @@ const QuestCreator: React.FC<QuestCreatorProps> = ({ characters, onBack, onQuest
             voiceName: { type: Type.STRING },
             ambienceTag: { type: Type.STRING },
           },
-          required: ['title','bio','greeting','timeframe','expertise','passion','systemInstruction','suggestedPrompts','voiceName','ambienceTag']
-        }
+          required: [
+            'title',
+            'bio',
+            'greeting',
+            'timeframe',
+            'expertise',
+            'passion',
+            'systemInstruction',
+            'suggestedPrompts',
+            'voiceName',
+            'ambienceTag',
+          ],
+        },
       },
-      contents: prompt
+      contents: personaPrompt,
     });
 
     const persona = JSON.parse(personaResp.text);
 
-    // portrait
-    const imgResp = await ai.models.generateImages({
-      model: 'imagen-4.0-generate-001',
-      prompt: `A realistic, academic portrait of ${name}, ${persona.title}. Dignified and historical.`,
-      config: { numberOfImages: 1, outputMimeType: 'image/jpeg', aspectRatio: '1:1' }
-    });
+    // --- SAFE portrait generation with fallback ---
+    let portraitUrl = makeFallbackAvatar(name, persona.title);
+    try {
+      const imgResp = await ai.models.generateImages({
+        model: 'imagen-4.0-generate-001',
+        prompt: `A realistic, academic portrait of ${name}, ${persona.title}. Dignified, historical lighting, 1:1, museum catalogue style.`,
+        config: { numberOfImages: 1, outputMimeType: 'image/jpeg', aspectRatio: '1:1' },
+      });
 
-    const portraitUrl = `data:image/jpeg;base64,${imgResp.generatedImages[0].image.imageBytes}`;
+      const maybe = (imgResp as any)?.generatedImages?.[0];
+      const bytes =
+        maybe?.image?.imageBytes ??
+        (maybe as any)?.b64Json ??
+        (maybe as any)?.content?.image?.imageBytes;
+
+      if (bytes) {
+        portraitUrl = `data:image/jpeg;base64,${bytes}`;
+      } else {
+        console.warn('Portrait generation returned no bytes; using fallback avatar.');
+      }
+    } catch (err) {
+      console.warn('Portrait generation failed; using fallback avatar.', err);
+    }
 
     const character: Character = {
       id: `custom_${Date.now()}`,
@@ -98,7 +156,7 @@ const QuestCreator: React.FC<QuestCreatorProps> = ({ characters, onBack, onQuest
       suggestedPrompts: persona.suggestedPrompts,
       voiceName: persona.voiceName,
       ambienceTag: persona.ambienceTag,
-      portraitUrl
+      portraitUrl,
     };
     return character;
   };
@@ -110,6 +168,7 @@ const QuestCreator: React.FC<QuestCreatorProps> = ({ characters, onBack, onQuest
       setError('Tell me what you want to learn.');
       return;
     }
+
     try {
       setLoading(true);
       setMsg('Designing your quest…');
@@ -117,7 +176,6 @@ const QuestCreator: React.FC<QuestCreatorProps> = ({ characters, onBack, onQuest
       if (!process.env.API_KEY) throw new Error('API_KEY not set.');
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
-      // 1) Turn goal → quest draft + mentor recommendation
       const draftPrompt = `You are the Quest Architect. Convert this learner goal into a concise quest and pick the most appropriate historical mentor.
 
 Goal: "${clean}"
@@ -128,16 +186,14 @@ Preferences (may be 'auto'):
 
 Return JSON with:
 {
-  "title": string,                // punchy quest title
-  "description": string,          // 1–2 sentence pitch
-  "objective": string,            // what the learner should be able to do
-  "focusPoints": string[],        // 3–5 bullets
-  "duration": string,             // estimate like "15–20 min"
-  "mentorName": string,           // single best historical figure
-  "alternates": string[]          // 2 backups (optional)
-}
-
-Use Socratic/application-first framing, include one experiential focus point when relevant.`;
+  "title": string,
+  "description": string,
+  "objective": string,
+  "focusPoints": string[],
+  "duration": string,
+  "mentorName": string,
+  "alternates": string[]
+}`;
 
       const draftResp = await ai.models.generateContent({
         model: 'gemini-2.5-flash',
@@ -152,26 +208,24 @@ Use Socratic/application-first framing, include one experiential focus point whe
               focusPoints: { type: Type.ARRAY, items: { type: Type.STRING } },
               duration: { type: Type.STRING },
               mentorName: { type: Type.STRING },
-              alternates: { type: Type.ARRAY, items: { type: Type.STRING } }
+              alternates: { type: Type.ARRAY, items: { type: Type.STRING } },
             },
-            required: ['title','description','objective','focusPoints','duration','mentorName']
-          }
+            required: ['title', 'description', 'objective', 'focusPoints', 'duration', 'mentorName'],
+          },
         },
-        contents: draftPrompt
+        contents: draftPrompt,
       });
 
       const draft: QuestDraft = JSON.parse(draftResp.text);
       setMsg(`Selecting mentor: ${draft.mentorName}…`);
 
-      // 2) Find or generate the mentor
       let mentor = findCharacterByName(draft.mentorName);
       if (!mentor) {
         setMsg(`Creating ${draft.mentorName}…`);
-        mentor = await createPersonaFor(draft.mentorName); // reuses your CharacterCreator pattern
-        onCharacterCreated(mentor); // persist in your app’s local store
+        mentor = await createPersonaFor(draft.mentorName);
+        onCharacterCreated(mentor); // persist
       }
 
-      // 3) Assemble Quest and hand off
       const quest: Quest = {
         id: `quest_${Date.now()}`,
         characterId: mentor.id,
@@ -179,7 +233,7 @@ Use Socratic/application-first framing, include one experiential focus point whe
         description: draft.description,
         objective: draft.objective,
         focusPoints: draft.focusPoints,
-        duration: draft.duration
+        duration: draft.duration,
       };
 
       setMsg('Launching your lesson…');
@@ -201,18 +255,26 @@ Use Socratic/application-first framing, include one experiential focus point whe
           <p className="mt-4 text-amber-200 text-lg">{msg || 'Working…'}</p>
         </div>
       )}
+
       <div className={loading ? 'opacity-20 blur-sm' : ''}>
         <div className="flex justify-between items-start mb-4">
           <div>
             <h2 className="text-3xl font-bold text-amber-200">Create a Learning Quest</h2>
             <p className="text-gray-400">Describe what you want to learn. We’ll pick (or create) the perfect mentor.</p>
           </div>
-          <button onClick={onBack} className="bg-gray-700 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded-lg transition-colors">
+          <button
+            onClick={onBack}
+            className="bg-gray-700 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded-lg transition-colors"
+          >
             Back
           </button>
         </div>
 
-        {error && <div className="bg-red-900/50 border border-red-700 text-red-300 p-3 rounded-lg mb-6">{error}</div>}
+        {error && (
+          <div className="bg-red-900/50 border border-red-700 text-red-300 p-3 rounded-lg mb-6">
+            {error}
+          </div>
+        )}
 
         <label className="block text-sm font-medium text-gray-300 mb-2">Your learning goal</label>
         <textarea
