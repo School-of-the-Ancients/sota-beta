@@ -221,12 +221,34 @@ Return JSON with:
       });
 
       const draft: QuestDraft = JSON.parse(draftResp.text);
-      setMsg(`Selecting mentor: ${draft.mentorName}…`);
 
-      let mentor = findCharacterByName(draft.mentorName);
+      const matcherPrompt = `You are the Mentor Matcher. Your job is to ensure the mentor is a legendary master of the requested learning goal.\n\nGoal: "${clean}"\nDraft mentor: ${draft.mentorName}\nAlternate candidates: ${(draft.alternates && draft.alternates.length > 0 ? draft.alternates.join(', ') : 'none provided')}\n\nRules:\n- Select a historical (or widely known contemporary) person celebrated for deep expertise in this exact topic.\n- If the draft mentor already fits, keep them.\n- If not, replace them with a better-suited mentor. Prefer candidates from the alternate list before suggesting a new one.\n- Never choose someone whose accomplishments are unrelated to the goal.\n- Respond in JSON with { "mentorName": string, "reason": string } and nothing else.`;
+
+      const matcherResp = await ai.models.generateContent({
+        model: 'gemini-2.5-flash',
+        config: {
+          responseMimeType: 'application/json',
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+              mentorName: { type: Type.STRING },
+              reason: { type: Type.STRING },
+            },
+            required: ['mentorName'],
+          },
+        },
+        contents: matcherPrompt,
+      });
+
+      const mentorDecision = JSON.parse(matcherResp.text) as { mentorName: string; reason?: string };
+      const mentorName = mentorDecision.mentorName?.trim() || draft.mentorName;
+
+      setMsg(`Selecting mentor: ${mentorName}…`);
+
+      let mentor = findCharacterByName(mentorName);
       if (!mentor) {
-        setMsg(`Creating ${draft.mentorName}…`);
-        mentor = await createPersonaFor(draft.mentorName);
+        setMsg(`Creating ${mentorName}…`);
+        mentor = await createPersonaFor(mentorName);
         onCharacterCreated(mentor); // persist
       }
 
