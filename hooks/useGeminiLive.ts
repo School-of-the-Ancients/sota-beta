@@ -91,6 +91,7 @@ const changeEnvironmentFunctionDeclaration: FunctionDeclaration = {
 export const useGeminiLive = (
     systemInstruction: string,
     voiceName: string,
+    voiceAccent?: string,
     onTurnComplete: (turn: { user: string; model: string }) => void,
     onEnvironmentChangeRequest: (description: string) => void,
     onArtifactDisplayRequest: (name: string, description: string) => void,
@@ -185,10 +186,20 @@ export const useGeminiLive = (
 
         try {
             const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-            
-            let finalSystemInstruction = systemInstruction;
+
+            const sanitizedAccent = voiceAccent?.trim();
+            let baseInstruction = systemInstruction.trim();
+            if (sanitizedAccent) {
+                const accentDirective = `Always speak using ${sanitizedAccent}, ensuring the accent, gender, and tone remain consistent. If your voice deviates from ${sanitizedAccent}, correct it immediately before continuing.`;
+                const normalizedInstruction = baseInstruction.toLowerCase();
+                if (!normalizedInstruction.includes(sanitizedAccent.toLowerCase())) {
+                    baseInstruction = `${baseInstruction}\n\nVOICE ACCENT REQUIREMENT: ${accentDirective}`;
+                }
+            }
+
+            let finalSystemInstruction = baseInstruction;
             if (activeQuest) {
-                finalSystemInstruction = `YOUR CURRENT MISSION: As a mentor, your primary goal is to guide the student to understand the following: "${activeQuest.objective}". Tailor your questions and explanations to lead them towards this goal.\n\n---\n\n${systemInstruction}`;
+                finalSystemInstruction = `YOUR CURRENT MISSION: As a mentor, your primary goal is to guide the student to understand the following: "${activeQuest.objective}". Tailor your questions and explanations to lead them towards this goal.\n\n---\n\n${baseInstruction}`;
             }
 
             const sessionPromise = ai.live.connect({

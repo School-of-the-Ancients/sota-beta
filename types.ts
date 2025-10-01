@@ -13,12 +13,27 @@ export interface Character {
   bio: string;
   greeting: string;
   systemInstruction: string;
-  voiceName:string;
+  voiceName: string;
+  voiceAccent: string;
   timeframe: string;
   expertise: string;
   passion: string;
   suggestedPrompts: string[];
   ambienceTag: string;
+}
+
+export interface PersonaData {
+  title: string;
+  bio: string;
+  greeting: string;
+  timeframe: string;
+  expertise: string;
+  passion: string;
+  systemInstruction: string;
+  suggestedPrompts: string[];
+  voiceName: string;
+  ambienceTag: string;
+  voiceAccent: string;
 }
 
 export enum ConnectionState {
