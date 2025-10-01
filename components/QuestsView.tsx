@@ -9,9 +9,17 @@ interface QuestsViewProps {
   completedQuestIds: string[];
   onSelectQuest: (quest: Quest) => void;
   onBack: () => void;
+  onCreateQuest: () => void;
 }
 
-const QuestsView: React.FC<QuestsViewProps> = ({ quests, characters, completedQuestIds, onSelectQuest, onBack }) => {
+const QuestsView: React.FC<QuestsViewProps> = ({
+  quests,
+  characters,
+  completedQuestIds,
+  onSelectQuest,
+  onBack,
+  onCreateQuest,
+}) => {
   return (
     <div className="max-w-4xl mx-auto animate-fade-in">
       <div className="flex justify-between items-center mb-6">
@@ -24,9 +32,43 @@ const QuestsView: React.FC<QuestsViewProps> = ({ quests, characters, completedQu
         </button>
       </div>
 
-      <p className="text-center text-gray-400 mb-8">
-        Embark on a guided journey to explore a specific topic. Your mentor will steer the conversation towards a defined learning objective.
-      </p>
+      <div className="mb-8 bg-gray-900/60 border border-amber-400/40 rounded-xl p-6 shadow-lg shadow-amber-900/20">
+        <h3 className="text-xl font-semibold text-amber-200 tracking-wide text-center sm:text-left">How Learning Quests Work</h3>
+        <div className="mt-4 grid gap-4 sm:grid-cols-2">
+          <ol className="space-y-3 text-sm text-gray-300">
+            <li className="flex gap-3">
+              <span className="text-amber-300 font-bold">1</span>
+              <span>
+                Pick a quest to unlock a focused dialogue. Your chosen mentor will guide every response toward the highlighted objective.
+              </span>
+            </li>
+            <li className="flex gap-3">
+              <span className="text-amber-300 font-bold">2</span>
+              <span>
+                Follow the focus points to keep the conversation on track and earn completion by demonstrating what you have learned.
+              </span>
+            </li>
+            <li className="flex gap-3">
+              <span className="text-amber-300 font-bold">3</span>
+              <span>
+                Need something more specific? Describe your goal and we will design a fresh quest with the best mentor for the job.
+              </span>
+            </li>
+          </ol>
+          <div className="flex flex-col justify-between gap-4 bg-gray-800/60 border border-gray-700 rounded-lg p-4 text-sm text-gray-300">
+            <p>
+              Use <span className="font-semibold text-amber-200">Create a Quest from Goal</span> to craft a bespoke path. Share what you want to master, choose optional preferences, and we will pair you with a new mentor and quest outline.
+            </p>
+            <button
+              onClick={onCreateQuest}
+              className="inline-flex items-center justify-center gap-2 self-start bg-teal-600 hover:bg-teal-500 text-black font-semibold py-2 px-4 rounded-lg transition-colors"
+            >
+              <QuestIcon className="w-5 h-5" />
+              Craft Your Own Quest
+            </button>
+          </div>
+        </div>
+      </div>
 
       {quests.length === 0 ? (
         <p className="text-center text-gray-400 bg-gray-800/50 p-8 rounded-lg">No quests available yet.</p>
