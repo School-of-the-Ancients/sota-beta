@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { GoogleGenAI, Type } from '@google/genai';
-import type { Character, Quest } from '../types';
+import type { Character, PersonaData, Quest } from '../types';
 import { AMBIENCE_LIBRARY, AVAILABLE_VOICES } from '../constants';
 
 type QuestDraft = {
@@ -80,6 +80,7 @@ const QuestCreator: React.FC<QuestCreatorProps> = ({
 - systemInstruction (act as mentor; emphasize Socratic prompts; may call changeEnvironment() or displayArtifact() as function-only lines)
 - suggestedPrompts (3, one must be environmental/visual)
 - voiceName (one of: ${AVAILABLE_VOICES.join(', ')})
+- voiceAccent (describe the accent, vocal tone, and gender presentation so the voice matches the figure)
 - ambienceTag (one of: ${availableAmbienceTags})`;
 
     const personaResp = await ai.models.generateContent({
@@ -98,6 +99,7 @@ const QuestCreator: React.FC<QuestCreatorProps> = ({
             systemInstruction: { type: Type.STRING },
             suggestedPrompts: { type: Type.ARRAY, items: { type: Type.STRING } },
             voiceName: { type: Type.STRING },
+            voiceAccent: { type: Type.STRING },
             ambienceTag: { type: Type.STRING },
           },
           required: [
@@ -110,6 +112,7 @@ const QuestCreator: React.FC<QuestCreatorProps> = ({
             'systemInstruction',
             'suggestedPrompts',
             'voiceName',
+            'voiceAccent',
             'ambienceTag',
           ],
         },
@@ -117,7 +120,7 @@ const QuestCreator: React.FC<QuestCreatorProps> = ({
       contents: personaPrompt,
     });
 
-    const persona = JSON.parse(personaResp.text);
+    const persona = JSON.parse(personaResp.text) as PersonaData;
 
     // --- SAFE portrait generation with fallback ---
     let portraitUrl = makeFallbackAvatar(name, persona.title);
@@ -155,6 +158,7 @@ const QuestCreator: React.FC<QuestCreatorProps> = ({
       systemInstruction: persona.systemInstruction,
       suggestedPrompts: persona.suggestedPrompts,
       voiceName: persona.voiceName,
+      voiceAccent: persona.voiceAccent,
       ambienceTag: persona.ambienceTag,
       portraitUrl,
     };

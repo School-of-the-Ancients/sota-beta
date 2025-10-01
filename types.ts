@@ -1,3 +1,16 @@
+export interface PersonaData {
+  title: string;
+  bio: string;
+  greeting: string;
+  timeframe: string;
+  expertise: string;
+  passion: string;
+  systemInstruction: string;
+  suggestedPrompts: string[];
+  voiceName: string;
+  voiceAccent: string;
+  ambienceTag: string;
+}
 
 export interface Ambience {
   tag: string;
@@ -5,20 +18,10 @@ export interface Ambience {
   audioSrc: string;
 }
 
-export interface Character {
+export interface Character extends PersonaData {
   id: string;
   name: string;
-  title: string;
   portraitUrl: string;
-  bio: string;
-  greeting: string;
-  systemInstruction: string;
-  voiceName:string;
-  timeframe: string;
-  expertise: string;
-  passion: string;
-  suggestedPrompts: string[];
-  ambienceTag: string;
 }
 
 export enum ConnectionState {
