@@ -1,6 +1,233 @@
 import type { Character, Ambience, Quest } from './types';
 
-export const AVAILABLE_VOICES = ['Zephyr', 'Puck', 'Charon', 'Kore', 'Fenrir'];
+export type VoiceRegister = 'masculine' | 'feminine' | 'androgynous';
+
+export interface VoiceProfile {
+  name: string;
+  register: VoiceRegister;
+  accent: string;
+  tone: string;
+  description: string;
+}
+
+export const VOICE_LIBRARY: VoiceProfile[] = [
+  {
+    name: 'Zephyr',
+    register: 'masculine',
+    accent: 'soft pan-European English with a gentle Mediterranean lilt',
+    tone: 'calm tenor, mid-30s energy',
+    description: 'Floaty and thoughtful—ideal for philosophers, scientists, and gentle mentors.',
+  },
+  {
+    name: 'Puck',
+    register: 'masculine',
+    accent: 'light British Received Pronunciation with playful cadence',
+    tone: 'nimble baritone, sprightly pacing',
+    description: 'Mischievous yet warm, great for witty guides and inventive polymaths.',
+  },
+  {
+    name: 'Charon',
+    register: 'masculine',
+    accent: 'formal Oxford English',
+    tone: 'measured baritone with gravitas',
+    description: 'Stoic, authoritative presence suited for scholars, jurists, and strategists.',
+  },
+  {
+    name: 'Kore',
+    register: 'feminine',
+    accent: 'upper-class Victorian English',
+    tone: 'crystalline mezzo-soprano',
+    description: 'Elegant and articulate, perfect for aristocratic thinkers and salon hosts.',
+  },
+  {
+    name: 'Fenrir',
+    register: 'masculine',
+    accent: 'Italian with revolutionary bravado',
+    tone: 'fiery baritone',
+    description: 'Bold and passionate—best for iconoclasts and scientific firebrands.',
+  },
+  {
+    name: 'Aurora',
+    register: 'feminine',
+    accent: 'Nordic-inflected English',
+    tone: 'bright mezzo with shimmering overtones',
+    description: 'Luminous and inspiring, suited for explorers, naturalists, and innovators.',
+  },
+  {
+    name: 'Calliope',
+    register: 'feminine',
+    accent: 'Aegean Greek English',
+    tone: 'lyrical soprano',
+    description: 'Poetic and expressive, ideal for storytellers, poets, and rhetoricians.',
+  },
+  {
+    name: 'Atlas',
+    register: 'masculine',
+    accent: 'neutral American with subtle Hellenic undertone',
+    tone: 'resonant bass-baritone',
+    description: 'Steady and dependable—great for engineers, architects, and tacticians.',
+  },
+  {
+    name: 'Thalia',
+    register: 'feminine',
+    accent: 'continental European English',
+    tone: 'warm alto',
+    description: 'Empathetic and encouraging, perfect for moral philosophers and educators.',
+  },
+  {
+    name: 'Orion',
+    register: 'masculine',
+    accent: 'American English with subtle Mid-Atlantic polish',
+    tone: 'confident tenor',
+    description: 'Adventurous and optimistic, well-matched to explorers and astronomers.',
+  },
+  {
+    name: 'Selene',
+    register: 'feminine',
+    accent: 'refined French-accented English',
+    tone: 'serene contralto',
+    description: 'Calm and nocturnal—suited for astronomers, mystics, and contemplatives.',
+  },
+  {
+    name: 'Mercury',
+    register: 'androgynous',
+    accent: 'fleet international English',
+    tone: 'agile light tenor',
+    description: 'Quick-witted communicator, perfect for diplomats, messengers, and polymaths.',
+  },
+  {
+    name: 'Lyra',
+    register: 'feminine',
+    accent: 'Celtic-tinged English',
+    tone: 'melodic mezzo',
+    description: 'Musical and imaginative, ideal for artists, mathematicians, and dreamers.',
+  },
+  {
+    name: 'Helios',
+    register: 'masculine',
+    accent: 'Aegean-to-Italian hybrid English',
+    tone: 'radiant tenor',
+    description: 'Sunny and invigorating—great for visionaries, humanists, and inventors.',
+  },
+  {
+    name: 'Gaia',
+    register: 'feminine',
+    accent: 'earthy pan-Mediterranean English',
+    tone: 'grounded alto',
+    description: 'Nurturing and wise, suited for healers, philosophers, and ecologists.',
+  },
+  {
+    name: 'Echo',
+    register: 'feminine',
+    accent: 'Athenian Greek English with modern clarity',
+    tone: 'clear mezzo',
+    description: 'Responsive and curious, matching philosophers and orators who favor dialogue.',
+  },
+  {
+    name: 'Nova',
+    register: 'androgynous',
+    accent: 'modern global English',
+    tone: 'bright mezzo-tenor mix',
+    description: 'Futuristic and energetic—ideal for innovators and forward-looking mentors.',
+  },
+  {
+    name: 'Valkyrie',
+    register: 'feminine',
+    accent: 'Nordic warrior English',
+    tone: 'bold dramatic mezzo',
+    description: 'Commanding and valiant, suited for military leaders and legendary heroines.',
+  },
+  {
+    name: 'Ariadne',
+    register: 'feminine',
+    accent: 'Greco-Mediterranean English',
+    tone: 'assured mezzo',
+    description: 'Strategic and composed, great for mathematicians, logicians, and planners.',
+  },
+  {
+    name: 'Mimir',
+    register: 'masculine',
+    accent: 'Norse sage English',
+    tone: 'deep resonant bass',
+    description: 'Ancient and wise—perfect for mystics, historians, and mentors of lore.',
+  },
+  {
+    name: 'Eos',
+    register: 'feminine',
+    accent: 'light Grecian dawn timbre',
+    tone: 'fresh soprano',
+    description: 'Bright and hopeful, suited for reformers, humanists, and educators.',
+  },
+  {
+    name: 'Nightingale',
+    register: 'feminine',
+    accent: 'soft British Isles English',
+    tone: 'soothing alto',
+    description: 'Caring and calm, perfect for healers, reformers, and compassionate leaders.',
+  },
+  {
+    name: 'Tempest',
+    register: 'masculine',
+    accent: 'gravelly Atlantic English',
+    tone: 'stormy baritone',
+    description: 'Dynamic and dramatic—great for revolutionaries, warriors, and bold explorers.',
+  },
+  {
+    name: 'Iris',
+    register: 'feminine',
+    accent: 'pan-global English with bright clarity',
+    tone: 'sparkling mezzo',
+    description: 'Colorful and diplomatic, suited for artists, ambassadors, and scientists.',
+  },
+  {
+    name: 'Rune',
+    register: 'androgynous',
+    accent: 'Scandinavian-inflected English',
+    tone: 'mystic baritone-mezzo blend',
+    description: 'Arcane and reflective—ideal for seers, polymaths, and esoteric mentors.',
+  },
+  {
+    name: 'Solstice',
+    register: 'androgynous',
+    accent: 'calm coastal American English',
+    tone: 'balanced mid-range',
+    description: 'Steady and grounding, excellent for contemplatives and wellness guides.',
+  },
+  {
+    name: 'Galatea',
+    register: 'feminine',
+    accent: 'Mediterranean artistic English',
+    tone: 'expressive mezzo',
+    description: 'Graceful and artistic, perfect for sculptors, designers, and inventors.',
+  },
+  {
+    name: 'Tiber',
+    register: 'masculine',
+    accent: 'classical Roman-inflected English',
+    tone: 'measured baritone',
+    description: 'Civil and statesmanlike—ideal for senators, jurists, and civic leaders.',
+  },
+  {
+    name: 'Saffron',
+    register: 'feminine',
+    accent: 'South Asian-tinged English',
+    tone: 'warm alto',
+    description: 'Radiant and empathetic, suited for scholars, mathematicians, and healers.',
+  },
+  {
+    name: 'Artemis',
+    register: 'feminine',
+    accent: 'Hellenic huntress English',
+    tone: 'focused mezzo',
+    description: 'Athletic and precise, matching explorers, scientists, and tacticians.',
+  },
+];
+
+export const AVAILABLE_VOICES = VOICE_LIBRARY.map(voice => voice.name);
+
+export const VOICE_SELECTION_GUIDE = VOICE_LIBRARY.map(voice => {
+  return `${voice.name} — ${voice.description} (register: ${voice.register}; accent: ${voice.accent}; tone: ${voice.tone})`;
+}).join('\n');
 
 export const AMBIENCE_LIBRARY: Ambience[] = [
   {

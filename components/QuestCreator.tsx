@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { GoogleGenAI, Type } from '@google/genai';
 import type { Character, PersonaData, Quest } from '../types';
-import { AMBIENCE_LIBRARY, AVAILABLE_VOICES } from '../constants';
+import { AMBIENCE_LIBRARY, VOICE_SELECTION_GUIDE } from '../constants';
 
 type QuestDraft = {
   title: string;
@@ -70,7 +70,12 @@ const QuestCreator: React.FC<QuestCreatorProps> = ({
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
     const availableAmbienceTags = AMBIENCE_LIBRARY.map(a => a.tag).join(', ');
-    const personaPrompt = `Based on the historical figure "${name}", return JSON with:
+    const personaPrompt = `Based on the historical figure "${name}", carefully choose the most fitting Gemini 2.5 Voice Preview HD voice from the library below. Match the mentor's perceived vocal gender, regional accent, and tone of delivery to the figure's historical context. When uncertain, prefer an androgynous or regionally aligned option. Never invent a new voice name.
+
+Voice options:
+${VOICE_SELECTION_GUIDE}
+
+Return JSON with:
 - title
 - bio (first person)
 - greeting (first person, short)
@@ -79,7 +84,7 @@ const QuestCreator: React.FC<QuestCreatorProps> = ({
 - passion (short phrase)
 - systemInstruction (act as mentor; emphasize Socratic prompts; may call changeEnvironment() or displayArtifact() as function-only lines)
 - suggestedPrompts (3, one must be environmental/visual)
-- voiceName (one of: ${AVAILABLE_VOICES.join(', ')})
+- voiceName (exact name from the Gemini 2.5 list above; avoid mismatched gender/region)
 - voiceAccent (describe the precise accent, vocal gender, and tone the mentor should maintain)
 - ambienceTag (one of: ${availableAmbienceTags})`;
 
