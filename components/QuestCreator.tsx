@@ -22,7 +22,7 @@ interface QuestCreatorProps {
   characters: Character[];
   onBack: () => void;
   onQuestReady: (quest: Quest, character: Character) => void;
-  onCharacterCreated: (character: Character) => void;
+  onCharacterCreated: (character: Character) => Promise<void> | void;
 }
 
 /** Pretty, branded SVG fallback if portrait generation fails */
@@ -278,7 +278,7 @@ Return JSON with:
       if (!mentor) {
         setMsg(`Creating ${mentorName}…`);
         mentor = await createPersonaFor(mentorName);
-        onCharacterCreated(mentor); // persist
+        await Promise.resolve(onCharacterCreated(mentor)); // persist
       }
 
       const quest: Quest = {

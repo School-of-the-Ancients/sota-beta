@@ -9,7 +9,7 @@ import {
 } from '../constants';
 
 interface CharacterCreatorProps {
-  onCharacterCreated: (character: Character) => void;
+  onCharacterCreated: (character: Character) => Promise<void> | void;
   onBack: () => void;
 }
 
@@ -176,7 +176,7 @@ Return JSON with:
         portraitUrl,
       };
 
-      onCharacterCreated(character);
+      await Promise.resolve(onCharacterCreated(character));
     } catch (e: any) {
       console.error(e);
       setError(e?.message || 'Failed to create character.');

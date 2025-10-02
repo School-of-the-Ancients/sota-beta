@@ -1,29 +1,6 @@
-
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useMemo } from 'react';
 import type { SavedConversation, ConversationTurn } from '../types';
 import DownloadIcon from './icons/DownloadIcon';
-
-const HISTORY_KEY = 'school-of-the-ancients-history';
-
-const loadConversations = (): SavedConversation[] => {
-  try {
-    const rawHistory = localStorage.getItem(HISTORY_KEY);
-    return rawHistory ? JSON.parse(rawHistory) : [];
-  } catch (error) {
-    console.error("Failed to load conversation history:", error);
-    return [];
-  }
-};
-
-const deleteConversationFromLocalStorage = (id: string) => {
-  try {
-    let history = loadConversations();
-    history = history.filter(c => c.id !== id);
-    localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
-  } catch (error) {
-    console.error("Failed to delete conversation:", error);
-  }
-};
 
 const ArtifactDisplay: React.FC<{ artifact: NonNullable<ConversationTurn['artifact']> }> = ({ artifact }) => {
   if (!artifact.imageUrl || artifact.loading) return null; // Don't show incomplete artifacts in history
@@ -38,23 +15,35 @@ const ArtifactDisplay: React.FC<{ artifact: NonNullable<ConversationTurn['artifa
 
 interface HistoryViewProps {
   onBack: () => void;
+  history: SavedConversation[];
+  onDeleteConversation: (id: string) => Promise<void> | void;
 }
 
-const HistoryView: React.FC<HistoryViewProps> = ({ onBack }) => {
-  const [history, setHistory] = useState<SavedConversation[]>([]);
-  const [selectedConversation, setSelectedConversation] = useState<SavedConversation | null>(null);
+const HistoryView: React.FC<HistoryViewProps> = ({ onBack, history, onDeleteConversation }) => {
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
-  useEffect(() => {
-    setHistory(loadConversations());
-  }, []);
+  const selectedConversation = useMemo(() => {
+    return history.find(conv => conv.id === selectedId) ?? null;
+  }, [history, selectedId]);
 
-  const handleDelete = (id: string) => {
-    if (window.confirm('Are you sure you want to delete this conversation?')) {
-      deleteConversationFromLocalStorage(id);
-      setHistory(loadConversations());
-      if (selectedConversation?.id === id) {
-        setSelectedConversation(null);
+  const sortedHistory = useMemo(() => {
+    return [...history].sort((a, b) => b.timestamp - a.timestamp);
+  }, [history]);
+
+  const handleDelete = async (id: string) => {
+    if (!window.confirm('Are you sure you want to delete this conversation?')) return;
+    setDeletingId(id);
+    try {
+      await Promise.resolve(onDeleteConversation(id));
+      if (selectedId === id) {
+        setSelectedId(null);
       }
+    } catch (error) {
+      console.error('Failed to delete conversation:', error);
+      alert('Failed to delete conversation. Please try again.');
+    } finally {
+      setDeletingId(null);
     }
   };
 
@@ -95,10 +84,6 @@ const HistoryView: React.FC<HistoryViewProps> = ({ onBack }) => {
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
   };
-
-  const sortedHistory = useMemo(() => {
-    return [...history].sort((a, b) => b.timestamp - a.timestamp);
-  }, [history]);
 
   if (selectedConversation) {
     return (
@@ -173,7 +158,7 @@ const HistoryView: React.FC<HistoryViewProps> = ({ onBack }) => {
             ))}
           </div>
           <div className="flex flex-col sm:flex-row gap-4 mt-6">
-            <button onClick={() => setSelectedConversation(null)} className="bg-amber-600 hover:bg-amber-500 text-black font-bold py-2 px-6 rounded-lg transition-colors">
+            <button onClick={() => setSelectedId(null)} className="bg-amber-600 hover:bg-amber-500 text-black font-bold py-2 px-6 rounded-lg transition-colors">
               Back to History
             </button>
             <button onClick={handleDownload} className="flex items-center justify-center gap-2 bg-blue-800/70 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded-lg transition-colors">
@@ -218,8 +203,14 @@ const HistoryView: React.FC<HistoryViewProps> = ({ onBack }) => {
                 </div>
               </div>
               <div className="flex gap-2 self-end sm:self-center">
-                <button onClick={() => setSelectedConversation(conv)} className="bg-blue-800/70 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition-colors">View</button>
-                <button onClick={() => handleDelete(conv.id)} className="bg-red-800/70 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg transition-colors">Delete</button>
+                <button onClick={() => setSelectedId(conv.id)} className="bg-blue-800/70 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition-colors">View</button>
+                <button
+                  onClick={() => handleDelete(conv.id)}
+                  disabled={deletingId === conv.id}
+                  className="bg-red-800/70 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+                >
+                  {deletingId === conv.id ? 'Deleting…' : 'Delete'}
+                </button>
               </div>
             </div>
           ))}
