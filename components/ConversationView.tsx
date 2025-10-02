@@ -526,6 +526,17 @@ ${contextTranscript}
             <h2 className="text-2xl sm:text-3xl font-bold text-amber-200 mt-8">{character.name}</h2>
             <p className="text-gray-400 italic">{character.title}</p>
 
+            <div className="mt-4 text-sm text-gray-300 space-y-3">
+                <div className="text-left">
+                    <p className="text-[10px] uppercase tracking-wide text-gray-500">Era</p>
+                    <p className="text-gray-200">{character.timeframe}</p>
+                </div>
+                <div className="text-left">
+                    <p className="text-[10px] uppercase tracking-wide text-gray-500">Voice &amp; Accent</p>
+                    <p className="text-gray-200">{character.voiceName} · {character.voiceAccent}</p>
+                </div>
+            </div>
+
             {activeQuest && (
                 <div className="mt-4 p-4 w-full max-w-xs bg-amber-900/40 border border-amber-800/80 rounded-lg text-left animate-fade-in space-y-3">
                     <div>
