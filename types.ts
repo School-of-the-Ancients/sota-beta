@@ -5,6 +5,14 @@ export interface Ambience {
   audioSrc: string;
 }
 
+export interface VoiceProfile {
+  name: string;
+  gender: 'male' | 'female' | 'nonbinary';
+  accent: string;
+  style: string;
+  description: string;
+}
+
 export interface Character {
   id: string;
   name: string;

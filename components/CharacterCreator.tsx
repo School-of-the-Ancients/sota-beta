@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { GoogleGenAI, Type } from '@google/genai';
 import type { Character, PersonaData } from '../types';
-import { AMBIENCE_LIBRARY, AVAILABLE_VOICES } from '../constants';
+import { AMBIENCE_LIBRARY, AVAILABLE_VOICES, AVAILABLE_VOICE_NAMES } from '../constants';
 
 interface CharacterCreatorProps {
   onCharacterCreated: (character: Character) => void;
@@ -54,7 +54,17 @@ const CharacterCreator: React.FC<CharacterCreatorProps> = ({ onCharacterCreated,
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
       const availableAmbienceTags = AMBIENCE_LIBRARY.map(a => a.tag).join(', ');
-      const personaPrompt = `Based on the historical figure "${clean}", return JSON with:
+      const voiceOptions = AVAILABLE_VOICES.map(
+        voice => `- ${voice.name}: ${voice.description} (Gender: ${voice.gender}; Accent: ${voice.accent}; Style: ${voice.style})`
+      ).join('\n');
+      const voiceNames = AVAILABLE_VOICE_NAMES.join(', ');
+      const personaPrompt = `Based on the historical figure "${clean}", craft a mentor persona that feels historically and culturally authentic.
+
+Select the Gemini 2.5 Preview HD voice that best matches the figure's identity, accent, tone, and teaching style. Choose thoughtfully—do not assign voices that clash with the mentor's gender presentation or historical background.
+
+Available voices:\n${voiceOptions}
+
+Return JSON with:
 - title
 - bio (first person)
 - greeting (first person, short)
@@ -63,8 +73,8 @@ const CharacterCreator: React.FC<CharacterCreatorProps> = ({ onCharacterCreated,
 - passion (short phrase)
 - systemInstruction (act as mentor; emphasize Socratic prompts; may call changeEnvironment() or displayArtifact() as function-only lines)
 - suggestedPrompts (3, one must be environmental/visual)
-- voiceName (one of: ${AVAILABLE_VOICES.join(', ')})
-- voiceAccent (describe the precise accent, vocal gender, and tone the mentor should maintain)
+- voiceName (must exactly match one of: ${voiceNames})
+- voiceAccent (describe the precise accent, vocal gender, and tone the mentor should maintain to complement the selected voice)
 - ambienceTag (one of: ${availableAmbienceTags})`;
 
       const personaResp = await ai.models.generateContent({
