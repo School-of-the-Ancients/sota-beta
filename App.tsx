@@ -507,6 +507,15 @@ Focus only on the student's contributions. Mark passed=true only if the learner 
 
             <Instructions />
 
+            <div className="text-center mb-8">
+              <h2 className="text-3xl sm:text-4xl font-bold text-amber-200 tracking-wide">
+                Whom shall we invite to the academy?
+              </h2>
+              <p className="text-gray-400 mt-2 max-w-2xl mx-auto">
+                Browse the roster below or conjure a new mentor with the Character Forge.
+              </p>
+            </div>
+
             <CharacterSelector
               characters={[...customCharacters, ...CHARACTERS]}
               onSelectCharacter={handleSelectCharacter}

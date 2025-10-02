@@ -1,7 +1,9 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { GoogleGenAI, Type } from '@google/genai';
 import type { Character, PersonaData } from '../types';
 import { AMBIENCE_LIBRARY, AVAILABLE_VOICES } from '../constants';
+import { HISTORICAL_FIGURES_SUGGESTIONS } from '../suggestions';
+import DiceIcon from './icons/DiceIcon';
 
 interface CharacterCreatorProps {
   onCharacterCreated: (character: Character) => void;
@@ -40,6 +42,35 @@ const CharacterCreator: React.FC<CharacterCreatorProps> = ({ onCharacterCreated,
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [verificationSummary, setVerificationSummary] = useState<string | null>(null);
+
+  const filteredSuggestions = useMemo(() => {
+    const clean = name.trim().toLowerCase();
+    if (!clean) {
+      return HISTORICAL_FIGURES_SUGGESTIONS.slice(0, 8);
+    }
+    return HISTORICAL_FIGURES_SUGGESTIONS.filter(suggestion =>
+      suggestion.toLowerCase().includes(clean)
+    ).slice(0, 8);
+  }, [name]);
+
+  const handleNameChange = (value: string) => {
+    setName(value);
+    setError(null);
+    setVerificationSummary(null);
+  };
+
+  const handlePickSuggestion = (value: string) => {
+    handleNameChange(value);
+    setDropdownOpen(false);
+  };
+
+  const handleRandomize = () => {
+    if (HISTORICAL_FIGURES_SUGGESTIONS.length === 0) return;
+    const randomIndex = Math.floor(Math.random() * HISTORICAL_FIGURES_SUGGESTIONS.length);
+    handlePickSuggestion(HISTORICAL_FIGURES_SUGGESTIONS[randomIndex]);
+  };
 
   const handleCreate = async () => {
     setError(null);
@@ -48,10 +79,41 @@ const CharacterCreator: React.FC<CharacterCreatorProps> = ({ onCharacterCreated,
 
     try {
       setLoading(true);
-      setMsg('Summoning your mentor…');
+      setMsg('Consulting the academy archivists…');
 
       if (!process.env.API_KEY) throw new Error('API_KEY not set.');
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+
+      const verificationPrompt = `Answer in JSON whether "${clean}" is a well-documented, non-fictional historical figure. Use this schema: {"isHistorical": boolean, "summary": string}. Treat mythological or fictional names as not historical. Keep summary to one sentence.`;
+
+      const verificationResp = await ai.models.generateContent({
+        model: 'gemini-2.5-flash',
+        config: {
+          responseMimeType: 'application/json',
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+              isHistorical: { type: Type.BOOLEAN },
+              summary: { type: Type.STRING },
+            },
+            required: ['isHistorical', 'summary'],
+          },
+        },
+        contents: verificationPrompt,
+      });
+
+      const verificationData = JSON.parse(verificationResp.text || '{}');
+      if (!verificationData.isHistorical) {
+        setError(
+          verificationData.summary
+            ? verificationData.summary
+            : `We could not verify ${clean} as a historical figure. Try another name.`
+        );
+        return;
+      }
+
+      setVerificationSummary(verificationData.summary);
+      setMsg('Summoning your mentor…');
 
       const availableAmbienceTags = AMBIENCE_LIBRARY.map(a => a.tag).join(', ');
       const personaPrompt = `Based on the historical figure "${clean}", return JSON with:
@@ -104,7 +166,12 @@ const CharacterCreator: React.FC<CharacterCreatorProps> = ({ onCharacterCreated,
         contents: personaPrompt,
       });
 
-      const persona: PersonaData = JSON.parse(personaResp.text);
+      const personaText = personaResp.text;
+      if (!personaText) {
+        throw new Error('The persona service returned no data.');
+      }
+
+      const persona: PersonaData = JSON.parse(personaText);
 
       // --- SAFE portrait generation with fallback ---
       let portraitUrl = makeFallbackAvatar(clean, persona.title);
@@ -187,19 +254,68 @@ const CharacterCreator: React.FC<CharacterCreatorProps> = ({ onCharacterCreated,
         )}
 
         <label className="block text-sm font-medium text-gray-300 mb-2">Historical figure</label>
-        <input
-          type="text"
-          value={name}
-          onChange={e => setName(e.target.value)}
-          placeholder="Ada Lovelace, Marcus Aurelius, Alhazen, Confucius, ..."
-          className="w-full bg-gray-800 border border-gray-600 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-amber-400 text-lg mb-4"
-        />
+        <div className="relative mb-4">
+          <div className="flex items-center gap-2">
+            <input
+              type="text"
+              value={name}
+              onChange={e => handleNameChange(e.target.value)}
+              onFocus={() => setDropdownOpen(true)}
+              onBlur={() => setTimeout(() => setDropdownOpen(false), 150)}
+              placeholder="Ada Lovelace, Marcus Aurelius, Alhazen, Confucius, ..."
+              className="w-full bg-gray-800 border border-gray-600 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-amber-400 text-lg"
+              aria-autocomplete="list"
+              aria-expanded={dropdownOpen}
+              aria-controls="character-suggestion-list"
+            />
+            <button
+              type="button"
+              onClick={handleRandomize}
+              className="shrink-0 p-3 rounded-lg border border-gray-600 bg-gray-800 hover:bg-gray-700 text-amber-300 transition-colors"
+              aria-label="Roll the dice for a historical figure"
+            >
+              <DiceIcon className="w-5 h-5" />
+            </button>
+          </div>
+
+          {dropdownOpen && filteredSuggestions.length > 0 && (
+            <div
+              id="character-suggestion-list"
+              className="absolute z-10 mt-2 w-full bg-[#161616] border border-gray-700 rounded-lg shadow-xl overflow-hidden"
+            >
+              <p className="px-4 py-2 text-xs uppercase tracking-wide text-gray-500 border-b border-gray-700">
+                Suggested figures
+              </p>
+              <ul className="max-h-60 overflow-y-auto">
+                {filteredSuggestions.map(suggestion => (
+                  <li key={suggestion}>
+                    <button
+                      type="button"
+                      onMouseDown={() => handlePickSuggestion(suggestion)}
+                      className="w-full text-left px-4 py-2 text-sm text-gray-200 hover:bg-amber-500/20 hover:text-amber-200"
+                    >
+                      {suggestion}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
+
+        {verificationSummary && (
+          <div className="mb-4 text-sm text-emerald-300 bg-emerald-900/40 border border-emerald-700 px-4 py-3 rounded-lg">
+            {verificationSummary}
+          </div>
+        )}
 
         <button
+          type="button"
           onClick={handleCreate}
-          className="w-full bg-amber-600 hover:bg-amber-500 text-black font-bold py-3 px-6 rounded-lg transition-colors text-lg"
+          disabled={loading}
+          className="w-full bg-amber-600 hover:bg-amber-500 disabled:bg-amber-800/60 disabled:text-amber-200/70 text-black font-bold py-3 px-6 rounded-lg transition-colors text-lg"
         >
-          Create Ancient
+          {loading ? 'Creating…' : 'Create Ancient'}
         </button>
       </div>
     </div>
