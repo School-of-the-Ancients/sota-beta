@@ -1,7 +1,12 @@
 import React, { useState } from 'react';
 import { GoogleGenAI, Type } from '@google/genai';
 import type { Character, PersonaData } from '../types';
-import { AMBIENCE_LIBRARY, AVAILABLE_VOICES } from '../constants';
+import {
+  AMBIENCE_LIBRARY,
+  AVAILABLE_VOICES,
+  DEFAULT_VOICE_NAME,
+  VOICE_LIBRARY,
+} from '../constants';
 
 interface CharacterCreatorProps {
   onCharacterCreated: (character: Character) => void;
@@ -54,7 +59,17 @@ const CharacterCreator: React.FC<CharacterCreatorProps> = ({ onCharacterCreated,
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
       const availableAmbienceTags = AMBIENCE_LIBRARY.map(a => a.tag).join(', ');
-      const personaPrompt = `Based on the historical figure "${clean}", return JSON with:
+      const voiceOptions = VOICE_LIBRARY.map(
+        v =>
+          `- ${v.name} (${v.gender}, ${v.locale}, ${v.tone}) — ${v.description}`
+      ).join('\n');
+
+      const personaPrompt = `Based on the historical figure "${clean}", craft a mentor persona.
+
+Focus on selecting an HD Gemini 2.5 voice that matches the figure's likely accent, gender presentation, and tone. Available Gemini 2.5 preview voices:
+${voiceOptions}
+
+Return JSON with:
 - title
 - bio (first person)
 - greeting (first person, short)
@@ -63,7 +78,7 @@ const CharacterCreator: React.FC<CharacterCreatorProps> = ({ onCharacterCreated,
 - passion (short phrase)
 - systemInstruction (act as mentor; emphasize Socratic prompts; may call changeEnvironment() or displayArtifact() as function-only lines)
 - suggestedPrompts (3, one must be environmental/visual)
-- voiceName (one of: ${AVAILABLE_VOICES.join(', ')})
+- voiceName (must exactly match one of the Gemini voice names listed above)
 - voiceAccent (describe the precise accent, vocal gender, and tone the mentor should maintain)
 - ambienceTag (one of: ${availableAmbienceTags})`;
 
@@ -130,6 +145,20 @@ const CharacterCreator: React.FC<CharacterCreatorProps> = ({ onCharacterCreated,
         console.warn('Portrait generation failed; using fallback avatar.', err);
       }
 
+      const rawVoiceName = persona.voiceName?.trim() || '';
+      const normalizedVoiceName = (() => {
+        if (!rawVoiceName) return DEFAULT_VOICE_NAME;
+        const exact = AVAILABLE_VOICES.find(
+          v => v.toLowerCase() === rawVoiceName.toLowerCase()
+        );
+        if (exact) return exact;
+        const partial = VOICE_LIBRARY.find(v =>
+          rawVoiceName.toLowerCase().includes(v.name.toLowerCase())
+        );
+        if (partial) return partial.name;
+        return DEFAULT_VOICE_NAME;
+      })();
+
       const character: Character = {
         id: `custom_${Date.now()}`,
         name: clean,
@@ -141,7 +170,7 @@ const CharacterCreator: React.FC<CharacterCreatorProps> = ({ onCharacterCreated,
         passion: persona.passion,
         systemInstruction: persona.systemInstruction,
         suggestedPrompts: persona.suggestedPrompts,
-        voiceName: persona.voiceName,
+        voiceName: normalizedVoiceName,
         voiceAccent: persona.voiceAccent,
         ambienceTag: persona.ambienceTag,
         portraitUrl,
