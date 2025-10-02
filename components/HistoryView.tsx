@@ -1,29 +1,7 @@
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useMemo } from 'react';
 import type { SavedConversation, ConversationTurn } from '../types';
 import DownloadIcon from './icons/DownloadIcon';
-
-const HISTORY_KEY = 'school-of-the-ancients-history';
-
-const loadConversations = (): SavedConversation[] => {
-  try {
-    const rawHistory = localStorage.getItem(HISTORY_KEY);
-    return rawHistory ? JSON.parse(rawHistory) : [];
-  } catch (error) {
-    console.error("Failed to load conversation history:", error);
-    return [];
-  }
-};
-
-const deleteConversationFromLocalStorage = (id: string) => {
-  try {
-    let history = loadConversations();
-    history = history.filter(c => c.id !== id);
-    localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
-  } catch (error) {
-    console.error("Failed to delete conversation:", error);
-  }
-};
 
 const ArtifactDisplay: React.FC<{ artifact: NonNullable<ConversationTurn['artifact']> }> = ({ artifact }) => {
   if (!artifact.imageUrl || artifact.loading) return null; // Don't show incomplete artifacts in history
@@ -38,23 +16,24 @@ const ArtifactDisplay: React.FC<{ artifact: NonNullable<ConversationTurn['artifa
 
 interface HistoryViewProps {
   onBack: () => void;
+  history: SavedConversation[];
+  onDeleteConversation: (id: string) => Promise<void>;
+  isLoading: boolean;
 }
 
-const HistoryView: React.FC<HistoryViewProps> = ({ onBack }) => {
-  const [history, setHistory] = useState<SavedConversation[]>([]);
+const HistoryView: React.FC<HistoryViewProps> = ({ onBack, history, onDeleteConversation, isLoading }) => {
   const [selectedConversation, setSelectedConversation] = useState<SavedConversation | null>(null);
 
-  useEffect(() => {
-    setHistory(loadConversations());
-  }, []);
+  const handleDelete = async (id: string) => {
+    if (!window.confirm('Are you sure you want to delete this conversation?')) return;
 
-  const handleDelete = (id: string) => {
-    if (window.confirm('Are you sure you want to delete this conversation?')) {
-      deleteConversationFromLocalStorage(id);
-      setHistory(loadConversations());
+    try {
+      await onDeleteConversation(id);
       if (selectedConversation?.id === id) {
         setSelectedConversation(null);
       }
+    } catch (error) {
+      console.error('Failed to delete conversation:', error);
     }
   };
 
@@ -195,7 +174,9 @@ const HistoryView: React.FC<HistoryViewProps> = ({ onBack }) => {
         </button>
       </div>
       {sortedHistory.length === 0 ? (
-        <p className="text-center text-gray-400 bg-gray-800/50 p-8 rounded-lg">No saved conversations yet.</p>
+        <p className="text-center text-gray-400 bg-gray-800/50 p-8 rounded-lg">
+          {isLoading ? 'Loading your history...' : 'No saved conversations yet.'}
+        </p>
       ) : (
         <div className="space-y-4">
           {sortedHistory.map((conv) => (

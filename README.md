@@ -53,7 +53,7 @@ School of the Ancients is a modern web application that pairs immersive visuals 
 - **Curated quest board** &mdash; Pick from ready-to-run quests, each linking a legendary mentor with a focused learning objective and estimated duration.
 - **Quest-aware conversations** &mdash; When a quest is active, the mentor keeps you on track, surfaces scene changes, and captures artifacts tied to the objective.
 - **Automatic mastery reviews** &mdash; Ending a quest triggers an AI assessment of your transcript, summarizing what you grasped, what evidence proves it, and what to revisit.
-- **Progress tracking** &mdash; Completed quest IDs persist in `localStorage`, powering progress meters and keeping your accomplishments pinned between sessions.
+- **Progress tracking** &mdash; Completed quest IDs sync to your Supabase profile, powering progress meters and keeping achievements pinned across devices.
 
 ### Custom Mentors & Quest Builder
 
@@ -63,7 +63,7 @@ School of the Ancients is a modern web application that pairs immersive visuals 
 
 ### Progression & Reflection
 
-- **Conversation history** &mdash; Sessions, transcripts, artifacts, and environments are stored in browser `localStorage` for later review or resuming quests.
+- **Conversation history** &mdash; Sessions, transcripts, artifacts, and environments live in Supabase so you can resume quests from any signed-in device.
 - **Quest dossiers** &mdash; Each AI review summarizes mastery, highlights evidence, and recommends improvements so you can iterate on your learning plan.
 - **Responsive design** &mdash; Tailwind CSS keeps the UI beautiful and accessible on mobile, tablet, and desktop displays.
 

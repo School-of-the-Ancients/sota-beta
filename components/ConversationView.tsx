@@ -13,8 +13,6 @@ import SendIcon from './icons/SendIcon';
 import MuteIcon from './icons/MuteIcon';
 import UnmuteIcon from './icons/UnmuteIcon';
 
-const HISTORY_KEY = 'school-of-the-ancients-history';
-
 interface ConversationViewProps {
   character: Character;
   onEndConversation: (transcript: ConversationTurn[], sessionId: string) => void;
@@ -22,32 +20,9 @@ interface ConversationViewProps {
   onEnvironmentUpdate: (url: string | null) => void;
   activeQuest: Quest | null;
   isSaving: boolean;
+  savedConversation: SavedConversation | null;
+  onAutoSave: (conversation: SavedConversation) => Promise<void>;
 }
-
-const loadConversations = (): SavedConversation[] => {
-  try {
-    const rawHistory = localStorage.getItem(HISTORY_KEY);
-    return rawHistory ? JSON.parse(rawHistory) : [];
-  } catch (error) {
-    console.error("Failed to load conversation history:", error);
-    return [];
-  }
-};
-
-const saveConversationToLocalStorage = (conversation: SavedConversation) => {
-  try {
-    const history = loadConversations();
-    const existingIndex = history.findIndex(c => c.id === conversation.id);
-    if (existingIndex > -1) {
-      history[existingIndex] = conversation;
-    } else {
-      history.unshift(conversation);
-    }
-    localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
-  } catch (error) {
-    console.error("Failed to save conversation:", error);
-  }
-};
 
 const StatusIndicator: React.FC<{ state: ConnectionState; isMicActive: boolean }> = ({ state, isMicActive }) => {
   let statusText = 'Ready';
@@ -99,7 +74,16 @@ const ArtifactDisplay: React.FC<{ artifact: NonNullable<ConversationTurn['artifa
     );
   };
 
-const ConversationView: React.FC<ConversationViewProps> = ({ character, onEndConversation, environmentImageUrl, onEnvironmentUpdate, activeQuest, isSaving }) => {
+const ConversationView: React.FC<ConversationViewProps> = ({
+  character,
+  onEndConversation,
+  environmentImageUrl,
+  onEnvironmentUpdate,
+  activeQuest,
+  isSaving,
+  savedConversation,
+  onAutoSave,
+}) => {
   const [transcript, setTranscript] = useState<ConversationTurn[]>([]);
   const [textInput, setTextInput] = useState('');
   const [dynamicSuggestions, setDynamicSuggestions] = useState<string[]>([]);
@@ -142,8 +126,21 @@ const ConversationView: React.FC<ConversationViewProps> = ({ character, onEndCon
   const [placeholder, setPlaceholder] = useState(placeholders[0]);
 
   const sessionIdRef = useRef(`conv_${character.id}_${Date.now()}`);
+  const [hasHydrated, setHasHydrated] = useState(false);
+  const prevSavedConversationIdRef = useRef<string | null>(null);
 
-  // Load existing conversation or start a new one with a greeting
+  useEffect(() => {
+    setHasHydrated(false);
+  }, [character.id, activeQuest?.id]);
+
+  useEffect(() => {
+    const currentId = savedConversation?.id ?? null;
+    if (currentId !== prevSavedConversationIdRef.current) {
+      prevSavedConversationIdRef.current = currentId;
+      setHasHydrated(false);
+    }
+  }, [savedConversation]);
+
   useEffect(() => {
     const greetingTurn: ConversationTurn = {
       speaker: 'model',
@@ -151,26 +148,29 @@ const ConversationView: React.FC<ConversationViewProps> = ({ character, onEndCon
       text: character.greeting,
     };
 
-    if (activeQuest) {
-      // Start a fresh conversation for a quest
+    if (!hasHydrated) {
+      if (activeQuest) {
+        setTranscript([greetingTurn]);
+        onEnvironmentUpdate(null);
+        sessionIdRef.current = `quest_${activeQuest.id}_${Date.now()}`;
+        setHasHydrated(true);
+        return;
+      }
+
+      if (savedConversation) {
+        setTranscript(savedConversation.transcript);
+        onEnvironmentUpdate(savedConversation.environmentImageUrl || null);
+        sessionIdRef.current = savedConversation.id;
+        setHasHydrated(true);
+        return;
+      }
+
       setTranscript([greetingTurn]);
       onEnvironmentUpdate(null);
-      sessionIdRef.current = `quest_${activeQuest.id}_${Date.now()}`;
-    } else {
-      const history = loadConversations();
-      const existingConversation = history.find(c => c.characterId === character.id);
-      if (existingConversation && existingConversation.transcript.length > 0) {
-          setTranscript(existingConversation.transcript);
-          onEnvironmentUpdate(existingConversation.environmentImageUrl || null);
-          sessionIdRef.current = existingConversation.id; 
-      } else {
-          // This is a new conversation or an empty one from history
-          setTranscript([greetingTurn]);
-          onEnvironmentUpdate(null);
-          sessionIdRef.current = existingConversation ? existingConversation.id : `conv_${character.id}_${Date.now()}`;
-      }
+      sessionIdRef.current = `conv_${character.id}_${Date.now()}`;
+      setHasHydrated(true);
     }
-  }, [character, onEnvironmentUpdate, activeQuest]);
+  }, [character, activeQuest, savedConversation, onEnvironmentUpdate, hasHydrated]);
 
     // Cycle through placeholders for text input
     useEffect(() => {
@@ -436,8 +436,8 @@ ${contextTranscript}
     }
   }, [transcript, updateDynamicSuggestions]);
 
-  // Auto-save conversation on transcript change
   useEffect(() => {
+    if (!hasHydrated) return;
     if (transcript.length === 0 && !environmentImageUrl) return;
 
     const conversation: SavedConversation = {
@@ -455,10 +455,13 @@ ${contextTranscript}
           }
         : {}),
     };
-    saveConversationToLocalStorage(conversation);
-  }, [transcript, character, environmentImageUrl, activeQuest]);
 
-  const handleReset = () => {
+    onAutoSave(conversation).catch(error => {
+      console.error('Failed to persist conversation:', error);
+    });
+  }, [transcript, character, environmentImageUrl, activeQuest, hasHydrated, onAutoSave]);
+
+  const handleReset = async () => {
     if (transcript.length === 0 && !environmentImageUrl) return;
     if (window.confirm('Are you sure you want to reset this conversation? The current transcript and environment will be cleared.')) {
         const greetingTurn: ConversationTurn = {
@@ -469,10 +472,10 @@ ${contextTranscript}
         setTranscript([greetingTurn]);
         setDynamicSuggestions([]);
         onEnvironmentUpdate(null);
-        
+
         const initialSrc = AMBIENCE_LIBRARY.find(a => a.tag === character.ambienceTag)?.audioSrc ?? null;
         changeAmbienceTrack(initialSrc);
-        
+
         const clearedConversation: SavedConversation = {
             id: sessionIdRef.current,
             characterId: character.id,
@@ -488,7 +491,11 @@ ${contextTranscript}
                 }
               : {}),
         };
-        saveConversationToLocalStorage(clearedConversation);
+        try {
+          await onAutoSave(clearedConversation);
+        } catch (error) {
+          console.error('Failed to persist cleared conversation:', error);
+        }
     }
   };
 
