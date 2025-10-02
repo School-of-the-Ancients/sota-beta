@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { GoogleGenAI, Type } from '@google/genai';
 import type { Character, PersonaData, Quest } from '../types';
-import { AMBIENCE_LIBRARY, AVAILABLE_VOICES } from '../constants';
+import { AMBIENCE_LIBRARY, AVAILABLE_VOICE_NAMES } from '../constants';
+import { VOICE_PROMPT_HEADER, selectVoiceProfile, buildVoiceAccentDirective } from '../voiceUtils';
 
 type QuestDraft = {
   title: string;
@@ -70,7 +71,12 @@ const QuestCreator: React.FC<QuestCreatorProps> = ({
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
     const availableAmbienceTags = AMBIENCE_LIBRARY.map(a => a.tag).join(', ');
-    const personaPrompt = `Based on the historical figure "${name}", return JSON with:
+    const personaPrompt = `You are the Persona Architect tasked with modelling ${name}. Match their documented gender presentation, accent, and energy.
+
+Use this voice catalog to choose a voice:
+${VOICE_PROMPT_HEADER}
+
+Return strict JSON with:
 - title
 - bio (first person)
 - greeting (first person, short)
@@ -79,9 +85,13 @@ const QuestCreator: React.FC<QuestCreatorProps> = ({
 - passion (short phrase)
 - systemInstruction (act as mentor; emphasize Socratic prompts; may call changeEnvironment() or displayArtifact() as function-only lines)
 - suggestedPrompts (3, one must be environmental/visual)
-- voiceName (one of: ${AVAILABLE_VOICES.join(', ')})
-- voiceAccent (describe the precise accent, vocal gender, and tone the mentor should maintain)
-- ambienceTag (one of: ${availableAmbienceTags})`;
+- voiceName (exactly one of: ${AVAILABLE_VOICE_NAMES.join(', ')})
+- voiceAccent (detail accent, gender presentation, tone, and timbre directions that align ${name}'s background with the chosen voice profile)
+- ambienceTag (one of: ${availableAmbienceTags})
+
+Rules:
+1. Never invent voice names outside the catalog. Choose the closest cultural and gender match.
+2. If the figure’s historical gender presentation is debated, choose the voice that best matches the persona you craft and clarify that presentation in voiceAccent.`;
 
     const personaResp = await ai.models.generateContent({
       model: 'gemini-2.5-flash',
@@ -122,6 +132,10 @@ const QuestCreator: React.FC<QuestCreatorProps> = ({
 
     const persona: PersonaData = JSON.parse(personaResp.text);
 
+    const chosenVoice = selectVoiceProfile(persona.voiceName, persona.voiceAccent);
+    const resolvedVoiceName = chosenVoice.name;
+    const resolvedVoiceAccent = buildVoiceAccentDirective(persona.voiceAccent, chosenVoice);
+
     // --- SAFE portrait generation with fallback ---
     let portraitUrl = makeFallbackAvatar(name, persona.title);
     try {
@@ -157,8 +171,8 @@ const QuestCreator: React.FC<QuestCreatorProps> = ({
       passion: persona.passion,
       systemInstruction: persona.systemInstruction,
       suggestedPrompts: persona.suggestedPrompts,
-      voiceName: persona.voiceName,
-      voiceAccent: persona.voiceAccent,
+      voiceName: resolvedVoiceName,
+      voiceAccent: resolvedVoiceAccent,
       ambienceTag: persona.ambienceTag,
       portraitUrl,
     };
