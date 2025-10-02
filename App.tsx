@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { GoogleGenAI, Type } from '@google/genai';
+import type { Session } from '@supabase/supabase-js';
 
 import type {
   Character,
@@ -18,67 +19,24 @@ import QuestsView from './components/QuestsView';
 import Instructions from './components/Instructions';
 import QuestIcon from './components/icons/QuestIcon';
 import QuestCreator from './components/QuestCreator'; // NEW
+import AuthGate from './components/AuthGate';
+import { supabase } from './supabaseClient';
 
 import { CHARACTERS, QUESTS } from './constants';
-
-const CUSTOM_CHARACTERS_KEY = 'school-of-the-ancients-custom-characters';
-const HISTORY_KEY = 'school-of-the-ancients-history';
-const COMPLETED_QUESTS_KEY = 'school-of-the-ancients-completed-quests';
-
-// ---- Local storage helpers -------------------------------------------------
-
-const loadConversations = (): SavedConversation[] => {
-  try {
-    const rawHistory = localStorage.getItem(HISTORY_KEY);
-    return rawHistory ? JSON.parse(rawHistory) : [];
-  } catch (error) {
-    console.error('Failed to load conversation history:', error);
-    return [];
-  }
-};
-
-const saveConversationToLocalStorage = (conversation: SavedConversation) => {
-  try {
-    const history = loadConversations();
-    const existingIndex = history.findIndex((c) => c.id === conversation.id);
-    if (existingIndex > -1) {
-      history[existingIndex] = conversation;
-    } else {
-      history.unshift(conversation);
-    }
-    localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
-  } catch (error) {
-    console.error('Failed to save conversation:', error);
-  }
-};
-
-const loadCompletedQuests = (): string[] => {
-  try {
-    const stored = localStorage.getItem(COMPLETED_QUESTS_KEY);
-    return stored ? JSON.parse(stored) : [];
-  } catch (error) {
-    console.error('Failed to load completed quests:', error);
-    return [];
-  }
-};
-
-const saveCompletedQuests = (questIds: string[]) => {
-  try {
-    localStorage.setItem(COMPLETED_QUESTS_KEY, JSON.stringify(questIds));
-  } catch (error) {
-    console.error('Failed to save completed quests:', error);
-  }
-};
 
 // ---- App -------------------------------------------------------------------
 
 const App: React.FC = () => {
+  const [session, setSession] = useState<Session | null>(null);
+  const [isAuthLoading, setIsAuthLoading] = useState(true);
+  const [isDataLoading, setIsDataLoading] = useState(false);
   const [selectedCharacter, setSelectedCharacter] = useState<Character | null>(null);
   const [view, setView] = useState<
     'selector' | 'conversation' | 'history' | 'creator' | 'quests' | 'questCreator'
   >('selector');
 
   const [customCharacters, setCustomCharacters] = useState<Character[]>([]);
+  const [conversations, setConversations] = useState<SavedConversation[]>([]);
   const [environmentImageUrl, setEnvironmentImageUrl] = useState<string | null>(null);
   const [activeQuest, setActiveQuest] = useState<Quest | null>(null);
 
@@ -87,32 +45,268 @@ const App: React.FC = () => {
 
   const [completedQuests, setCompletedQuests] = useState<string[]>([]);
   const [lastQuestOutcome, setLastQuestOutcome] = useState<QuestAssessment | null>(null);
+  const urlSelectionAppliedRef = useRef(false);
 
-  // On mount: load saved characters, url param character, and progress
-  useEffect(() => {
-    try {
-      const storedCharacters = localStorage.getItem(CUSTOM_CHARACTERS_KEY);
-      if (storedCharacters) {
-        setCustomCharacters(JSON.parse(storedCharacters));
-      }
-    } catch (e) {
-      console.error('Failed to load custom characters:', e);
+  const userId = session?.user?.id ?? null;
+
+  const loadCustomCharacters = useCallback(async () => {
+    if (!userId) {
+      setCustomCharacters([]);
+      return;
     }
+
+    const { data, error } = await supabase
+      .from('custom_characters')
+      .select('character')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error('Failed to load custom characters:', error);
+      return;
+    }
+
+    const parsed = (data ?? [])
+      .map((row) => row.character as Character | null)
+      .filter((character): character is Character => Boolean(character));
+
+    setCustomCharacters(parsed);
+  }, [userId]);
+
+  const loadConversations = useCallback(async () => {
+    if (!userId) {
+      setConversations([]);
+      return;
+    }
+
+    const { data, error } = await supabase
+      .from('conversations')
+      .select('id, data, updated_at')
+      .eq('user_id', userId)
+      .order('updated_at', { ascending: false });
+
+    if (error) {
+      console.error('Failed to load conversation history:', error);
+      return;
+    }
+
+    const parsed = (data ?? [])
+      .map((row) => {
+        const payload = row.data as SavedConversation | null;
+        if (!payload) return null;
+        return { ...payload, id: row.id } as SavedConversation;
+      })
+      .filter((conversation): conversation is SavedConversation => Boolean(conversation))
+      .sort((a, b) => b.timestamp - a.timestamp);
+
+    setConversations(parsed);
+  }, [userId]);
+
+  const loadCompletedQuestIds = useCallback(async () => {
+    if (!userId) {
+      setCompletedQuests([]);
+      return;
+    }
+
+    const { data, error } = await supabase
+      .from('completed_quests')
+      .select('quest_id')
+      .eq('user_id', userId);
+
+    if (error) {
+      console.error('Failed to load completed quests:', error);
+      return;
+    }
+
+    setCompletedQuests((data ?? []).map((row) => row.quest_id));
+  }, [userId]);
+
+  const persistConversation = useCallback(
+    async (conversation: SavedConversation) => {
+      if (!userId) return;
+
+      setConversations((prev) => {
+        const remaining = prev.filter((item) => item.id !== conversation.id);
+        const updated = [conversation, ...remaining];
+        return updated.sort((a, b) => b.timestamp - a.timestamp);
+      });
+
+      const { error } = await supabase
+        .from('conversations')
+        .upsert(
+          {
+            id: conversation.id,
+            user_id: userId,
+            data: conversation,
+            updated_at: new Date().toISOString(),
+          },
+          { onConflict: 'id' }
+        );
+
+      if (error) {
+        console.error('Failed to save conversation:', error);
+      }
+    },
+    [userId]
+  );
+
+  const markQuestCompletion = useCallback(
+    async (questId: string, passed: boolean) => {
+      if (!userId) return;
+
+      if (passed) {
+        setCompletedQuests((prev) => {
+          if (prev.includes(questId)) return prev;
+          return [...prev, questId];
+        });
+
+        const { error } = await supabase
+          .from('completed_quests')
+          .upsert({
+            user_id: userId,
+            quest_id: questId,
+            completed_at: new Date().toISOString(),
+          });
+
+        if (error) {
+          console.error('Failed to mark quest complete:', error);
+        }
+      } else {
+        setCompletedQuests((prev) => prev.filter((id) => id !== questId));
+
+        const { error } = await supabase
+          .from('completed_quests')
+          .delete()
+          .match({ user_id: userId, quest_id: questId });
+
+        if (error) {
+          console.error('Failed to reset quest status:', error);
+        }
+      }
+    },
+    [userId]
+  );
+
+  const handleDeleteConversation = useCallback(
+    async (conversationId: string) => {
+      if (!userId) return;
+
+      setConversations((prev) => prev.filter((item) => item.id !== conversationId));
+
+      const { error } = await supabase
+        .from('conversations')
+        .delete()
+        .match({ user_id: userId, id: conversationId });
+
+      if (error) {
+        console.error('Failed to delete conversation:', error);
+        loadConversations();
+      }
+    },
+    [userId, loadConversations]
+  );
+
+  const handleSignOut = useCallback(async () => {
+    try {
+      await supabase.auth.signOut();
+    } catch (error) {
+      console.error('Failed to sign out:', error);
+    }
+  }, []);
+
+  // ---- Supabase session & data loading ------------------------------------
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const initialiseSession = async () => {
+      try {
+        const { data, error } = await supabase.auth.getSession();
+        if (!isMounted) return;
+        if (error) {
+          console.error('Failed to fetch session:', error);
+        }
+        setSession(data.session ?? null);
+      } catch (err) {
+        console.error('Failed to initialise session:', err);
+      } finally {
+        if (isMounted) {
+          setIsAuthLoading(false);
+        }
+      }
+    };
+
+    initialiseSession();
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, newSession) => {
+      setSession(newSession);
+    });
+
+    return () => {
+      isMounted = false;
+      subscription.unsubscribe();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!userId) {
+      setIsDataLoading(false);
+      setCustomCharacters([]);
+      setConversations([]);
+      setCompletedQuests([]);
+      return;
+    }
+
+    let cancelled = false;
+    setIsDataLoading(true);
+
+    const loadAll = async () => {
+      await Promise.all([loadCustomCharacters(), loadConversations(), loadCompletedQuestIds()]);
+    };
+
+    loadAll()
+      .catch((error) => {
+        console.error('Failed to load user data:', error);
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setIsDataLoading(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [userId, loadCustomCharacters, loadConversations, loadCompletedQuestIds]);
+
+  useEffect(() => {
+    if (!session) {
+      setSelectedCharacter(null);
+      setActiveQuest(null);
+      setEnvironmentImageUrl(null);
+      setLastQuestOutcome(null);
+      setView('selector');
+      urlSelectionAppliedRef.current = false;
+    }
+  }, [session]);
+
+  useEffect(() => {
+    if (!session || urlSelectionAppliedRef.current) return;
 
     const urlParams = new URLSearchParams(window.location.search);
     const characterId = urlParams.get('character');
-    if (characterId) {
-      const allCharacters = [...customCharacters, ...CHARACTERS];
-      const characterFromUrl = allCharacters.find((c) => c.id === characterId);
-      if (characterFromUrl) {
-        setSelectedCharacter(characterFromUrl);
-        setView('conversation');
-      }
-    }
+    if (!characterId) return;
 
-    setCompletedQuests(loadCompletedQuests());
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    const allCharacters = [...customCharacters, ...CHARACTERS];
+    const characterFromUrl = allCharacters.find((c) => c.id === characterId);
+    if (characterFromUrl) {
+      urlSelectionAppliedRef.current = true;
+      setSelectedCharacter(characterFromUrl);
+      setView('conversation');
+    }
+  }, [session, customCharacters]);
 
   // ---- Navigation helpers ----
 
@@ -120,6 +314,7 @@ const App: React.FC = () => {
     setSelectedCharacter(character);
     setView('conversation');
     setActiveQuest(null); // clear any quest when directly picking a character
+    urlSelectionAppliedRef.current = true;
     const url = new URL(window.location.href);
     url.searchParams.set('character', character.id);
     window.history.pushState({}, '', url);
@@ -132,6 +327,7 @@ const App: React.FC = () => {
       setActiveQuest(quest);
       setSelectedCharacter(characterForQuest);
       setView('conversation');
+      urlSelectionAppliedRef.current = true;
       const url = new URL(window.location.href);
       url.searchParams.set('character', characterForQuest.id);
       window.history.pushState({}, '', url);
@@ -140,25 +336,52 @@ const App: React.FC = () => {
     }
   };
 
-  const handleCharacterCreated = (newCharacter: Character) => {
-    const updatedCharacters = [newCharacter, ...customCharacters];
-    setCustomCharacters(updatedCharacters);
-    try {
-      localStorage.setItem(CUSTOM_CHARACTERS_KEY, JSON.stringify(updatedCharacters));
-    } catch (e) {
-      console.error('Failed to save custom character:', e);
-    }
+  const saveCustomCharacter = useCallback(
+    async (character: Character) => {
+      setCustomCharacters((prev) => {
+        const filtered = prev.filter((item) => item.id !== character.id);
+        return [character, ...filtered];
+      });
+
+      if (userId) {
+        const { error } = await supabase
+          .from('custom_characters')
+          .upsert(
+            {
+              id: character.id,
+              user_id: userId,
+              character,
+            },
+            { onConflict: 'id' }
+          );
+
+        if (error) {
+          console.error('Failed to save custom character:', error);
+        }
+      }
+    },
+    [userId]
+  );
+
+  const handleCharacterCreated = async (newCharacter: Character) => {
+    await saveCustomCharacter(newCharacter);
     handleSelectCharacter(newCharacter);
   };
 
-  const handleDeleteCharacter = (characterId: string) => {
+  const handleDeleteCharacter = async (characterId: string) => {
     if (window.confirm('Are you sure you want to permanently delete this ancient?')) {
       const updatedCharacters = customCharacters.filter((c) => c.id !== characterId);
       setCustomCharacters(updatedCharacters);
-      try {
-        localStorage.setItem(CUSTOM_CHARACTERS_KEY, JSON.stringify(updatedCharacters));
-      } catch (e) {
-        console.error('Failed to delete custom character:', e);
+      if (userId) {
+        const { error } = await supabase
+          .from('custom_characters')
+          .delete()
+          .match({ user_id: userId, id: characterId });
+
+        if (error) {
+          console.error('Failed to delete custom character:', error);
+          loadCustomCharacters();
+        }
       }
     }
   };
@@ -168,6 +391,7 @@ const App: React.FC = () => {
     setActiveQuest(quest);
     setSelectedCharacter(mentor);
     setView('conversation');
+    urlSelectionAppliedRef.current = true;
     const url = new URL(window.location.href);
     url.searchParams.set('character', mentor.id);
     window.history.pushState({}, '', url);
@@ -180,8 +404,7 @@ const App: React.FC = () => {
     let questAssessment: QuestAssessment | null = null;
 
     try {
-      const conversationHistory = loadConversations();
-      const existingConversation = conversationHistory.find((c) => c.id === sessionId);
+      const existingConversation = conversations.find((c) => c.id === sessionId);
 
       let updatedConversation: SavedConversation =
         existingConversation ??
@@ -310,25 +533,9 @@ Focus only on the student's contributions. Mark passed=true only if the learner 
           };
 
           if (questAssessment.passed) {
-            setCompletedQuests((prev) => {
-              if (prev.includes(activeQuest.id)) {
-                saveCompletedQuests(prev);
-                return prev;
-              }
-              const updated = [...prev, activeQuest.id]; // FIX
-              saveCompletedQuests(updated);
-              return updated;
-            });
+            await markQuestCompletion(activeQuest.id, true);
           } else {
-            setCompletedQuests((prev) => {
-              if (!prev.includes(activeQuest.id)) {
-                saveCompletedQuests(prev);
-                return prev;
-              }
-              const updated = prev.filter((id) => id !== activeQuest.id);
-              saveCompletedQuests(updated);
-              return updated;
-            });
+            await markQuestCompletion(activeQuest.id, false);
           }
         }
       } else if (activeQuest) {
@@ -340,7 +547,7 @@ Focus only on the student's contributions. Mark passed=true only if the learner 
         };
       }
 
-      saveConversationToLocalStorage(updatedConversation);
+      await persistConversation(updatedConversation);
     } catch (error) {
       console.error('Failed to finalize conversation:', error);
     } finally {
@@ -363,7 +570,12 @@ Focus only on the student's contributions. Mark passed=true only if the learner 
   const renderContent = () => {
     switch (view) {
       case 'conversation':
-        return selectedCharacter ? (
+        if (!selectedCharacter) return null;
+        const existingConversation =
+          !activeQuest
+            ? conversations.find((conversation) => conversation.characterId === selectedCharacter.id) ?? null
+            : null;
+        return (
           <ConversationView
             character={selectedCharacter}
             onEndConversation={handleEndConversation}
@@ -371,10 +583,18 @@ Focus only on the student's contributions. Mark passed=true only if the learner 
             onEnvironmentUpdate={setEnvironmentImageUrl}
             activeQuest={activeQuest}
             isSaving={isSaving} // pass saving state
+            existingConversation={existingConversation}
+            onAutosave={persistConversation}
           />
-        ) : null;
+        );
       case 'history':
-        return <HistoryView onBack={() => setView('selector')} />;
+        return (
+          <HistoryView
+            conversations={conversations}
+            onBack={() => setView('selector')}
+            onDeleteConversation={handleDeleteConversation}
+          />
+        );
       case 'creator':
         return <CharacterCreator onCharacterCreated={handleCharacterCreated} onBack={() => setView('selector')} />;
       case 'quests': {
@@ -397,12 +617,8 @@ Focus only on the student's contributions. Mark passed=true only if the learner 
             characters={allChars}
             onBack={() => setView('selector')}
             onQuestReady={startGeneratedQuest}
-            onCharacterCreated={(newChar) => {
-              const updated = [newChar, ...customCharacters];
-              setCustomCharacters(updated);
-              try {
-                localStorage.setItem(CUSTOM_CHARACTERS_KEY, JSON.stringify(updated));
-              } catch {}
+            onCharacterCreated={async (newChar) => {
+              await saveCustomCharacter(newChar);
             }}
           />
         );
@@ -518,6 +734,18 @@ Focus only on the student's contributions. Mark passed=true only if the learner 
     }
   };
 
+  if (isAuthLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[#1a1a1a] text-gray-300">
+        Loading your account…
+      </div>
+    );
+  }
+
+  if (!session) {
+    return <AuthGate />;
+  }
+
   return (
     <div className="relative min-h-screen bg-[#1a1a1a]">
       <div
@@ -530,6 +758,17 @@ Focus only on the student's contributions. Mark passed=true only if the learner 
         className="relative z-10 min-h-screen flex flex-col text-gray-200 font-serif p-4 sm:p-6 lg:p-8"
         style={{ background: environmentImageUrl ? 'transparent' : 'linear-gradient(to bottom right, #1a1a1a, #2b2b2b)' }}
       >
+        <div className="flex justify-end items-center gap-3 mb-4">
+          {session.user.email && (
+            <span className="text-sm text-gray-400 hidden sm:inline">{session.user.email}</span>
+          )}
+          <button
+            onClick={handleSignOut}
+            className="text-sm font-semibold text-amber-300 hover:text-amber-200 bg-gray-800/60 border border-gray-700 rounded-lg px-3 py-1.5 transition-colors"
+          >
+            Sign out
+          </button>
+        </div>
         <header className="text-center mb-8">
           <h1
             className="text-4xl sm:text-5xl md:text-6xl font-bold text-amber-300 tracking-wider"
@@ -540,7 +779,15 @@ Focus only on the student's contributions. Mark passed=true only if the learner 
           <p className="text-gray-400 mt-2 text-lg">Old world wisdom. New world classroom.</p>
         </header>
 
-        <main className="max-w-7xl w-full mx-auto flex-grow flex flex-col">{renderContent()}</main>
+        <main className="max-w-7xl w-full mx-auto flex-grow flex flex-col">
+          {isDataLoading ? (
+            <div className="flex flex-1 items-center justify-center text-gray-300 text-lg">
+              Syncing your library…
+            </div>
+          ) : (
+            renderContent()
+          )}
+        </main>
       </div>
     </div>
   );
