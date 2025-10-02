@@ -1,7 +1,9 @@
-import React, { useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import { GoogleGenAI, Type } from '@google/genai';
 import type { Character, PersonaData } from '../types';
 import { AMBIENCE_LIBRARY, AVAILABLE_VOICES } from '../constants';
+import { HISTORICAL_FIGURES_SUGGESTIONS } from '../suggestions';
+import DiceIcon from './icons/DiceIcon';
 
 interface CharacterCreatorProps {
   onCharacterCreated: (character: Character) => void;
@@ -40,18 +42,90 @@ const CharacterCreator: React.FC<CharacterCreatorProps> = ({ onCharacterCreated,
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [verificationSummary, setVerificationSummary] = useState<string | null>(null);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const suggestionsRef = useRef<HTMLDivElement | null>(null);
+
+  const filteredSuggestions = useMemo(() => {
+    const query = name.trim().toLowerCase();
+    if (!query) return HISTORICAL_FIGURES_SUGGESTIONS.slice(0, 12);
+    return HISTORICAL_FIGURES_SUGGESTIONS.filter(suggestion =>
+      suggestion.toLowerCase().includes(query)
+    ).slice(0, 12);
+  }, [name]);
+
+  const handleSuggestionClick = (suggestion: string) => {
+    setName(suggestion);
+    setShowSuggestions(false);
+  };
+
+  const handleRandomize = () => {
+    if (HISTORICAL_FIGURES_SUGGESTIONS.length === 0) return;
+    const randomSuggestion =
+      HISTORICAL_FIGURES_SUGGESTIONS[
+        Math.floor(Math.random() * HISTORICAL_FIGURES_SUGGESTIONS.length)
+      ];
+    setName(randomSuggestion);
+    setShowSuggestions(false);
+  };
+
+  const verifyHistoricalFigure = async (ai: GoogleGenAI, candidate: string) => {
+    const prompt = `You are the registrar of the School of the Ancients. Verify that "${candidate}" is a real historical figure who actually lived (not a mythological or purely fictional character). Respond in strict JSON with:
+- verified (boolean)
+- summary (one sentence about their historical significance)
+- era (the main centuries during which they lived)
+If you are not at least 80% confident in their historicity, set verified to false.`;
+
+    const response = await ai.models.generateContent({
+      model: 'gemini-2.5-flash',
+      contents: prompt,
+      config: {
+        responseMimeType: 'application/json',
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            verified: { type: Type.BOOLEAN },
+            summary: { type: Type.STRING },
+            era: { type: Type.STRING },
+          },
+          required: ['verified', 'summary', 'era'],
+        },
+      },
+    });
+
+    const verification = JSON.parse(response.text) as {
+      verified: boolean;
+      summary: string;
+      era: string;
+    };
+
+    return verification;
+  };
 
   const handleCreate = async () => {
     setError(null);
+    setVerificationSummary(null);
     const clean = name.trim();
     if (!clean) return setError('Enter a historical figure’s name.');
 
     try {
       setLoading(true);
-      setMsg('Summoning your mentor…');
+      setMsg('Consulting the academy rolls…');
 
       if (!process.env.API_KEY) throw new Error('API_KEY not set.');
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+
+      setMsg('Verifying the historical record…');
+      const verification = await verifyHistoricalFigure(ai, clean);
+
+      if (!verification.verified) {
+        setError('We could not verify this figure in the historical record. Try another name.');
+        setLoading(false);
+        return;
+      }
+
+      setVerificationSummary(`${verification.summary} (${verification.era})`);
+      setMsg('Summoning your mentor…');
 
       const availableAmbienceTags = AMBIENCE_LIBRARY.map(a => a.tag).join(', ');
       const personaPrompt = `Based on the historical figure "${clean}", return JSON with:
@@ -186,14 +260,56 @@ const CharacterCreator: React.FC<CharacterCreatorProps> = ({ onCharacterCreated,
           </div>
         )}
 
-        <label className="block text-sm font-medium text-gray-300 mb-2">Historical figure</label>
-        <input
-          type="text"
-          value={name}
-          onChange={e => setName(e.target.value)}
-          placeholder="Ada Lovelace, Marcus Aurelius, Alhazen, Confucius, ..."
-          className="w-full bg-gray-800 border border-gray-600 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-amber-400 text-lg mb-4"
-        />
+        <label className="block text-sm font-medium text-gray-300 mb-2">Whom shall we invite to the academy?</label>
+        <div className="relative mb-4" onFocus={() => setShowSuggestions(true)}>
+          <input
+            type="text"
+            value={name}
+            onChange={e => {
+              setName(e.target.value);
+              setShowSuggestions(true);
+            }}
+            onBlur={event => {
+              if (!suggestionsRef.current?.contains(event.relatedTarget as Node)) {
+                setShowSuggestions(false);
+              }
+            }}
+            placeholder="Begin typing a historical figure…"
+            className="w-full bg-gray-800 border border-gray-600 rounded-lg px-4 py-3 pr-12 focus:outline-none focus:ring-2 focus:ring-amber-400 text-lg"
+          />
+          <button
+            type="button"
+            onClick={handleRandomize}
+            className="absolute inset-y-0 right-0 flex items-center justify-center px-3 text-amber-300 hover:text-amber-200 focus:outline-none"
+            aria-label="Roll the dice for a random historical figure"
+          >
+            <DiceIcon className="w-6 h-6" />
+          </button>
+          {showSuggestions && filteredSuggestions.length > 0 && (
+            <div
+              ref={suggestionsRef}
+              className="absolute z-10 mt-2 w-full bg-gray-900 border border-gray-700 rounded-lg shadow-xl max-h-64 overflow-y-auto"
+            >
+              {filteredSuggestions.map(suggestion => (
+                <button
+                  key={suggestion}
+                  type="button"
+                  onMouseDown={event => event.preventDefault()}
+                  onClick={() => handleSuggestionClick(suggestion)}
+                  className="w-full text-left px-4 py-2 text-gray-200 hover:bg-amber-500/10 hover:text-amber-200 focus:bg-amber-500/10 focus:text-amber-200"
+                >
+                  {suggestion}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {verificationSummary && (
+          <div className="bg-emerald-900/40 border border-emerald-700 text-emerald-200 text-sm p-3 rounded-lg mb-4">
+            {verificationSummary}
+          </div>
+        )}
 
         <button
           onClick={handleCreate}

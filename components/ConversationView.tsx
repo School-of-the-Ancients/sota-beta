@@ -525,6 +525,12 @@ ${contextTranscript}
             </div>
             <h2 className="text-2xl sm:text-3xl font-bold text-amber-200 mt-8">{character.name}</h2>
             <p className="text-gray-400 italic">{character.title}</p>
+            {character.voiceAccent && (
+                <p className="text-xs text-gray-400 mt-2">
+                    <span className="uppercase tracking-wide text-gray-500 mr-1">Voice:</span>
+                    {character.voiceAccent}
+                </p>
+            )}
 
             {activeQuest && (
                 <div className="mt-4 p-4 w-full max-w-xs bg-amber-900/40 border border-amber-800/80 rounded-lg text-left animate-fade-in space-y-3">
