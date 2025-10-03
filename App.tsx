@@ -22,6 +22,7 @@ import QuestCreator from './components/QuestCreator'; // NEW
 import { CHARACTERS, QUESTS } from './constants';
 
 const CUSTOM_CHARACTERS_KEY = 'school-of-the-ancients-custom-characters';
+const CUSTOM_QUESTS_KEY = 'school-of-the-ancients-custom-quests';
 const HISTORY_KEY = 'school-of-the-ancients-history';
 const COMPLETED_QUESTS_KEY = 'school-of-the-ancients-completed-quests';
 
@@ -34,6 +35,24 @@ const loadConversations = (): SavedConversation[] => {
   } catch (error) {
     console.error('Failed to load conversation history:', error);
     return [];
+  }
+};
+
+const loadCustomQuests = (): Quest[] => {
+  try {
+    const stored = localStorage.getItem(CUSTOM_QUESTS_KEY);
+    return stored ? JSON.parse(stored) : [];
+  } catch (error) {
+    console.error('Failed to load custom quests:', error);
+    return [];
+  }
+};
+
+const saveCustomQuests = (quests: Quest[]) => {
+  try {
+    localStorage.setItem(CUSTOM_QUESTS_KEY, JSON.stringify(quests));
+  } catch (error) {
+    console.error('Failed to save custom quests:', error);
   }
 };
 
@@ -79,6 +98,7 @@ const App: React.FC = () => {
   >('selector');
 
   const [customCharacters, setCustomCharacters] = useState<Character[]>([]);
+  const [customQuests, setCustomQuests] = useState<Quest[]>([]);
   const [environmentImageUrl, setEnvironmentImageUrl] = useState<string | null>(null);
   const [activeQuest, setActiveQuest] = useState<Quest | null>(null);
 
@@ -113,6 +133,7 @@ const App: React.FC = () => {
     }
 
     setCompletedQuests(loadCompletedQuests());
+    setCustomQuests(loadCustomQuests());
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -167,6 +188,18 @@ const App: React.FC = () => {
 
   // NEW: handle a freshly-generated quest & mentor from QuestCreator
   const startGeneratedQuest = (quest: Quest, mentor: Character) => {
+    setCustomQuests((prev) => {
+      const existingIndex = prev.findIndex((q) => q.id === quest.id);
+      let updated: Quest[];
+      if (existingIndex > -1) {
+        updated = [...prev];
+        updated[existingIndex] = quest;
+      } else {
+        updated = [quest, ...prev];
+      }
+      saveCustomQuests(updated);
+      return updated;
+    });
     setActiveQuest(quest);
     setSelectedCharacter(mentor);
     setView('conversation');
@@ -381,14 +414,25 @@ Focus only on the student's contributions. Mark passed=true only if the learner 
         return <CharacterCreator onCharacterCreated={handleCharacterCreated} onBack={() => setView('selector')} />;
       case 'quests': {
         const allCharacters = [...customCharacters, ...CHARACTERS]; // FIX
+        const allQuests = [...customQuests, ...QUESTS];
+        const questHistory = loadConversations();
+        const inProgressQuestIds = Array.from(
+          new Set(
+            questHistory
+              .filter((entry) => entry.questId)
+              .map((entry) => entry.questId as string)
+          )
+        );
         return (
           <QuestsView
             onBack={() => setView('selector')}
             onSelectQuest={handleSelectQuest}
-            quests={QUESTS}
+            quests={allQuests}
             characters={allCharacters}
             completedQuestIds={completedQuests}
             onCreateQuest={() => setView('questCreator')}
+            inProgressQuestIds={inProgressQuestIds}
+            customQuestIds={customQuests.map((quest) => quest.id)}
           />
         );
       }
@@ -413,28 +457,34 @@ Focus only on the student's contributions. Mark passed=true only if the learner 
       default:
         return (
           <div className="text-center animate-fade-in">
+            {(() => {
+              const allQuestIds = new Set([...customQuests, ...QUESTS].map((quest) => quest.id));
+              const totalQuestCount = allQuestIds.size;
+              const completedCount = completedQuests.filter((id) => allQuestIds.has(id)).length;
+              const progressPercentage =
+                totalQuestCount > 0
+                  ? Math.min(100, Math.round((completedCount / totalQuestCount) * 100))
+                  : 0;
+
+              return (
+                <div className="max-w-3xl mx-auto mb-8 bg-gray-800/50 border border-gray-700 rounded-lg p-4 text-left">
+                  <p className="text-sm text-gray-300 mb-2 font-semibold">Quest Progress</p>
+                  <p className="text-xs uppercase tracking-wide text-gray-400 mb-3">
+                    {completedCount} of {totalQuestCount || 0} quests completed
+                  </p>
+                  <div className="w-full h-2 bg-gray-700 rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-amber-500 transition-all duration-500"
+                      style={{ width: `${progressPercentage}%` }}
+                    />
+                  </div>
+                </div>
+              );
+            })()}
             <p className="max-w-3xl mx-auto mb-8 text-gray-400 text-lg">
               Engage in real-time voice conversations with legendary minds from history, or embark on a guided Learning
               Quest to master a new subject.
             </p>
-
-            <div className="max-w-3xl mx-auto mb-8 bg-gray-800/50 border border-gray-700 rounded-lg p-4 text-left">
-              <p className="text-sm text-gray-300 mb-2 font-semibold">Quest Progress</p>
-              <p className="text-xs uppercase tracking-wide text-gray-400 mb-3">
-                {completedQuests.length} of {QUESTS.length} quests completed
-              </p>
-              <div className="w-full h-2 bg-gray-700 rounded-full overflow-hidden">
-                <div
-                  className="h-full bg-amber-500 transition-all duration-500"
-                  style={{
-                    width: `${Math.min(
-                      100,
-                      Math.round((completedQuests.length / Math.max(QUESTS.length, 1)) * 100)
-                    )}%`,
-                  }}
-                />
-              </div>
-            </div>
 
             {lastQuestOutcome && (
               <div

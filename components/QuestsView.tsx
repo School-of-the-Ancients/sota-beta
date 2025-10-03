@@ -7,6 +7,8 @@ interface QuestsViewProps {
   quests: Quest[];
   characters: Character[];
   completedQuestIds: string[];
+  inProgressQuestIds: string[];
+  customQuestIds?: string[];
   onSelectQuest: (quest: Quest) => void;
   onBack: () => void;
   onCreateQuest: () => void;
@@ -16,6 +18,8 @@ const QuestsView: React.FC<QuestsViewProps> = ({
   quests,
   characters,
   completedQuestIds,
+  inProgressQuestIds,
+  customQuestIds = [],
   onSelectQuest,
   onBack,
   onCreateQuest,
@@ -78,6 +82,13 @@ const QuestsView: React.FC<QuestsViewProps> = ({
             const character = characters.find(c => c.id === quest.characterId);
             if (!character) return null;
             const isCompleted = completedQuestIds.includes(quest.id);
+            const isInProgress = inProgressQuestIds.includes(quest.id) && !isCompleted;
+            const isCustom = customQuestIds.includes(quest.id);
+            const buttonLabel = isCompleted
+              ? 'Review Quest'
+              : isInProgress
+              ? 'Continue Quest'
+              : 'Begin Quest';
 
             return (
               <div
@@ -87,6 +98,20 @@ const QuestsView: React.FC<QuestsViewProps> = ({
                 <img src={character.portraitUrl} alt={character.name} className="w-24 h-24 rounded-full mx-auto mb-4 border-2 border-amber-300" />
                 <h3 className="font-bold text-xl text-amber-300">{quest.title}</h3>
                 <p className="text-sm text-gray-400 mt-1">with {character.name}</p>
+                <div className="flex justify-center gap-2 mt-2">
+                  {isCustom && (
+                    <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-teal-500/20 text-teal-200 text-xs font-semibold uppercase tracking-wide">
+                      <span className="w-2 h-2 rounded-full bg-teal-300" />
+                      Custom Quest
+                    </span>
+                  )}
+                  {isInProgress && (
+                    <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-amber-500/20 text-amber-200 text-xs font-semibold uppercase tracking-wide">
+                      <span className="w-2 h-2 rounded-full bg-amber-300" />
+                      In Progress
+                    </span>
+                  )}
+                </div>
                 {isCompleted && (
                   <div className="mt-2">
                     <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-700/30 text-emerald-200 text-xs font-semibold uppercase tracking-wide">
@@ -119,7 +144,7 @@ const QuestsView: React.FC<QuestsViewProps> = ({
                     onClick={() => onSelectQuest(quest)}
                     className={`mt-6 font-bold py-2 px-4 rounded-lg transition-colors w-full ${isCompleted ? 'bg-emerald-600 hover:bg-emerald-500 text-black' : 'bg-amber-600 hover:bg-amber-500 text-black'}`}
                 >
-                    {isCompleted ? 'Review Quest' : 'Begin Quest'}
+                    {buttonLabel}
                 </button>
               </div>
             );

@@ -152,10 +152,25 @@ const ConversationView: React.FC<ConversationViewProps> = ({ character, onEndCon
     };
 
     if (activeQuest) {
-      // Start a fresh conversation for a quest
-      setTranscript([greetingTurn]);
-      onEnvironmentUpdate(null);
-      sessionIdRef.current = `quest_${activeQuest.id}_${Date.now()}`;
+      const history = loadConversations();
+      const existingQuestConversation = history.find(
+        (c) => c.questId === activeQuest.id
+      );
+
+      if (existingQuestConversation) {
+        sessionIdRef.current = existingQuestConversation.id;
+        setTranscript(
+          existingQuestConversation.transcript.length > 0
+            ? [...existingQuestConversation.transcript]
+            : [greetingTurn]
+        );
+        onEnvironmentUpdate(existingQuestConversation.environmentImageUrl || null);
+      } else {
+        // Start a fresh conversation for a quest
+        sessionIdRef.current = `quest_${activeQuest.id}_${Date.now()}`;
+        setTranscript([greetingTurn]);
+        onEnvironmentUpdate(null);
+      }
     } else {
       const history = loadConversations();
       const existingConversation = history.find(c => c.characterId === character.id);
