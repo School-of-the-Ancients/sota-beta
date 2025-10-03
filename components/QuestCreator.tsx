@@ -382,8 +382,9 @@ Return JSON with:
 
         <div className="grid sm:grid-cols-3 gap-3 mb-6">
           <div>
-            <label className="block text-xs uppercase tracking-wide text-gray-400 mb-1">Difficulty</label>
+            <label htmlFor="difficulty-select" className="block text-xs uppercase tracking-wide text-gray-400 mb-1">Difficulty</label>
             <select
+              id="difficulty-select"
               value={prefs.difficulty}
               onChange={e => setPrefs(p => ({ ...p, difficulty: e.target.value }))}
               className="w-full bg-gray-800 border border-gray-600 rounded-lg px-3 py-2 text-gray-200"
@@ -395,8 +396,9 @@ Return JSON with:
             </select>
           </div>
           <div>
-            <label className="block text-xs uppercase tracking-wide text-gray-400 mb-1">Style</label>
+            <label htmlFor="style-select" className="block text-xs uppercase tracking-wide text-gray-400 mb-1">Style</label>
             <select
+              id="style-select"
               value={prefs.style}
               onChange={e => setPrefs(p => ({ ...p, style: e.target.value }))}
               className="w-full bg-gray-800 border border-gray-600 rounded-lg px-3 py-2 text-gray-200"
@@ -410,8 +412,9 @@ Return JSON with:
             </select>
           </div>
           <div>
-            <label className="block text-xs uppercase tracking-wide text-gray-400 mb-1">Time</label>
+            <label htmlFor="time-select" className="block text-xs uppercase tracking-wide text-gray-400 mb-1">Time</label>
             <select
+              id="time-select"
               value={prefs.time}
               onChange={e => setPrefs(p => ({ ...p, time: e.target.value }))}
               className="w-full bg-gray-800 border border-gray-600 rounded-lg px-3 py-2 text-gray-200"
