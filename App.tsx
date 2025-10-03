@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { GoogleGenAI, Type } from '@google/genai';
 
 import type {
@@ -24,6 +24,7 @@ import { CHARACTERS, QUESTS } from './constants';
 const CUSTOM_CHARACTERS_KEY = 'school-of-the-ancients-custom-characters';
 const HISTORY_KEY = 'school-of-the-ancients-history';
 const COMPLETED_QUESTS_KEY = 'school-of-the-ancients-completed-quests';
+const CUSTOM_QUESTS_KEY = 'school-of-the-ancients-custom-quests';
 
 // ---- Local storage helpers -------------------------------------------------
 
@@ -70,6 +71,24 @@ const saveCompletedQuests = (questIds: string[]) => {
   }
 };
 
+const loadCustomQuests = (): Quest[] => {
+  try {
+    const stored = localStorage.getItem(CUSTOM_QUESTS_KEY);
+    return stored ? JSON.parse(stored) : [];
+  } catch (error) {
+    console.error('Failed to load custom quests:', error);
+    return [];
+  }
+};
+
+const saveCustomQuests = (quests: Quest[]) => {
+  try {
+    localStorage.setItem(CUSTOM_QUESTS_KEY, JSON.stringify(quests));
+  } catch (error) {
+    console.error('Failed to save custom quests:', error);
+  }
+};
+
 // ---- App -------------------------------------------------------------------
 
 const App: React.FC = () => {
@@ -79,6 +98,7 @@ const App: React.FC = () => {
   >('selector');
 
   const [customCharacters, setCustomCharacters] = useState<Character[]>([]);
+  const [customQuests, setCustomQuests] = useState<Quest[]>([]);
   const [environmentImageUrl, setEnvironmentImageUrl] = useState<string | null>(null);
   const [activeQuest, setActiveQuest] = useState<Quest | null>(null);
 
@@ -87,10 +107,27 @@ const App: React.FC = () => {
 
   const [completedQuests, setCompletedQuests] = useState<string[]>([]);
   const [lastQuestOutcome, setLastQuestOutcome] = useState<QuestAssessment | null>(null);
+  const [inProgressQuestIds, setInProgressQuestIds] = useState<string[]>([]);
+
+  const allQuests = useMemo(() => [...customQuests, ...QUESTS], [customQuests]);
+
+  const syncQuestProgress = useCallback(() => {
+    const history = loadConversations();
+    const inProgress = new Set<string>();
+    history.forEach((conversation) => {
+      if (!conversation.questId) return;
+      if (conversation.questAssessment?.passed) return;
+      if (conversation.transcript && conversation.transcript.length > 1) {
+        inProgress.add(conversation.questId);
+      }
+    });
+    setInProgressQuestIds(Array.from(inProgress));
+  }, []);
 
   // On mount: load saved characters, url param character, and progress
   useEffect(() => {
     let loadedCustomCharacters: Character[] = [];
+    let loadedCustomQuests: Quest[] = [];
     try {
       const storedCharacters = localStorage.getItem(CUSTOM_CHARACTERS_KEY);
       if (storedCharacters) {
@@ -99,6 +136,11 @@ const App: React.FC = () => {
       }
     } catch (e) {
       console.error('Failed to load custom characters:', e);
+    }
+
+    loadedCustomQuests = loadCustomQuests();
+    if (loadedCustomQuests.length > 0) {
+      setCustomQuests(loadedCustomQuests);
     }
 
     const urlParams = new URLSearchParams(window.location.search);
@@ -113,8 +155,9 @@ const App: React.FC = () => {
     }
 
     setCompletedQuests(loadCompletedQuests());
+    syncQuestProgress();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [syncQuestProgress]);
 
   // ---- Navigation helpers ----
 
@@ -167,6 +210,18 @@ const App: React.FC = () => {
 
   // NEW: handle a freshly-generated quest & mentor from QuestCreator
   const startGeneratedQuest = (quest: Quest, mentor: Character) => {
+    setCustomQuests((prev) => {
+      const existingIndex = prev.findIndex((q) => q.id === quest.id);
+      let updated: Quest[];
+      if (existingIndex > -1) {
+        updated = [...prev];
+        updated[existingIndex] = quest;
+      } else {
+        updated = [quest, ...prev];
+      }
+      saveCustomQuests(updated);
+      return updated;
+    });
     setActiveQuest(quest);
     setSelectedCharacter(mentor);
     setView('conversation');
@@ -343,6 +398,7 @@ Focus only on the student's contributions. Mark passed=true only if the learner 
       }
 
       saveConversationToLocalStorage(updatedConversation);
+      syncQuestProgress();
     } catch (error) {
       console.error('Failed to finalize conversation:', error);
     } finally {
@@ -380,15 +436,16 @@ Focus only on the student's contributions. Mark passed=true only if the learner 
       case 'creator':
         return <CharacterCreator onCharacterCreated={handleCharacterCreated} onBack={() => setView('selector')} />;
       case 'quests': {
-        const allCharacters = [...customCharacters, ...CHARACTERS]; // FIX
+        const allCharacters = [...customCharacters, ...CHARACTERS];
         return (
           <QuestsView
             onBack={() => setView('selector')}
             onSelectQuest={handleSelectQuest}
-            quests={QUESTS}
+            quests={allQuests}
             characters={allCharacters}
             completedQuestIds={completedQuests}
             onCreateQuest={() => setView('questCreator')}
+            inProgressQuestIds={inProgressQuestIds}
           />
         );
       }
@@ -421,7 +478,7 @@ Focus only on the student's contributions. Mark passed=true only if the learner 
             <div className="max-w-3xl mx-auto mb-8 bg-gray-800/50 border border-gray-700 rounded-lg p-4 text-left">
               <p className="text-sm text-gray-300 mb-2 font-semibold">Quest Progress</p>
               <p className="text-xs uppercase tracking-wide text-gray-400 mb-3">
-                {completedQuests.length} of {QUESTS.length} quests completed
+                {completedQuests.length} of {allQuests.length} quests completed
               </p>
               <div className="w-full h-2 bg-gray-700 rounded-full overflow-hidden">
                 <div
@@ -429,7 +486,9 @@ Focus only on the student's contributions. Mark passed=true only if the learner 
                   style={{
                     width: `${Math.min(
                       100,
-                      Math.round((completedQuests.length / Math.max(QUESTS.length, 1)) * 100)
+                      Math.round(
+                        (completedQuests.length / Math.max(allQuests.length, 1)) * 100
+                      )
                     )}%`,
                   }}
                 />
