@@ -81,6 +81,7 @@ const App: React.FC = () => {
   const [customCharacters, setCustomCharacters] = useState<Character[]>([]);
   const [environmentImageUrl, setEnvironmentImageUrl] = useState<string | null>(null);
   const [activeQuest, setActiveQuest] = useState<Quest | null>(null);
+  const [resumedConversation, setResumedConversation] = useState<SavedConversation | null>(null);
 
   // end-conversation save/AI-eval flag
   const [isSaving, setIsSaving] = useState(false);
@@ -120,6 +121,7 @@ const App: React.FC = () => {
     setSelectedCharacter(character);
     setView('conversation');
     setActiveQuest(null); // clear any quest when directly picking a character
+    setResumedConversation(null);
     const url = new URL(window.location.href);
     url.searchParams.set('character', character.id);
     window.history.pushState({}, '', url);
@@ -129,6 +131,20 @@ const App: React.FC = () => {
     const allCharacters = [...customCharacters, ...CHARACTERS];
     const characterForQuest = allCharacters.find((c) => c.id === quest.characterId);
     if (characterForQuest) {
+      const conversationHistory = loadConversations();
+      const existingQuestConversation = conversationHistory.find(
+        (conversation) => conversation.questId === quest.id
+      );
+
+      if (
+        existingQuestConversation &&
+        (!existingQuestConversation.questAssessment || !existingQuestConversation.questAssessment.passed)
+      ) {
+        setResumedConversation(existingQuestConversation);
+      } else {
+        setResumedConversation(null);
+      }
+
       setActiveQuest(quest);
       setSelectedCharacter(characterForQuest);
       setView('conversation');
@@ -167,6 +183,7 @@ const App: React.FC = () => {
   const startGeneratedQuest = (quest: Quest, mentor: Character) => {
     setActiveQuest(quest);
     setSelectedCharacter(mentor);
+    setResumedConversation(null);
     setView('conversation');
     const url = new URL(window.location.href);
     url.searchParams.set('character', mentor.id);
@@ -354,6 +371,7 @@ Focus only on the student's contributions. Mark passed=true only if the learner 
       setView('selector');
       setEnvironmentImageUrl(null);
       setActiveQuest(null);
+      setResumedConversation(null);
       window.history.pushState({}, '', window.location.pathname);
     }
   };
@@ -370,6 +388,7 @@ Focus only on the student's contributions. Mark passed=true only if the learner 
             environmentImageUrl={environmentImageUrl}
             onEnvironmentUpdate={setEnvironmentImageUrl}
             activeQuest={activeQuest}
+            resumedConversation={resumedConversation}
             isSaving={isSaving} // pass saving state
           />
         ) : null;

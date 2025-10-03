@@ -21,6 +21,7 @@ interface ConversationViewProps {
   environmentImageUrl: string | null;
   onEnvironmentUpdate: (url: string | null) => void;
   activeQuest: Quest | null;
+  resumedConversation: SavedConversation | null;
   isSaving: boolean;
 }
 
@@ -99,7 +100,15 @@ const ArtifactDisplay: React.FC<{ artifact: NonNullable<ConversationTurn['artifa
     );
   };
 
-const ConversationView: React.FC<ConversationViewProps> = ({ character, onEndConversation, environmentImageUrl, onEnvironmentUpdate, activeQuest, isSaving }) => {
+const ConversationView: React.FC<ConversationViewProps> = ({
+  character,
+  onEndConversation,
+  environmentImageUrl,
+  onEnvironmentUpdate,
+  activeQuest,
+  resumedConversation,
+  isSaving,
+}) => {
   const [transcript, setTranscript] = useState<ConversationTurn[]>([]);
   const [textInput, setTextInput] = useState('');
   const [dynamicSuggestions, setDynamicSuggestions] = useState<string[]>([]);
@@ -152,25 +161,32 @@ const ConversationView: React.FC<ConversationViewProps> = ({ character, onEndCon
     };
 
     if (activeQuest) {
-      // Start a fresh conversation for a quest
+      if (resumedConversation) {
+        const hasExistingTranscript = resumedConversation.transcript.length > 0;
+        setTranscript(hasExistingTranscript ? resumedConversation.transcript : [greetingTurn]);
+        onEnvironmentUpdate(resumedConversation.environmentImageUrl || null);
+        sessionIdRef.current = resumedConversation.id;
+      } else {
+        setTranscript([greetingTurn]);
+        onEnvironmentUpdate(null);
+        sessionIdRef.current = `quest_${activeQuest.id}_${Date.now()}`;
+      }
+      return;
+    }
+
+    const history = loadConversations();
+    const existingConversation = history.find(c => c.characterId === character.id);
+    if (existingConversation && existingConversation.transcript.length > 0) {
+      setTranscript(existingConversation.transcript);
+      onEnvironmentUpdate(existingConversation.environmentImageUrl || null);
+      sessionIdRef.current = existingConversation.id;
+    } else {
+      // This is a new conversation or an empty one from history
       setTranscript([greetingTurn]);
       onEnvironmentUpdate(null);
-      sessionIdRef.current = `quest_${activeQuest.id}_${Date.now()}`;
-    } else {
-      const history = loadConversations();
-      const existingConversation = history.find(c => c.characterId === character.id);
-      if (existingConversation && existingConversation.transcript.length > 0) {
-          setTranscript(existingConversation.transcript);
-          onEnvironmentUpdate(existingConversation.environmentImageUrl || null);
-          sessionIdRef.current = existingConversation.id; 
-      } else {
-          // This is a new conversation or an empty one from history
-          setTranscript([greetingTurn]);
-          onEnvironmentUpdate(null);
-          sessionIdRef.current = existingConversation ? existingConversation.id : `conv_${character.id}_${Date.now()}`;
-      }
+      sessionIdRef.current = existingConversation ? existingConversation.id : `conv_${character.id}_${Date.now()}`;
     }
-  }, [character, onEnvironmentUpdate, activeQuest]);
+  }, [character, onEnvironmentUpdate, activeQuest, resumedConversation]);
 
     // Cycle through placeholders for text input
     useEffect(() => {
