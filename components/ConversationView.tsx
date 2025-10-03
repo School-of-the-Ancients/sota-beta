@@ -151,24 +151,36 @@ const ConversationView: React.FC<ConversationViewProps> = ({ character, onEndCon
       text: character.greeting,
     };
 
+    const history = loadConversations();
+
     if (activeQuest) {
-      // Start a fresh conversation for a quest
+      const existingQuestConversation = history.find(
+        c => c.questId === activeQuest.id && c.characterId === character.id,
+      );
+
+      if (existingQuestConversation && existingQuestConversation.transcript.length > 0) {
+        setTranscript(existingQuestConversation.transcript);
+        onEnvironmentUpdate(existingQuestConversation.environmentImageUrl || null);
+        sessionIdRef.current = existingQuestConversation.id;
+        return;
+      }
+
       setTranscript([greetingTurn]);
       onEnvironmentUpdate(null);
       sessionIdRef.current = `quest_${activeQuest.id}_${Date.now()}`;
+      return;
+    }
+
+    const existingConversation = history.find(c => c.characterId === character.id);
+    if (existingConversation && existingConversation.transcript.length > 0) {
+      setTranscript(existingConversation.transcript);
+      onEnvironmentUpdate(existingConversation.environmentImageUrl || null);
+      sessionIdRef.current = existingConversation.id;
     } else {
-      const history = loadConversations();
-      const existingConversation = history.find(c => c.characterId === character.id);
-      if (existingConversation && existingConversation.transcript.length > 0) {
-          setTranscript(existingConversation.transcript);
-          onEnvironmentUpdate(existingConversation.environmentImageUrl || null);
-          sessionIdRef.current = existingConversation.id; 
-      } else {
-          // This is a new conversation or an empty one from history
-          setTranscript([greetingTurn]);
-          onEnvironmentUpdate(null);
-          sessionIdRef.current = existingConversation ? existingConversation.id : `conv_${character.id}_${Date.now()}`;
-      }
+      // This is a new conversation or an empty one from history
+      setTranscript([greetingTurn]);
+      onEnvironmentUpdate(null);
+      sessionIdRef.current = existingConversation ? existingConversation.id : `conv_${character.id}_${Date.now()}`;
     }
   }, [character, onEnvironmentUpdate, activeQuest]);
 
