@@ -110,12 +110,11 @@ If you are not at least 80% confident in their historicity, set verified to fals
 
     try {
       setLoading(true);
-      setMsg('Consulting the academy rolls…');
+      setMsg('Verifying historical figure…');
 
       if (!process.env.API_KEY) throw new Error('API_KEY not set.');
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
-      setMsg('Verifying the historical record…');
       const verification = await verifyHistoricalFigure(ai, clean);
 
       if (!verification.verified) {
@@ -125,7 +124,7 @@ If you are not at least 80% confident in their historicity, set verified to fals
       }
 
       setVerificationSummary(`${verification.summary} (${verification.era})`);
-      setMsg('Summoning your mentor…');
+      setMsg('Researching historical figure…');
 
       const availableAmbienceTags = AMBIENCE_LIBRARY.map(a => a.tag).join(', ');
       const personaPrompt = `Based on the historical figure "${clean}", return JSON with:
@@ -183,6 +182,7 @@ If you are not at least 80% confident in their historicity, set verified to fals
       // --- SAFE portrait generation with fallback ---
       let portraitUrl = makeFallbackAvatar(clean, persona.title);
       try {
+        setMsg('Painting portrait…');
         const imgResp = await ai.models.generateImages({
           model: 'imagen-4.0-generate-001',
           prompt: `A realistic, academic portrait of ${clean}, ${persona.title}. Dignified, historical lighting, 1:1, museum catalogue style.`,
