@@ -90,10 +90,12 @@ const App: React.FC = () => {
 
   // On mount: load saved characters, url param character, and progress
   useEffect(() => {
+    let loadedCustomCharacters: Character[] = [];
     try {
       const storedCharacters = localStorage.getItem(CUSTOM_CHARACTERS_KEY);
       if (storedCharacters) {
-        setCustomCharacters(JSON.parse(storedCharacters));
+        loadedCustomCharacters = JSON.parse(storedCharacters);
+        setCustomCharacters(loadedCustomCharacters);
       }
     } catch (e) {
       console.error('Failed to load custom characters:', e);
@@ -102,7 +104,7 @@ const App: React.FC = () => {
     const urlParams = new URLSearchParams(window.location.search);
     const characterId = urlParams.get('character');
     if (characterId) {
-      const allCharacters = [...customCharacters, ...CHARACTERS];
+      const allCharacters = [...loadedCustomCharacters, ...CHARACTERS];
       const characterFromUrl = allCharacters.find((c) => c.id === characterId);
       if (characterFromUrl) {
         setSelectedCharacter(characterFromUrl);
