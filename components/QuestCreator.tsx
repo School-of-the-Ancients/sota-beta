@@ -71,17 +71,16 @@ const QuestCreator: React.FC<QuestCreatorProps> = ({
 
     const availableAmbienceTags = AMBIENCE_LIBRARY.map(a => a.tag).join(', ');
     const personaPrompt = `Based on the historical figure "${name}", return JSON with:
-- title
-- bio (first person)
-- greeting (first person, short)
-- timeframe (centuries)
-- expertise (comma list)
-- passion (short phrase)
-- systemInstruction (act as mentor; emphasize Socratic prompts; may call changeEnvironment() or displayArtifact() as function-only lines)
-- suggestedPrompts (3, one must be environmental/visual)
-- voiceName (one of: ${AVAILABLE_VOICES.join(', ')})
-- voiceAccent (describe the precise accent, vocal gender, and tone the mentor should maintain)
-- ambienceTag (one of: ${availableAmbienceTags})`;
+- title: A concise, descriptive title (e.g., The Father of Modern Physics).
+        - bio: A short, engaging biography in the first person.
+        - greeting: A brief, welcoming opening line for a conversation, in the first person, that invites the user to ask a question. For example, "Greetings. I am Albert Einstein. It is a pleasure to ponder the universe with you. What is on your mind?"
+        - timeframe: The centuries they were active in (e.g., 17th and 18th centuries).
+        - expertise: A comma-separated list of their key areas of expertise.
+        - passion: A short phrase describing their core motivation or passion.
+        - systemInstruction: act as mentor; emphasize Socratic prompts; may call changeEnvironment() or displayArtifact() as function-only lines. The prompt must also specify a distinct, authentic-sounding accent based on their origin. The tone should match their personality.
+        - suggestedPrompts: Three engaging, open-ended questions a user could ask this character. At least one should suggest using a visual ability (e.g., "Take me to...", "Show me...").
+        - voiceName: Based on their personality and historical context, suggest the most suitable voice from this list: ${AVAILABLE_VOICES.join(', ')}. Return only the name of the voice.
+        - ambienceTag: Based on the character's typical environment, select the most fitting keyword from this list: ${availableAmbienceTags}.`;
 
     const personaResp = await ai.models.generateContent({
       model: 'gemini-2.5-flash',
