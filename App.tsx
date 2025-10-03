@@ -24,6 +24,7 @@ import { CHARACTERS, QUESTS } from './constants';
 const CUSTOM_CHARACTERS_KEY = 'school-of-the-ancients-custom-characters';
 const HISTORY_KEY = 'school-of-the-ancients-history';
 const COMPLETED_QUESTS_KEY = 'school-of-the-ancients-completed-quests';
+const CUSTOM_QUESTS_KEY = 'school-of-the-ancients-custom-quests';
 
 // ---- Local storage helpers -------------------------------------------------
 
@@ -33,6 +34,16 @@ const loadConversations = (): SavedConversation[] => {
     return rawHistory ? JSON.parse(rawHistory) : [];
   } catch (error) {
     console.error('Failed to load conversation history:', error);
+    return [];
+  }
+};
+
+const loadCustomQuests = (): Quest[] => {
+  try {
+    const stored = localStorage.getItem(CUSTOM_QUESTS_KEY);
+    return stored ? JSON.parse(stored) : [];
+  } catch (error) {
+    console.error('Failed to load custom quests:', error);
     return [];
   }
 };
@@ -70,6 +81,14 @@ const saveCompletedQuests = (questIds: string[]) => {
   }
 };
 
+const saveCustomQuests = (quests: Quest[]) => {
+  try {
+    localStorage.setItem(CUSTOM_QUESTS_KEY, JSON.stringify(quests));
+  } catch (error) {
+    console.error('Failed to save custom quests:', error);
+  }
+};
+
 // ---- App -------------------------------------------------------------------
 
 const App: React.FC = () => {
@@ -81,6 +100,7 @@ const App: React.FC = () => {
   const [customCharacters, setCustomCharacters] = useState<Character[]>([]);
   const [environmentImageUrl, setEnvironmentImageUrl] = useState<string | null>(null);
   const [activeQuest, setActiveQuest] = useState<Quest | null>(null);
+  const [customQuests, setCustomQuests] = useState<Quest[]>([]);
 
   // end-conversation save/AI-eval flag
   const [isSaving, setIsSaving] = useState(false);
@@ -113,8 +133,21 @@ const App: React.FC = () => {
     }
 
     setCompletedQuests(loadCompletedQuests());
+    setCustomQuests(loadCustomQuests());
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    const validQuestIds = new Set([...QUESTS.map((quest) => quest.id), ...customQuests.map((quest) => quest.id)]);
+    setCompletedQuests((prev) => {
+      const filtered = prev.filter((id) => validQuestIds.has(id));
+      if (filtered.length !== prev.length) {
+        saveCompletedQuests(filtered);
+        return filtered;
+      }
+      return prev;
+    });
+  }, [customQuests]);
 
   // ---- Navigation helpers ----
 
@@ -162,11 +195,41 @@ const App: React.FC = () => {
       } catch (e) {
         console.error('Failed to delete custom character:', e);
       }
+
+      setCustomQuests((prev) => {
+        const filtered = prev.filter((quest) => quest.characterId !== characterId);
+        if (filtered.length !== prev.length) {
+          saveCustomQuests(filtered);
+          setCompletedQuests((prevCompleted) => {
+            const validIds = new Set([
+              ...QUESTS.map((quest) => quest.id),
+              ...filtered.map((quest) => quest.id),
+            ]);
+            const sanitized = prevCompleted.filter((id) => validIds.has(id));
+            if (sanitized.length !== prevCompleted.length) {
+              saveCompletedQuests(sanitized);
+              return sanitized;
+            }
+            return prevCompleted;
+          });
+        }
+        return filtered;
+      });
     }
   };
 
   // NEW: handle a freshly-generated quest & mentor from QuestCreator
   const startGeneratedQuest = (quest: Quest, mentor: Character) => {
+    setCustomQuests((prev) => {
+      const existingIndex = prev.findIndex((existing) => existing.id === quest.id);
+      const updated =
+        existingIndex > -1
+          ? prev.map((existing) => (existing.id === quest.id ? quest : existing))
+          : [quest, ...prev];
+      saveCustomQuests(updated);
+      return updated;
+    });
+
     setActiveQuest(quest);
     setSelectedCharacter(mentor);
     setView('conversation');
@@ -381,14 +444,16 @@ Focus only on the student's contributions. Mark passed=true only if the learner 
         return <CharacterCreator onCharacterCreated={handleCharacterCreated} onBack={() => setView('selector')} />;
       case 'quests': {
         const allCharacters = [...customCharacters, ...CHARACTERS]; // FIX
+        const allQuests = [...customQuests, ...QUESTS];
         return (
           <QuestsView
             onBack={() => setView('selector')}
             onSelectQuest={handleSelectQuest}
-            quests={QUESTS}
+            quests={allQuests}
             characters={allCharacters}
             completedQuestIds={completedQuests}
             onCreateQuest={() => setView('questCreator')}
+            customQuestIds={customQuests.map((quest) => quest.id)}
           />
         );
       }
@@ -411,6 +476,10 @@ Focus only on the student's contributions. Mark passed=true only if the learner 
       }
       case 'selector':
       default:
+        const availableQuestIds = new Set([...QUESTS, ...customQuests].map((quest) => quest.id));
+        const totalQuests = availableQuestIds.size;
+        const completedCount = completedQuests.filter((id) => availableQuestIds.has(id)).length;
+        const progressPercent = totalQuests === 0 ? 0 : Math.min(100, Math.round((completedCount / totalQuests) * 100));
         return (
           <div className="text-center animate-fade-in">
             <p className="max-w-3xl mx-auto mb-8 text-gray-400 text-lg">
@@ -421,16 +490,13 @@ Focus only on the student's contributions. Mark passed=true only if the learner 
             <div className="max-w-3xl mx-auto mb-8 bg-gray-800/50 border border-gray-700 rounded-lg p-4 text-left">
               <p className="text-sm text-gray-300 mb-2 font-semibold">Quest Progress</p>
               <p className="text-xs uppercase tracking-wide text-gray-400 mb-3">
-                {completedQuests.length} of {QUESTS.length} quests completed
+                {completedCount} of {totalQuests} quests completed
               </p>
               <div className="w-full h-2 bg-gray-700 rounded-full overflow-hidden">
                 <div
                   className="h-full bg-amber-500 transition-all duration-500"
                   style={{
-                    width: `${Math.min(
-                      100,
-                      Math.round((completedQuests.length / Math.max(QUESTS.length, 1)) * 100)
-                    )}%`,
+                    width: `${progressPercent}%`,
                   }}
                 />
               </div>

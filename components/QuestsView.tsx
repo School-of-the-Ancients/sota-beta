@@ -7,6 +7,7 @@ interface QuestsViewProps {
   quests: Quest[];
   characters: Character[];
   completedQuestIds: string[];
+  customQuestIds: string[];
   onSelectQuest: (quest: Quest) => void;
   onBack: () => void;
   onCreateQuest: () => void;
@@ -16,10 +17,91 @@ const QuestsView: React.FC<QuestsViewProps> = ({
   quests,
   characters,
   completedQuestIds,
+  customQuestIds,
   onSelectQuest,
   onBack,
   onCreateQuest,
 }) => {
+  const customQuestSet = React.useMemo(() => new Set(customQuestIds), [customQuestIds]);
+  const customQuests = React.useMemo(
+    () => quests.filter((quest) => customQuestSet.has(quest.id)),
+    [quests, customQuestSet]
+  );
+  const featuredQuests = React.useMemo(
+    () => quests.filter((quest) => !customQuestSet.has(quest.id)),
+    [quests, customQuestSet]
+  );
+
+  const renderQuestCard = (quest: Quest, isCustom: boolean) => {
+    const character = characters.find((c) => c.id === quest.characterId);
+    if (!character) return null;
+    const isCompleted = completedQuestIds.includes(quest.id);
+
+    const buttonLabel = isCompleted ? 'Review Quest' : isCustom ? 'Continue Quest' : 'Begin Quest';
+
+    return (
+      <div
+        key={quest.id}
+        className={`bg-gray-800/50 p-5 rounded-lg border flex flex-col text-center transition-colors duration-300 ${
+          isCompleted
+            ? 'border-emerald-600/80 shadow-lg shadow-emerald-900/40'
+            : 'border-gray-700 hover:border-amber-400'
+        }`}
+      >
+        <img
+          src={character.portraitUrl}
+          alt={character.name}
+          className="w-24 h-24 rounded-full mx-auto mb-4 border-2 border-amber-300"
+        />
+        <h3 className="font-bold text-xl text-amber-300">{quest.title}</h3>
+        <p className="text-sm text-gray-400 mt-1">with {character.name}</p>
+        {isCustom && (
+          <span className="mt-2 inline-flex items-center justify-center px-3 py-1 rounded-full bg-teal-500/20 text-teal-200 text-xs font-semibold uppercase tracking-wide">
+            Custom Quest
+          </span>
+        )}
+        {isCompleted && (
+          <div className="mt-2">
+            <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-700/30 text-emerald-200 text-xs font-semibold uppercase tracking-wide">
+              <span className="w-2 h-2 rounded-full bg-emerald-300" />
+              Completed
+            </span>
+          </div>
+        )}
+        <div className="mt-3 mb-4">
+          <span className="inline-flex items-center justify-center px-3 py-1 rounded-full bg-amber-500/20 text-amber-200 text-xs font-semibold uppercase tracking-wide">
+            {quest.duration}
+          </span>
+        </div>
+        <p className="text-gray-300 text-sm mb-4">{quest.description}</p>
+        <div className="text-left text-sm text-gray-300 space-y-3 flex-grow">
+          <div>
+            <p className="font-semibold text-amber-200 uppercase tracking-wide text-xs mb-1">Objective</p>
+            <p className="text-gray-300 leading-relaxed">{quest.objective}</p>
+          </div>
+          <div>
+            <p className="font-semibold text-amber-200 uppercase tracking-wide text-xs mb-1">Focus Points</p>
+            <ul className="list-disc list-inside space-y-1 text-gray-300/90">
+              {quest.focusPoints.map((point) => (
+                <li key={point}>{point}</li>
+              ))}
+            </ul>
+          </div>
+        </div>
+        <button
+          onClick={() => onSelectQuest(quest)}
+          className={`mt-6 font-bold py-2 px-4 rounded-lg transition-colors w-full ${
+            isCompleted ? 'bg-emerald-600 hover:bg-emerald-500 text-black' : 'bg-amber-600 hover:bg-amber-500 text-black'
+          }`}
+        >
+          {buttonLabel}
+        </button>
+      </div>
+    );
+  };
+
+  const hasQuests = customQuests.length + featuredQuests.length > 0;
+
   return (
     <div className="max-w-4xl mx-auto animate-fade-in">
       <div className="flex justify-between items-center mb-6">
@@ -70,60 +152,37 @@ const QuestsView: React.FC<QuestsViewProps> = ({
         </div>
       </div>
 
-      {quests.length === 0 ? (
+      {!hasQuests ? (
         <p className="text-center text-gray-400 bg-gray-800/50 p-8 rounded-lg">No quests available yet.</p>
       ) : (
-        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {quests.map((quest) => {
-            const character = characters.find(c => c.id === quest.characterId);
-            if (!character) return null;
-            const isCompleted = completedQuestIds.includes(quest.id);
-
-            return (
-              <div
-                key={quest.id}
-                className={`bg-gray-800/50 p-5 rounded-lg border flex flex-col text-center transition-colors duration-300 ${isCompleted ? 'border-emerald-600/80 shadow-lg shadow-emerald-900/40' : 'border-gray-700 hover:border-amber-400'}`}
-              >
-                <img src={character.portraitUrl} alt={character.name} className="w-24 h-24 rounded-full mx-auto mb-4 border-2 border-amber-300" />
-                <h3 className="font-bold text-xl text-amber-300">{quest.title}</h3>
-                <p className="text-sm text-gray-400 mt-1">with {character.name}</p>
-                {isCompleted && (
-                  <div className="mt-2">
-                    <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-700/30 text-emerald-200 text-xs font-semibold uppercase tracking-wide">
-                      <span className="w-2 h-2 rounded-full bg-emerald-300" />
-                      Completed
-                    </span>
-                  </div>
-                )}
-                <div className="mt-3 mb-4">
-                  <span className="inline-flex items-center justify-center px-3 py-1 rounded-full bg-amber-500/20 text-amber-200 text-xs font-semibold uppercase tracking-wide">
-                    {quest.duration}
-                  </span>
+        <div className="space-y-12">
+          {customQuests.length > 0 && (
+            <div>
+              <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3 mb-4">
+                <div>
+                  <h3 className="text-2xl font-semibold text-amber-200">Your Custom Quests</h3>
+                  <p className="text-sm text-gray-400">Continue the bespoke lessons you crafted with the ancients.</p>
                 </div>
-                <p className="text-gray-300 text-sm mb-4">{quest.description}</p>
-                <div className="text-left text-sm text-gray-300 space-y-3 flex-grow">
-                  <div>
-                    <p className="font-semibold text-amber-200 uppercase tracking-wide text-xs mb-1">Objective</p>
-                    <p className="text-gray-300 leading-relaxed">{quest.objective}</p>
-                  </div>
-                  <div>
-                    <p className="font-semibold text-amber-200 uppercase tracking-wide text-xs mb-1">Focus Points</p>
-                    <ul className="list-disc list-inside space-y-1 text-gray-300/90">
-                      {quest.focusPoints.map((point) => (
-                        <li key={point}>{point}</li>
-                      ))}
-                    </ul>
-                  </div>
-                </div>
-                <button
-                    onClick={() => onSelectQuest(quest)}
-                    className={`mt-6 font-bold py-2 px-4 rounded-lg transition-colors w-full ${isCompleted ? 'bg-emerald-600 hover:bg-emerald-500 text-black' : 'bg-amber-600 hover:bg-amber-500 text-black'}`}
-                >
-                    {isCompleted ? 'Review Quest' : 'Begin Quest'}
-                </button>
               </div>
-            );
-          })}
+              <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {customQuests.map((quest) => renderQuestCard(quest, true))}
+              </div>
+            </div>
+          )}
+
+          {featuredQuests.length > 0 && (
+            <div>
+              <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3 mb-4">
+                <div>
+                  <h3 className="text-2xl font-semibold text-amber-200">Featured Learning Paths</h3>
+                  <p className="text-sm text-gray-400">Explore curated quests designed by our legendary mentors.</p>
+                </div>
+              </div>
+              <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {featuredQuests.map((quest) => renderQuestCard(quest, false))}
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>
