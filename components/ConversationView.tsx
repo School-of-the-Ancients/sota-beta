@@ -152,17 +152,30 @@ const ConversationView: React.FC<ConversationViewProps> = ({ character, onEndCon
     };
 
     if (activeQuest) {
-      // Start a fresh conversation for a quest
-      setTranscript([greetingTurn]);
-      onEnvironmentUpdate(null);
-      sessionIdRef.current = `quest_${activeQuest.id}_${Date.now()}`;
+      const history = loadConversations();
+      const existingQuestConversation = history
+        .filter(c => c.questId === activeQuest.id)
+        .sort((a, b) => (b.timestamp ?? 0) - (a.timestamp ?? 0))[0];
+
+      if (existingQuestConversation && existingQuestConversation.transcript.length > 0) {
+        setTranscript(existingQuestConversation.transcript);
+        onEnvironmentUpdate(existingQuestConversation.environmentImageUrl || null);
+        sessionIdRef.current = existingQuestConversation.id;
+      } else {
+        // Start a fresh conversation for this quest
+        setTranscript([greetingTurn]);
+        onEnvironmentUpdate(null);
+        sessionIdRef.current = existingQuestConversation
+          ? existingQuestConversation.id
+          : `quest_${activeQuest.id}_${Date.now()}`;
+      }
     } else {
       const history = loadConversations();
       const existingConversation = history.find(c => c.characterId === character.id);
       if (existingConversation && existingConversation.transcript.length > 0) {
           setTranscript(existingConversation.transcript);
           onEnvironmentUpdate(existingConversation.environmentImageUrl || null);
-          sessionIdRef.current = existingConversation.id; 
+          sessionIdRef.current = existingConversation.id;
       } else {
           // This is a new conversation or an empty one from history
           setTranscript([greetingTurn]);
