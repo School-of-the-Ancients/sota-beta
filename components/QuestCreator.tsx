@@ -164,6 +164,69 @@ const QuestCreator: React.FC<QuestCreatorProps> = ({
     return character;
   };
 
+  const ensureMeaningfulGoal = async (cleanGoal: string) => {
+    if (!process.env.API_KEY) throw new Error('API_KEY not set.');
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+
+    const validationPrompt = `You are the Gatekeeper for a learning quest generator. Decide if the user's goal is specific, meaningful, and actionable. If the text is gibberish, a single repeated word, or otherwise not a legitimate learning objective, reject it.\n\nReturn JSON with { "meaningful": boolean, "reason": string }. Use meaningful=false for gibberish, nonsense, or empty goals.`;
+
+    const validationResp = await ai.models.generateContent({
+      model: 'gemini-2.5-flash',
+      config: {
+        responseMimeType: 'application/json',
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            meaningful: { type: Type.BOOLEAN },
+            reason: { type: Type.STRING },
+          },
+          required: ['meaningful'],
+        },
+      },
+      contents: `${validationPrompt}\nGoal: "${cleanGoal}"`,
+    });
+
+    const decision = JSON.parse(validationResp.text) as { meaningful?: boolean; reason?: string };
+    if (!decision.meaningful) {
+      throw new Error(decision.reason || 'Please describe a specific learning objective.');
+    }
+  };
+
+  const looksInvalidMentorName = (name: string | undefined | null) => {
+    if (!name) return true;
+    const lower = name.trim().toLowerCase();
+    if (!lower) return true;
+    return (
+      lower === 'unknown' ||
+      lower === 'n/a' ||
+      lower.includes('no suitable mentor') ||
+      lower.includes('not found') ||
+      lower.includes('unable to identify')
+    );
+  };
+
+  const validateQuestDraft = (draft: QuestDraft) => {
+    if (!draft.title || draft.title.trim().length < 5) {
+      throw new Error('The quest title returned by the model was invalid. Please try again.');
+    }
+    if (!draft.description || draft.description.trim().length < 20) {
+      throw new Error('The quest description was too short to be useful. Please try again.');
+    }
+    if (!draft.objective || draft.objective.trim().length < 10) {
+      throw new Error('The quest objective was invalid. Please try again.');
+    }
+    if (!draft.focusPoints || !Array.isArray(draft.focusPoints) || draft.focusPoints.length === 0) {
+      throw new Error('No focus points were provided for this quest. Please try again.');
+    }
+    if (looksInvalidMentorName(draft.mentorName)) {
+      throw new Error('The mentor could not be determined for this goal. Please refine your request.');
+    }
+    draft.focusPoints = draft.focusPoints.filter(point => typeof point === 'string' && point.trim().length > 0);
+    if (draft.focusPoints.length === 0) {
+      throw new Error('No focus points were provided for this quest. Please try again.');
+    }
+  };
+
   const handleCreate = async () => {
     setError(null);
     const clean = goal.trim();
@@ -175,6 +238,8 @@ const QuestCreator: React.FC<QuestCreatorProps> = ({
     try {
       setLoading(true);
       setMsg('Designing your quest…');
+
+      await ensureMeaningfulGoal(clean);
 
       if (!process.env.API_KEY) throw new Error('API_KEY not set.');
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
@@ -220,6 +285,7 @@ Return JSON with:
       });
 
       const draft: QuestDraft = JSON.parse(draftResp.text);
+      validateQuestDraft(draft);
 
       const matcherPrompt = `You are the Mentor Matcher. Your job is to ensure the mentor is a legendary master of the requested learning goal.\n\nGoal: "${clean}"\nDraft mentor: ${draft.mentorName}\nAlternate candidates: ${(draft.alternates && draft.alternates.length > 0 ? draft.alternates.join(', ') : 'none provided')}\n\nRules:\n- Select a historical (or widely known contemporary) person celebrated for deep expertise in this exact topic.\n- If the draft mentor already fits, keep them.\n- If not, replace them with a better-suited mentor. Prefer candidates from the alternate list before suggesting a new one.\n- Never choose someone whose accomplishments are unrelated to the goal.\n- Respond in JSON with { "mentorName": string, "reason": string } and nothing else.`;
 
@@ -241,6 +307,10 @@ Return JSON with:
 
       const mentorDecision = JSON.parse(matcherResp.text) as { mentorName: string; reason?: string };
       const mentorName = mentorDecision.mentorName?.trim() || draft.mentorName;
+
+      if (looksInvalidMentorName(mentorName)) {
+        throw new Error('Could not find a suitable mentor for that goal. Please refine your request.');
+      }
 
       setMsg(`Selecting mentor: ${mentorName}…`);
 
