@@ -22,6 +22,7 @@ import QuestCreator from './components/QuestCreator'; // NEW
 import { CHARACTERS, QUESTS } from './constants';
 
 const CUSTOM_CHARACTERS_KEY = 'school-of-the-ancients-custom-characters';
+const CUSTOM_QUESTS_KEY = 'school-of-the-ancients-custom-quests';
 const HISTORY_KEY = 'school-of-the-ancients-history';
 const COMPLETED_QUESTS_KEY = 'school-of-the-ancients-completed-quests';
 
@@ -34,6 +35,24 @@ const loadConversations = (): SavedConversation[] => {
   } catch (error) {
     console.error('Failed to load conversation history:', error);
     return [];
+  }
+};
+
+const loadCustomQuests = (): Quest[] => {
+  try {
+    const stored = localStorage.getItem(CUSTOM_QUESTS_KEY);
+    return stored ? JSON.parse(stored) : [];
+  } catch (error) {
+    console.error('Failed to load custom quests:', error);
+    return [];
+  }
+};
+
+const saveCustomQuests = (quests: Quest[]) => {
+  try {
+    localStorage.setItem(CUSTOM_QUESTS_KEY, JSON.stringify(quests));
+  } catch (error) {
+    console.error('Failed to save custom quests:', error);
   }
 };
 
@@ -79,8 +98,10 @@ const App: React.FC = () => {
   >('selector');
 
   const [customCharacters, setCustomCharacters] = useState<Character[]>([]);
+  const [customQuests, setCustomQuests] = useState<Quest[]>([]);
   const [environmentImageUrl, setEnvironmentImageUrl] = useState<string | null>(null);
   const [activeQuest, setActiveQuest] = useState<Quest | null>(null);
+  const [questResumeData, setQuestResumeData] = useState<SavedConversation | null>(null);
 
   // end-conversation save/AI-eval flag
   const [isSaving, setIsSaving] = useState(false);
@@ -99,6 +120,15 @@ const App: React.FC = () => {
       }
     } catch (e) {
       console.error('Failed to load custom characters:', e);
+    }
+
+    try {
+      const storedQuests = loadCustomQuests();
+      if (storedQuests.length > 0) {
+        setCustomQuests(storedQuests);
+      }
+    } catch (e) {
+      console.error('Failed to initialize custom quests:', e);
     }
 
     const urlParams = new URLSearchParams(window.location.search);
@@ -122,6 +152,7 @@ const App: React.FC = () => {
     setSelectedCharacter(character);
     setView('conversation');
     setActiveQuest(null); // clear any quest when directly picking a character
+    setQuestResumeData(null);
     const url = new URL(window.location.href);
     url.searchParams.set('character', character.id);
     window.history.pushState({}, '', url);
@@ -133,6 +164,13 @@ const App: React.FC = () => {
     if (characterForQuest) {
       setActiveQuest(quest);
       setSelectedCharacter(characterForQuest);
+      const history = loadConversations();
+      const existingConversation = history.find((c) => c.questId === quest.id);
+      if (existingConversation && !completedQuests.includes(quest.id)) {
+        setQuestResumeData(existingConversation);
+      } else {
+        setQuestResumeData(null);
+      }
       setView('conversation');
       const url = new URL(window.location.href);
       url.searchParams.set('character', characterForQuest.id);
@@ -167,8 +205,15 @@ const App: React.FC = () => {
 
   // NEW: handle a freshly-generated quest & mentor from QuestCreator
   const startGeneratedQuest = (quest: Quest, mentor: Character) => {
+    setCustomQuests((prev) => {
+      const filtered = prev.filter((q) => q.id !== quest.id);
+      const updated = [quest, ...filtered];
+      saveCustomQuests(updated);
+      return updated;
+    });
     setActiveQuest(quest);
     setSelectedCharacter(mentor);
+    setQuestResumeData(null);
     setView('conversation');
     const url = new URL(window.location.href);
     url.searchParams.set('character', mentor.id);
@@ -356,6 +401,7 @@ Focus only on the student's contributions. Mark passed=true only if the learner 
       setView('selector');
       setEnvironmentImageUrl(null);
       setActiveQuest(null);
+      setQuestResumeData(null);
       window.history.pushState({}, '', window.location.pathname);
     }
   };
@@ -372,6 +418,7 @@ Focus only on the student's contributions. Mark passed=true only if the learner 
             environmentImageUrl={environmentImageUrl}
             onEnvironmentUpdate={setEnvironmentImageUrl}
             activeQuest={activeQuest}
+            existingQuestConversation={questResumeData}
             isSaving={isSaving} // pass saving state
           />
         ) : null;
@@ -381,13 +428,24 @@ Focus only on the student's contributions. Mark passed=true only if the learner 
         return <CharacterCreator onCharacterCreated={handleCharacterCreated} onBack={() => setView('selector')} />;
       case 'quests': {
         const allCharacters = [...customCharacters, ...CHARACTERS]; // FIX
+        const questsForView = [...customQuests, ...QUESTS];
+        const customQuestIds = customQuests.map((quest) => quest.id);
+        const inProgressQuestIds = Array.from(
+          new Set(
+            loadConversations()
+              .filter((conversation) => conversation.questId && !completedQuests.includes(conversation.questId))
+              .map((conversation) => conversation.questId as string)
+          )
+        );
         return (
           <QuestsView
             onBack={() => setView('selector')}
             onSelectQuest={handleSelectQuest}
-            quests={QUESTS}
+            quests={questsForView}
             characters={allCharacters}
             completedQuestIds={completedQuests}
+            inProgressQuestIds={inProgressQuestIds}
+            customQuestIds={customQuestIds}
             onCreateQuest={() => setView('questCreator')}
           />
         );
@@ -410,7 +468,14 @@ Focus only on the student's contributions. Mark passed=true only if the learner 
         );
       }
       case 'selector':
-      default:
+      default: {
+        const totalQuestCount = QUESTS.length + customQuests.length;
+        const safeTotalQuestCount = Math.max(totalQuestCount, 1);
+        const completionPercent = Math.min(
+          100,
+          Math.round((completedQuests.length / safeTotalQuestCount) * 100)
+        );
+
         return (
           <div className="text-center animate-fade-in">
             <p className="max-w-3xl mx-auto mb-8 text-gray-400 text-lg">
@@ -421,16 +486,13 @@ Focus only on the student's contributions. Mark passed=true only if the learner 
             <div className="max-w-3xl mx-auto mb-8 bg-gray-800/50 border border-gray-700 rounded-lg p-4 text-left">
               <p className="text-sm text-gray-300 mb-2 font-semibold">Quest Progress</p>
               <p className="text-xs uppercase tracking-wide text-gray-400 mb-3">
-                {completedQuests.length} of {QUESTS.length} quests completed
+                {completedQuests.length} of {totalQuestCount} quests completed
               </p>
               <div className="w-full h-2 bg-gray-700 rounded-full overflow-hidden">
                 <div
                   className="h-full bg-amber-500 transition-all duration-500"
                   style={{
-                    width: `${Math.min(
-                      100,
-                      Math.round((completedQuests.length / Math.max(QUESTS.length, 1)) * 100)
-                    )}%`,
+                    width: `${completionPercent}%`,
                   }}
                 />
               </div>
@@ -517,6 +579,7 @@ Focus only on the student's contributions. Mark passed=true only if the learner 
             />
           </div>
         );
+      }
     }
   };
 

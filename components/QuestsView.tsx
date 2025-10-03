@@ -7,6 +7,8 @@ interface QuestsViewProps {
   quests: Quest[];
   characters: Character[];
   completedQuestIds: string[];
+  inProgressQuestIds: string[];
+  customQuestIds: string[];
   onSelectQuest: (quest: Quest) => void;
   onBack: () => void;
   onCreateQuest: () => void;
@@ -16,6 +18,8 @@ const QuestsView: React.FC<QuestsViewProps> = ({
   quests,
   characters,
   completedQuestIds,
+  inProgressQuestIds,
+  customQuestIds,
   onSelectQuest,
   onBack,
   onCreateQuest,
@@ -78,21 +82,44 @@ const QuestsView: React.FC<QuestsViewProps> = ({
             const character = characters.find(c => c.id === quest.characterId);
             if (!character) return null;
             const isCompleted = completedQuestIds.includes(quest.id);
+            const isCustom = customQuestIds.includes(quest.id);
+            const isInProgress = inProgressQuestIds.includes(quest.id) && !isCompleted;
+            const showBadges = isCompleted || isInProgress || isCustom;
+            const buttonText = isCompleted ? 'Review Quest' : isInProgress ? 'Continue Quest' : 'Begin Quest';
+            const buttonClass = isCompleted
+              ? 'bg-emerald-600 hover:bg-emerald-500 text-black'
+              : isInProgress
+              ? 'bg-teal-600 hover:bg-teal-500 text-black'
+              : 'bg-amber-600 hover:bg-amber-500 text-black';
 
             return (
               <div
                 key={quest.id}
-                className={`bg-gray-800/50 p-5 rounded-lg border flex flex-col text-center transition-colors duration-300 ${isCompleted ? 'border-emerald-600/80 shadow-lg shadow-emerald-900/40' : 'border-gray-700 hover:border-amber-400'}`}
+                className={`bg-gray-800/50 p-5 rounded-lg border flex flex-col text-center transition-colors duration-300 ${isCompleted ? 'border-emerald-600/80 shadow-lg shadow-emerald-900/40' : isInProgress ? 'border-teal-600/60 shadow-lg shadow-teal-900/30' : 'border-gray-700 hover:border-amber-400'}`}
               >
                 <img src={character.portraitUrl} alt={character.name} className="w-24 h-24 rounded-full mx-auto mb-4 border-2 border-amber-300" />
                 <h3 className="font-bold text-xl text-amber-300">{quest.title}</h3>
                 <p className="text-sm text-gray-400 mt-1">with {character.name}</p>
-                {isCompleted && (
-                  <div className="mt-2">
-                    <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-700/30 text-emerald-200 text-xs font-semibold uppercase tracking-wide">
-                      <span className="w-2 h-2 rounded-full bg-emerald-300" />
-                      Completed
-                    </span>
+                {showBadges && (
+                  <div className="mt-2 flex flex-wrap justify-center gap-2">
+                    {isCompleted && (
+                      <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-700/30 text-emerald-200 text-xs font-semibold uppercase tracking-wide">
+                        <span className="w-2 h-2 rounded-full bg-emerald-300" />
+                        Completed
+                      </span>
+                    )}
+                    {isInProgress && (
+                      <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-teal-700/30 text-teal-200 text-xs font-semibold uppercase tracking-wide">
+                        <span className="w-2 h-2 rounded-full bg-teal-300" />
+                        In Progress
+                      </span>
+                    )}
+                    {isCustom && (
+                      <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-700/30 text-amber-200 text-xs font-semibold uppercase tracking-wide">
+                        <span className="w-2 h-2 rounded-full bg-amber-300" />
+                        Custom Quest
+                      </span>
+                    )}
                   </div>
                 )}
                 <div className="mt-3 mb-4">
@@ -117,9 +144,9 @@ const QuestsView: React.FC<QuestsViewProps> = ({
                 </div>
                 <button
                     onClick={() => onSelectQuest(quest)}
-                    className={`mt-6 font-bold py-2 px-4 rounded-lg transition-colors w-full ${isCompleted ? 'bg-emerald-600 hover:bg-emerald-500 text-black' : 'bg-amber-600 hover:bg-amber-500 text-black'}`}
+                    className={`mt-6 font-bold py-2 px-4 rounded-lg transition-colors w-full ${buttonClass}`}
                 >
-                    {isCompleted ? 'Review Quest' : 'Begin Quest'}
+                    {buttonText}
                 </button>
               </div>
             );
