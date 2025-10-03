@@ -4,10 +4,29 @@ import App from './App';
 import { ConnectionState, Character } from './types';
 
 // Mock dependencies
-vi.mock('@google/genai', () => ({
-  GoogleGenAI: vi.fn(),
-  Type: {},
-}));
+vi.mock('@google/genai', () => {
+  const mockGenerateContent = vi.fn(() => Promise.resolve({
+    text: JSON.stringify({ suggestions: ['suggestion 1', 'suggestion 2', 'suggestion 3'] }),
+  }));
+
+  const mockGenerateImages = vi.fn(() => Promise.resolve({
+    generatedImages: [{ image: { imageBytes: 'fake-image-bytes' } }],
+  }));
+
+  return {
+    GoogleGenAI: vi.fn(() => ({
+      models: {
+        generateContent: mockGenerateContent,
+        generateImages: mockGenerateImages,
+      },
+    })),
+    Type: {
+      OBJECT: 'OBJECT',
+      ARRAY: 'ARRAY',
+      STRING: 'STRING',
+    },
+  };
+});
 
 vi.mock('./hooks/useGeminiLive', () => ({
   useGeminiLive: vi.fn(() => ({
