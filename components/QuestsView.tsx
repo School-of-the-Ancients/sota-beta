@@ -11,6 +11,8 @@ interface QuestsViewProps {
   onBack: () => void;
   onCreateQuest: () => void;
   inProgressQuestIds: string[];
+  onDeleteQuest: (questId: string) => void;
+  deletableQuestIds: string[];
 }
 
 const QuestsView: React.FC<QuestsViewProps> = ({
@@ -21,6 +23,8 @@ const QuestsView: React.FC<QuestsViewProps> = ({
   onBack,
   onCreateQuest,
   inProgressQuestIds,
+  onDeleteQuest,
+  deletableQuestIds,
 }) => {
   return (
     <div className="max-w-4xl mx-auto animate-fade-in">
@@ -81,6 +85,7 @@ const QuestsView: React.FC<QuestsViewProps> = ({
             if (!character) return null;
             const isCompleted = completedQuestIds.includes(quest.id);
             const isInProgress = inProgressQuestIds.includes(quest.id);
+            const isDeletable = deletableQuestIds.includes(quest.id);
             const cardStatusClass = isCompleted
               ? 'border-emerald-600/80 shadow-lg shadow-emerald-900/40'
               : isInProgress
@@ -102,6 +107,17 @@ const QuestsView: React.FC<QuestsViewProps> = ({
                 key={quest.id}
                 className={`bg-gray-800/50 p-5 rounded-lg border flex flex-col text-center transition-colors duration-300 ${cardStatusClass}`}
               >
+                {isDeletable && (
+                  <div className="flex justify-end mb-2">
+                    <button
+                      type="button"
+                      onClick={() => onDeleteQuest(quest.id)}
+                      className="text-xs font-semibold text-red-200 bg-red-900/40 hover:bg-red-900/60 hover:text-red-100 px-3 py-1 rounded-md transition-colors"
+                    >
+                      Delete Quest
+                    </button>
+                  </div>
+                )}
                 <img src={character.portraitUrl} alt={character.name} className="w-24 h-24 rounded-full mx-auto mb-4 border-2 border-amber-300" />
                 <h3 className="font-bold text-xl text-amber-300">{quest.title}</h3>
                 <p className="text-sm text-gray-400 mt-1">with {character.name}</p>

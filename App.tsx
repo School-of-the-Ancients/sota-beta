@@ -255,6 +255,37 @@ const App: React.FC = () => {
     }
   };
 
+  const handleDeleteQuest = (questId: string) => {
+    const questToDelete = customQuests.find((quest) => quest.id === questId);
+    if (!questToDelete) {
+      return;
+    }
+
+    const confirmed = window.confirm('Are you sure you want to permanently delete this quest? This cannot be undone.');
+    if (!confirmed) {
+      return;
+    }
+
+    setCustomQuests((prev) => {
+      const updated = prev.filter((quest) => quest.id !== questId);
+      saveCustomQuests(updated);
+      return updated;
+    });
+
+    setCompletedQuests((prev) => {
+      if (!prev.includes(questId)) {
+        return prev;
+      }
+      const updated = prev.filter((id) => id !== questId);
+      saveCompletedQuests(updated);
+      return updated;
+    });
+
+    setInProgressQuestIds((prev) => prev.filter((id) => id !== questId));
+
+    setActiveQuest((current) => (current?.id === questId ? null : current));
+  };
+
   // NEW: handle a freshly-generated quest & mentor from QuestCreator
   const startGeneratedQuest = (quest: Quest, mentor: Character) => {
     setCustomQuests((prev) => {
@@ -501,6 +532,8 @@ Focus only on the student's contributions. Mark passed=true only if the learner 
             completedQuestIds={completedQuests}
             onCreateQuest={() => setView('questCreator')}
             inProgressQuestIds={inProgressQuestIds}
+            onDeleteQuest={handleDeleteQuest}
+            deletableQuestIds={customQuests.map((quest) => quest.id)}
           />
         );
       }
