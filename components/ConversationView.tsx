@@ -142,6 +142,7 @@ const ConversationView: React.FC<ConversationViewProps> = ({ character, onEndCon
   const [placeholder, setPlaceholder] = useState(placeholders[0]);
 
   const sessionIdRef = useRef(`conv_${character.id}_${Date.now()}`);
+  const sessionQuestRef = useRef<{ questId?: string; questTitle?: string }>({});
 
   // Load existing conversation or start a new one with a greeting
   useEffect(() => {
@@ -160,23 +161,43 @@ const ConversationView: React.FC<ConversationViewProps> = ({ character, onEndCon
         setTranscript(existingQuestConversation.transcript);
         onEnvironmentUpdate(existingQuestConversation.environmentImageUrl || null);
         sessionIdRef.current = existingQuestConversation.id;
+        sessionQuestRef.current = {
+          questId: existingQuestConversation.questId,
+          questTitle: existingQuestConversation.questTitle,
+        };
       } else {
         setTranscript([greetingTurn]);
         onEnvironmentUpdate(null);
         sessionIdRef.current = `quest_${activeQuest.id}_${Date.now()}`;
+        sessionQuestRef.current = {
+          questId: activeQuest.id,
+          questTitle: activeQuest.title,
+        };
       }
     } else {
       const history = loadConversations();
-      const existingConversation = history.find(c => c.characterId === character.id);
+      const existingConversation = history.find((c) => c.characterId === character.id);
       if (existingConversation && existingConversation.transcript.length > 0) {
-          setTranscript(existingConversation.transcript);
-          onEnvironmentUpdate(existingConversation.environmentImageUrl || null);
-          sessionIdRef.current = existingConversation.id; 
+        setTranscript(existingConversation.transcript);
+        onEnvironmentUpdate(existingConversation.environmentImageUrl || null);
+        sessionIdRef.current = existingConversation.id;
+        sessionQuestRef.current = existingConversation.questId
+          ? {
+              questId: existingConversation.questId,
+              questTitle: existingConversation.questTitle,
+            }
+          : {};
       } else {
-          // This is a new conversation or an empty one from history
-          setTranscript([greetingTurn]);
-          onEnvironmentUpdate(null);
-          sessionIdRef.current = existingConversation ? existingConversation.id : `conv_${character.id}_${Date.now()}`;
+        // This is a new conversation or an empty one from history
+        setTranscript([greetingTurn]);
+        onEnvironmentUpdate(null);
+        sessionIdRef.current = existingConversation ? existingConversation.id : `conv_${character.id}_${Date.now()}`;
+        sessionQuestRef.current = existingConversation?.questId
+          ? {
+              questId: existingConversation.questId,
+              questTitle: existingConversation.questTitle,
+            }
+          : {};
       }
     }
   }, [character, onEnvironmentUpdate, activeQuest]);
@@ -449,6 +470,8 @@ ${contextTranscript}
   useEffect(() => {
     if (transcript.length === 0 && !environmentImageUrl) return;
 
+    const questMetadata = sessionQuestRef.current;
+
     const conversation: SavedConversation = {
       id: sessionIdRef.current,
       characterId: character.id,
@@ -457,10 +480,10 @@ ${contextTranscript}
       timestamp: Date.now(),
       transcript,
       environmentImageUrl: environmentImageUrl || undefined,
-      ...(activeQuest
+      ...(questMetadata.questId
         ? {
-            questId: activeQuest.id,
-            questTitle: activeQuest.title,
+            questId: questMetadata.questId,
+            questTitle: questMetadata.questTitle,
           }
         : {}),
     };
@@ -482,6 +505,8 @@ ${contextTranscript}
         const initialSrc = AMBIENCE_LIBRARY.find(a => a.tag === character.ambienceTag)?.audioSrc ?? null;
         changeAmbienceTrack(initialSrc);
         
+        const questMetadata = sessionQuestRef.current;
+
         const clearedConversation: SavedConversation = {
             id: sessionIdRef.current,
             characterId: character.id,
@@ -490,10 +515,10 @@ ${contextTranscript}
             timestamp: Date.now(),
             transcript: [greetingTurn],
             environmentImageUrl: undefined,
-            ...(activeQuest
+            ...(questMetadata.questId
               ? {
-                  questId: activeQuest.id,
-                  questTitle: activeQuest.title,
+                  questId: questMetadata.questId,
+                  questTitle: questMetadata.questTitle,
                 }
               : {}),
         };
