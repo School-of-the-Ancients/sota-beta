@@ -102,6 +102,7 @@ const App: React.FC = () => {
   const [environmentImageUrl, setEnvironmentImageUrl] = useState<string | null>(null);
   const [activeQuest, setActiveQuest] = useState<Quest | null>(null);
   const [resumeConversationId, setResumeConversationId] = useState<string | null>(null);
+  const [questCreatorSeed, setQuestCreatorSeed] = useState<string | null>(null);
 
   // end-conversation save/AI-eval flag
   const [isSaving, setIsSaving] = useState(false);
@@ -288,6 +289,7 @@ const App: React.FC = () => {
 
   // NEW: handle a freshly-generated quest & mentor from QuestCreator
   const startGeneratedQuest = (quest: Quest, mentor: Character) => {
+    setQuestCreatorSeed(null);
     setCustomQuests((prev) => {
       const existingIndex = prev.findIndex((q) => q.id === quest.id);
       let updated: Quest[];
@@ -308,6 +310,56 @@ const App: React.FC = () => {
     url.searchParams.set('character', mentor.id);
     window.history.pushState({}, '', url);
   };
+
+  const openQuestCreator = useCallback((seedGoal?: string | null) => {
+    setQuestCreatorSeed(seedGoal ?? null);
+    setView('questCreator');
+  }, []);
+
+  const findMentorNameForQuest = useCallback(
+    (questId?: string | null) => {
+      if (!questId) return undefined;
+      const quest = allQuests.find((q) => q.id === questId);
+      if (!quest) return undefined;
+      const allCharacters = [...customCharacters, ...CHARACTERS];
+      const mentor = allCharacters.find((character) => character.id === quest.characterId);
+      return mentor?.name;
+    },
+    [allQuests, customCharacters]
+  );
+
+  const handleCreateQuestFromNextSteps = useCallback(
+    ({
+      improvements,
+      questTitle,
+      mentorName,
+    }: {
+      improvements: string[];
+      questTitle?: string | null;
+      mentorName?: string | null;
+    }) => {
+      const filtered = (improvements || []).map((item) => item.trim()).filter(Boolean);
+      if (filtered.length === 0) {
+        return;
+      }
+
+      const contextParts: string[] = [];
+      if (questTitle) {
+        contextParts.push(`from the quest "${questTitle}"`);
+      }
+      if (mentorName) {
+        contextParts.push(`while working with ${mentorName}`);
+      }
+      const contextText = contextParts.length > 0 ? ` ${contextParts.join(' ')}` : '';
+
+      const seedGoal = `Create a follow-up quest to help me improve on these next steps${contextText}:\n${filtered
+        .map((item) => `- ${item}`)
+        .join('\n')}`;
+
+      openQuestCreator(seedGoal);
+    },
+    [openQuestCreator]
+  );
 
   // ---- End conversation: summarize & (if quest) evaluate mastery ----
   const handleEndConversation = async (transcript: ConversationTurn[], sessionId: string) => {
@@ -517,6 +569,9 @@ Focus only on the student's contributions. Mark passed=true only if the learner 
           <HistoryView
             onBack={() => setView('selector')}
             onResumeConversation={handleResumeConversation}
+            onCreateQuestFromNextSteps={({ improvements, questTitle, mentorName }) =>
+              handleCreateQuestFromNextSteps({ improvements, questTitle, mentorName })
+            }
           />
         );
       case 'creator':
@@ -530,7 +585,7 @@ Focus only on the student's contributions. Mark passed=true only if the learner 
             quests={allQuests}
             characters={allCharacters}
             completedQuestIds={completedQuests}
-            onCreateQuest={() => setView('questCreator')}
+            onCreateQuest={() => openQuestCreator(null)}
             inProgressQuestIds={inProgressQuestIds}
             onDeleteQuest={handleDeleteQuest}
             deletableQuestIds={customQuests.map((quest) => quest.id)}
@@ -542,7 +597,10 @@ Focus only on the student's contributions. Mark passed=true only if the learner 
         return (
           <QuestCreator
             characters={allChars}
-            onBack={() => setView('selector')}
+            onBack={() => {
+              setQuestCreatorSeed(null);
+              setView('selector');
+            }}
             onQuestReady={startGeneratedQuest}
             onCharacterCreated={(newChar) => {
               const updated = [newChar, ...customCharacters];
@@ -551,6 +609,7 @@ Focus only on the student's contributions. Mark passed=true only if the learner 
                 localStorage.setItem(CUSTOM_CHARACTERS_KEY, JSON.stringify(updated));
               } catch {}
             }}
+            seedGoal={questCreatorSeed}
           />
         );
       }
@@ -624,10 +683,35 @@ Focus only on the student's contributions. Mark passed=true only if the learner 
                         <li key={item}>{item}</li>
                       ))}
                     </ul>
+
+                    <div className="mt-3 flex flex-col sm:flex-row gap-3 sm:items-center">
+                      {lastQuestOutcome.questId && (
+                        <button
+                          type="button"
+                          onClick={() => handleContinueQuest(lastQuestOutcome.questId!)}
+                          className="inline-flex items-center justify-center text-sm font-semibold text-amber-200 hover:text-amber-100 hover:underline focus:outline-none"
+                        >
+                          Continue quest?
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() =>
+                          handleCreateQuestFromNextSteps({
+                            improvements: lastQuestOutcome.improvements,
+                            questTitle: lastQuestOutcome.questTitle,
+                            mentorName: findMentorNameForQuest(lastQuestOutcome.questId),
+                          })
+                        }
+                        className="inline-flex items-center justify-center rounded-lg bg-amber-600/90 px-4 py-2 text-sm font-semibold text-black transition-colors hover:bg-amber-500"
+                      >
+                        Turn next steps into a new quest
+                      </button>
+                    </div>
                   </div>
                 )}
 
-                {!lastQuestOutcome.passed && lastQuestOutcome.questId && (
+                {!lastQuestOutcome.passed && lastQuestOutcome.improvements.length === 0 && lastQuestOutcome.questId && (
                   <button
                     type="button"
                     onClick={() => handleContinueQuest(lastQuestOutcome.questId)}
@@ -657,7 +741,7 @@ Focus only on the student's contributions. Mark passed=true only if the learner 
 
               {/* NEW CTA */}
               <button
-                onClick={() => setView('questCreator')}
+                onClick={() => openQuestCreator(null)}
                 className="bg-teal-700 hover:bg-teal-600 text-white font-bold py-3 px-8 rounded-lg transition-colors duration-300 w-full sm:w-auto"
               >
                 Create Your Quest
