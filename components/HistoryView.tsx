@@ -39,11 +39,18 @@ const ArtifactDisplay: React.FC<{ artifact: NonNullable<ConversationTurn['artifa
 interface HistoryViewProps {
   onBack: () => void;
   onResumeConversation: (conversation: SavedConversation) => void;
+  onCreateQuestFromInsights: (goal: string, mentorName?: string) => void;
 }
 
-const HistoryView: React.FC<HistoryViewProps> = ({ onBack, onResumeConversation }) => {
+const HistoryView: React.FC<HistoryViewProps> = ({
+  onBack,
+  onResumeConversation,
+  onCreateQuestFromInsights,
+}) => {
   const [history, setHistory] = useState<SavedConversation[]>([]);
   const [selectedConversation, setSelectedConversation] = useState<SavedConversation | null>(null);
+  const [questIdea, setQuestIdea] = useState('');
+  const [questIdeaSource, setQuestIdeaSource] = useState<'nextSteps' | 'takeaways' | 'custom' | null>(null);
 
   useEffect(() => {
     setHistory(loadConversations());
@@ -100,6 +107,71 @@ const HistoryView: React.FC<HistoryViewProps> = ({ onBack, onResumeConversation 
   const sortedHistory = useMemo(() => {
     return [...history].sort((a, b) => b.timestamp - a.timestamp);
   }, [history]);
+
+  const defaultQuestNotes = useMemo(() => {
+    if (!selectedConversation) return '';
+    const formatLines = (lines: string[]) =>
+      lines
+        .filter(line => line && line.trim().length > 0)
+        .map(line => `• ${line.trim()}`)
+        .join('\n');
+
+    if (selectedConversation.questAssessment?.improvements?.length) {
+      return formatLines(selectedConversation.questAssessment.improvements);
+    }
+
+    if (selectedConversation.summary?.takeaways?.length) {
+      return formatLines(selectedConversation.summary.takeaways);
+    }
+
+    return '';
+  }, [selectedConversation]);
+
+  useEffect(() => {
+    if (selectedConversation) {
+      setQuestIdea(defaultQuestNotes);
+      setQuestIdeaSource(
+        selectedConversation.questAssessment?.improvements?.length
+          ? 'nextSteps'
+          : selectedConversation.summary?.takeaways?.length
+            ? 'takeaways'
+            : null,
+      );
+    } else {
+      setQuestIdea('');
+      setQuestIdeaSource(null);
+    }
+  }, [selectedConversation, defaultQuestNotes]);
+
+  const handleUseNextSteps = () => {
+    if (!selectedConversation?.questAssessment?.improvements?.length) return;
+    const formatted = selectedConversation.questAssessment.improvements
+      .filter(line => line && line.trim().length > 0)
+      .map(line => `• ${line.trim()}`)
+      .join('\n');
+    setQuestIdea(formatted);
+    setQuestIdeaSource('nextSteps');
+  };
+
+  const handleUseTakeaways = () => {
+    if (!selectedConversation?.summary?.takeaways?.length) return;
+    const formatted = selectedConversation.summary.takeaways
+      .filter(line => line && line.trim().length > 0)
+      .map(line => `• ${line.trim()}`)
+      .join('\n');
+    setQuestIdea(formatted);
+    setQuestIdeaSource('takeaways');
+  };
+
+  const handleCreateQuest = () => {
+    if (!selectedConversation) return;
+    const clean = questIdea.trim();
+    if (!clean) return;
+    onCreateQuestFromInsights(clean, selectedConversation.characterName);
+  };
+
+  const hasNextSteps = Boolean(selectedConversation?.questAssessment?.improvements?.length);
+  const hasTakeaways = Boolean(selectedConversation?.summary?.takeaways?.length);
 
   if (selectedConversation) {
     return (
@@ -161,6 +233,83 @@ const HistoryView: React.FC<HistoryViewProps> = ({ onBack, onResumeConversation 
               <ul className="list-disc list-inside space-y-1 text-gray-300">
                 {selectedConversation.summary.takeaways.map((item, i) => <li key={i}>{item}</li>)}
               </ul>
+            </div>
+          )}
+
+          {(hasNextSteps || hasTakeaways) && (
+            <div className="mb-4 bg-gray-900/60 p-4 rounded-lg border border-emerald-800/60">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-3">
+                <h3 className="text-lg font-bold text-emerald-200">Build a follow-up quest</h3>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={handleUseNextSteps}
+                    disabled={!hasNextSteps}
+                    className={`text-xs font-semibold uppercase tracking-wide px-3 py-1 rounded-full border transition-colors ${
+                      hasNextSteps
+                        ? questIdeaSource === 'nextSteps'
+                          ? 'bg-emerald-700/60 text-emerald-100 border-emerald-500'
+                          : 'bg-transparent text-emerald-200 border-emerald-500 hover:bg-emerald-800/30'
+                        : 'bg-gray-800 text-gray-500 border-gray-700 cursor-not-allowed'
+                    }`}
+                  >
+                    Use Next Steps
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleUseTakeaways}
+                    disabled={!hasTakeaways}
+                    className={`text-xs font-semibold uppercase tracking-wide px-3 py-1 rounded-full border transition-colors ${
+                      hasTakeaways
+                        ? questIdeaSource === 'takeaways'
+                          ? 'bg-amber-700/60 text-amber-100 border-amber-500'
+                          : 'bg-transparent text-amber-200 border-amber-500 hover:bg-amber-800/30'
+                        : 'bg-gray-800 text-gray-500 border-gray-700 cursor-not-allowed'
+                    }`}
+                  >
+                    Use Key Takeaways
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setQuestIdea('');
+                      setQuestIdeaSource('custom');
+                    }}
+                    className={`text-xs font-semibold uppercase tracking-wide px-3 py-1 rounded-full border transition-colors ${
+                      questIdeaSource === 'custom'
+                        ? 'bg-gray-100 text-gray-900 border-gray-300'
+                        : 'bg-transparent text-gray-300 border-gray-500 hover:bg-gray-700/40'
+                    }`}
+                  >
+                    Start Fresh
+                  </button>
+                </div>
+              </div>
+              <p className="text-sm text-gray-300 mb-2">
+                Turn the mentor's advice into a concrete learning goal. You can edit the plan before drafting a new quest.
+              </p>
+              <textarea
+                rows={4}
+                value={questIdea}
+                onChange={event => {
+                  setQuestIdea(event.target.value);
+                  setQuestIdeaSource('custom');
+                }}
+                placeholder="Summarize what you want to practice next…"
+                className="w-full bg-gray-950/60 border border-gray-700 rounded-lg px-4 py-3 text-sm text-gray-100 focus:outline-none focus:ring-2 focus:ring-emerald-500/60"
+              />
+              <button
+                type="button"
+                onClick={handleCreateQuest}
+                disabled={!questIdea.trim()}
+                className={`mt-3 inline-flex items-center justify-center px-4 py-2 rounded-lg font-semibold transition-colors ${
+                  questIdea.trim()
+                    ? 'bg-emerald-600/80 hover:bg-emerald-500 text-white'
+                    : 'bg-gray-700 text-gray-400 cursor-not-allowed'
+                }`}
+              >
+                Create follow-up quest
+              </button>
             </div>
           )}
 

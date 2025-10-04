@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { GoogleGenAI, Type } from '@google/genai';
 import type { Character, PersonaData, Quest } from '../types';
 import { AMBIENCE_LIBRARY, AVAILABLE_VOICES } from '../constants';
@@ -18,6 +18,9 @@ interface QuestCreatorProps {
   onBack: () => void;
   onQuestReady: (quest: Quest, character: Character) => void;
   onCharacterCreated: (character: Character) => void;
+  initialGoal?: string;
+  preferredMentorName?: string;
+  seedContext?: string;
 }
 
 /** Pretty, branded SVG fallback if portrait generation fails */
@@ -52,12 +55,19 @@ const QuestCreator: React.FC<QuestCreatorProps> = ({
   onBack,
   onQuestReady,
   onCharacterCreated,
+  initialGoal,
+  preferredMentorName,
+  seedContext,
 }) => {
-  const [goal, setGoal] = useState('');
+  const [goal, setGoal] = useState(initialGoal ?? '');
   const [prefs, setPrefs] = useState({ difficulty: 'auto', style: 'auto', time: 'auto' });
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState('');
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setGoal(initialGoal ?? '');
+  }, [initialGoal]);
 
   const findCharacterByName = (name: string): Character | null => {
     const lower = name.trim().toLowerCase();
@@ -244,9 +254,17 @@ const QuestCreator: React.FC<QuestCreatorProps> = ({
       if (!process.env.API_KEY) throw new Error('API_KEY not set.');
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
+      const trimmedPreference = preferredMentorName?.trim();
+      const contextLines = [
+        seedContext ? `Context: ${seedContext}` : null,
+        trimmedPreference ? `Preferred mentor (if clearly appropriate): ${trimmedPreference}` : null,
+      ]
+        .filter(Boolean)
+        .join('\n');
+
       const draftPrompt = `You are the Quest Architect. Convert this learner goal into a concise quest and pick the most appropriate historical mentor.
 
-Goal: "${clean}"
+${contextLines ? `${contextLines}\n\n` : ''}Goal: "${clean}"
 Preferences (may be 'auto'):
 - Difficulty: ${prefs.difficulty}
 - Style (empirical / ethical / canonical / craft / integrative): ${prefs.style}
@@ -287,7 +305,9 @@ Return JSON with:
       const draft: QuestDraft = JSON.parse(draftResp.text);
       validateQuestDraft(draft);
 
-      const matcherPrompt = `You are the Mentor Matcher. Your job is to ensure the mentor is a legendary master of the requested learning goal.\n\nGoal: "${clean}"\nDraft mentor: ${draft.mentorName}\nAlternate candidates: ${(draft.alternates && draft.alternates.length > 0 ? draft.alternates.join(', ') : 'none provided')}\n\nRules:\n- Select a historical (or widely known contemporary) person celebrated for deep expertise in this exact topic.\n- If the draft mentor already fits, keep them.\n- If not, replace them with a better-suited mentor. Prefer candidates from the alternate list before suggesting a new one.\n- Never choose someone whose accomplishments are unrelated to the goal.\n- Respond in JSON with { "mentorName": string, "reason": string } and nothing else.`;
+      const matcherPrompt = `You are the Mentor Matcher. Your job is to ensure the mentor is a legendary master of the requested learning goal.\n\nGoal: "${clean}"\nDraft mentor: ${draft.mentorName}\nAlternate candidates: ${(draft.alternates && draft.alternates.length > 0 ? draft.alternates.join(', ') : 'none provided')}\n${
+        trimmedPreference ? `Preferred mentor (keep them if they clearly excel at this goal): ${trimmedPreference}\n` : ''
+      }\nRules:\n- Select a historical (or widely known contemporary) person celebrated for deep expertise in this exact topic.\n- If the draft mentor already fits, keep them.\n- If not, replace them with a better-suited mentor. Prefer candidates from the alternate list before suggesting a new one.\n- Never choose someone whose accomplishments are unrelated to the goal.\n- Respond in JSON with { "mentorName": string, "reason": string } and nothing else.`;
 
       const matcherResp = await ai.models.generateContent({
         model: 'gemini-2.5-flash',
@@ -368,6 +388,18 @@ Return JSON with:
         {error && (
           <div className="bg-red-900/50 border border-red-700 text-red-300 p-3 rounded-lg mb-6">
             {error}
+          </div>
+        )}
+
+        {(seedContext || preferredMentorName) && (
+          <div className="bg-emerald-900/30 border border-emerald-700 text-emerald-100 p-3 rounded-lg mb-4 text-sm space-y-1">
+            {seedContext && <p>{seedContext}</p>}
+            {preferredMentorName && (
+              <p>
+                Suggested mentor:{' '}
+                <span className="font-semibold text-emerald-50">{preferredMentorName}</span>
+              </p>
+            )}
           </div>
         )}
 
