@@ -470,21 +470,12 @@ Focus only on the student's contributions. Mark passed=true only if the learner 
 
           if (questAssessment.passed) {
             setCompletedQuests((prev) => {
+              // Only add the quest ID if it's not already there.
+              // Do not remove it if the quest is failed again.
               if (prev.includes(activeQuest.id)) {
-                saveCompletedQuests(prev);
                 return prev;
               }
-              const updated = [...prev, activeQuest.id]; // FIX
-              saveCompletedQuests(updated);
-              return updated;
-            });
-          } else {
-            setCompletedQuests((prev) => {
-              if (!prev.includes(activeQuest.id)) {
-                saveCompletedQuests(prev);
-                return prev;
-              }
-              const updated = prev.filter((id) => id !== activeQuest.id);
+              const updated = [...prev, activeQuest.id];
               saveCompletedQuests(updated);
               return updated;
             });
