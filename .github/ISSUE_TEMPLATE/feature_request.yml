@@ -1,0 +1,70 @@
+name: "✨ Feature request"
+description: Propose a new capability or enhancement
+title: "feat: <short summary>"
+labels: ["type:feature"]
+assignees: []
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem / opportunity
+      description: What user need are we solving?
+      placeholder: |
+        Example: Learners need a short mastery check so completion feels earned and progress is meaningful.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: What should we build? Keep scope minimal for first iteration.
+      placeholder: |
+        Example: 3–5 item quiz at quest end with pass/fail gate, badge award, and "Review weak areas" CTA.
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: Observable, testable outcomes (Given/When/Then)
+      placeholder: |
+        - Given I complete the final lesson,
+          When I click “Finish”,
+          Then I see a 5-question quiz and must pass >= 3/5 to complete the quest.
+        - Results are persisted and visible on the Progress panel.
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - area:quests
+        - area:progress
+        - area:auth
+        - area:ui
+        - area:ai
+        - area:infra
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Suggested priority
+      options:
+        - priority:P0
+        - priority:P1
+        - priority:P2
+  - type: textarea
+    id: design
+    attributes:
+      label: UX notes / mocks (optional)
+      description: Link Figma, screenshots, or describe the flow
+  - type: textarea
+    id: risks
+    attributes:
+      label: Risks / dependencies
+      description: What could block this? Any data model or auth needs?
+  - type: textarea
+    id: rollout
+    attributes:
+      label: Rollout plan
+      description: Flags, metrics, docs updates, user comms
