@@ -1,0 +1,79 @@
+name: "🐞 Bug report"
+description: Report a defect or regression
+title: "bug: <short summary>"
+labels: ["type:bug"]
+assignees: []
+body:
+  - type: checkboxes
+    id: preflight
+    attributes:
+      label: Pre-flight
+      description: Help us triage faster
+      options:
+        - label: I’m on the latest `main`
+          required: true
+        - label: I searched existing issues and didn’t find this bug
+          required: true
+  - type: textarea
+    id: summary
+    attributes:
+      label: What happened?
+      description: A clear, concise description of the problem
+      placeholder: |
+        Example: After finishing the last lesson in a quest, the app keeps suggesting content and never marks completion.
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      description: Numbered, minimal steps to see the issue
+      placeholder: |
+        1. Go to ...
+        2. Click ...
+        3. See ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      placeholder: |
+        Example: After the final lesson, show a "Quest Complete" banner, persist completion, and stop auto-suggestions.
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Evidence (screenshots, logs)
+      description: Drag & drop screenshots, console logs, or screen recordings
+  - type: input
+    id: env
+    attributes:
+      label: Environment
+      placeholder: "OS/Browser (e.g., Windows 11 + Chrome 129), Build SHA if known"
+  - type: dropdown
+    id: area
+    attributes:
+      label: Affected area
+      options:
+        - area:quests
+        - area:progress
+        - area:auth
+        - area:ui
+        - area:ai
+        - area:infra
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Suggested priority
+      description: Maintainers may change this after triage
+      options:
+        - priority:P0
+        - priority:P1
+        - priority:P2
+  - type: textarea
+    id: notes
+    attributes:
+      label: Extra notes
+      description: Links to related issues/PRs, hypotheses, quick fixes
