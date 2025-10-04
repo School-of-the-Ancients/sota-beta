@@ -60,6 +60,20 @@ describe('QuestCreator', () => {
         expect(screen.getByRole('button', { name: 'Create Quest' })).toBeInTheDocument();
     });
 
+    it('should preload the initial goal when provided', () => {
+        render(
+            <QuestCreator
+                characters={[]}
+                onBack={mockOnBack}
+                onQuestReady={mockOnQuestReady}
+                onCharacterCreated={mockOnCharacterCreated}
+                initialGoal="Strengthen my grasp of rhetorical devices"
+            />
+        );
+
+        expect(screen.getByDisplayValue('Strengthen my grasp of rhetorical devices')).toBeInTheDocument();
+    });
+
     it('should show an error if the goal is empty on creation', async () => {
         const user = userEvent.setup();
         render(<QuestCreator characters={[]} onBack={mockOnBack} onQuestReady={mockOnQuestReady} onCharacterCreated={mockOnCharacterCreated} />);
