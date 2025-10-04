@@ -495,51 +495,67 @@ Focus only on the student's contributions. Mark passed=true only if the learner 
               </div>
             </div>
 
-            {lastQuestOutcome && (
-              <div
-                className={`max-w-3xl mx-auto mb-8 rounded-lg border p-5 text-left shadow-lg ${
-                  lastQuestOutcome.passed ? 'bg-emerald-900/40 border-emerald-700' : 'bg-red-900/30 border-red-700'
-                }`}
-              >
-                <div className="flex justify-between items-start gap-4">
-                  <div>
-                    <p className="text-xs uppercase tracking-wide text-gray-300 font-semibold">Latest Quest Review</p>
-                    <h3 className="text-2xl font-bold text-amber-200 mt-1">{lastQuestOutcome.questTitle}</h3>
+            {lastQuestOutcome && (() => {
+              const questToResume =
+                !lastQuestOutcome.passed
+                  ? allQuests.find((quest) => quest.id === lastQuestOutcome.questId)
+                  : null;
+
+              return (
+                <div
+                  className={`max-w-3xl mx-auto mb-8 rounded-lg border p-5 text-left shadow-lg ${
+                    lastQuestOutcome.passed ? 'bg-emerald-900/40 border-emerald-700' : 'bg-red-900/30 border-red-700'
+                  }`}
+                >
+                  <div className="flex justify-between items-start gap-4">
+                    <div>
+                      <p className="text-xs uppercase tracking-wide text-gray-300 font-semibold">Latest Quest Review</p>
+                      <h3 className="text-2xl font-bold text-amber-200 mt-1">{lastQuestOutcome.questTitle}</h3>
+                    </div>
+                    <span
+                      className={`text-sm font-semibold px-3 py-1 rounded-full ${
+                        lastQuestOutcome.passed ? 'bg-emerald-600 text-emerald-50' : 'bg-red-600 text-red-50'
+                      }`}
+                    >
+                      {lastQuestOutcome.passed ? 'Completed' : 'Needs Review'}
+                    </span>
                   </div>
-                  <span
-                    className={`text-sm font-semibold px-3 py-1 rounded-full ${
-                      lastQuestOutcome.passed ? 'bg-emerald-600 text-emerald-50' : 'bg-red-600 text-red-50'
-                    }`}
-                  >
-                    {lastQuestOutcome.passed ? 'Completed' : 'Needs Review'}
-                  </span>
+
+                  <p className="text-gray-200 mt-4 leading-relaxed">{lastQuestOutcome.summary}</p>
+
+                  {lastQuestOutcome.evidence.length > 0 && (
+                    <div className="mt-4">
+                      <p className="text-sm font-semibold text-emerald-200 uppercase tracking-wide mb-1">Highlights</p>
+                      <ul className="list-disc list-inside text-gray-100 space-y-1 text-sm">
+                        {lastQuestOutcome.evidence.map((item) => (
+                          <li key={item}>{item}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  {!lastQuestOutcome.passed && lastQuestOutcome.improvements.length > 0 && (
+                    <div className="mt-4">
+                      <p className="text-sm font-semibold text-red-200 uppercase tracking-wide mb-1">Next Steps</p>
+                      <ul className="list-disc list-inside text-red-100 space-y-1 text-sm">
+                        {lastQuestOutcome.improvements.map((item) => (
+                          <li key={item}>{item}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  {!lastQuestOutcome.passed && questToResume && (
+                    <button
+                      type="button"
+                      onClick={() => handleSelectQuest(questToResume)}
+                      className="mt-5 inline-flex items-center gap-2 text-sm font-semibold text-amber-200 hover:text-amber-100 underline-offset-4 hover:underline"
+                    >
+                      Continue quest?
+                    </button>
+                  )}
                 </div>
-
-                <p className="text-gray-200 mt-4 leading-relaxed">{lastQuestOutcome.summary}</p>
-
-                {lastQuestOutcome.evidence.length > 0 && (
-                  <div className="mt-4">
-                    <p className="text-sm font-semibold text-emerald-200 uppercase tracking-wide mb-1">Highlights</p>
-                    <ul className="list-disc list-inside text-gray-100 space-y-1 text-sm">
-                      {lastQuestOutcome.evidence.map((item) => (
-                        <li key={item}>{item}</li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-
-                {!lastQuestOutcome.passed && lastQuestOutcome.improvements.length > 0 && (
-                  <div className="mt-4">
-                    <p className="text-sm font-semibold text-red-200 uppercase tracking-wide mb-1">Next Steps</p>
-                    <ul className="list-disc list-inside text-red-100 space-y-1 text-sm">
-                      {lastQuestOutcome.improvements.map((item) => (
-                        <li key={item}>{item}</li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-              </div>
-            )}
+              );
+            })()}
 
             <div className="flex flex-col sm:flex-row justify-center items-center gap-4 mb-12">
               <button
