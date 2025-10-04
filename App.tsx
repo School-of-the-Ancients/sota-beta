@@ -25,6 +25,7 @@ const CUSTOM_CHARACTERS_KEY = 'school-of-the-ancients-custom-characters';
 const HISTORY_KEY = 'school-of-the-ancients-history';
 const COMPLETED_QUESTS_KEY = 'school-of-the-ancients-completed-quests';
 const CUSTOM_QUESTS_KEY = 'school-of-the-ancients-custom-quests';
+const LAST_QUEST_OUTCOME_KEY = 'school-of-the-ancients-last-quest-outcome';
 
 // ---- Local storage helpers -------------------------------------------------
 
@@ -86,6 +87,28 @@ const saveCustomQuests = (quests: Quest[]) => {
     localStorage.setItem(CUSTOM_QUESTS_KEY, JSON.stringify(quests));
   } catch (error) {
     console.error('Failed to save custom quests:', error);
+  }
+};
+
+const loadLastQuestOutcome = (): QuestAssessment | null => {
+  try {
+    const stored = localStorage.getItem(LAST_QUEST_OUTCOME_KEY);
+    return stored ? JSON.parse(stored) : null;
+  } catch (error) {
+    console.error('Failed to load last quest outcome:', error);
+    return null;
+  }
+};
+
+const saveLastQuestOutcome = (outcome: QuestAssessment | null) => {
+  try {
+    if (outcome) {
+      localStorage.setItem(LAST_QUEST_OUTCOME_KEY, JSON.stringify(outcome));
+    } else {
+      localStorage.removeItem(LAST_QUEST_OUTCOME_KEY);
+    }
+  } catch (error) {
+    console.error('Failed to save last quest outcome:', error);
   }
 };
 
@@ -155,6 +178,7 @@ const App: React.FC = () => {
     }
 
     setCompletedQuests(loadCompletedQuests());
+    setLastQuestOutcome(loadLastQuestOutcome());
     syncQuestProgress();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [syncQuestProgress]);
@@ -416,8 +440,10 @@ Focus only on the student's contributions. Mark passed=true only if the learner 
     } finally {
       setIsSaving(false);
       if (questAssessment) {
+        saveLastQuestOutcome(questAssessment);
         setLastQuestOutcome(questAssessment);
       } else if (activeQuest) {
+        saveLastQuestOutcome(null);
         setLastQuestOutcome(null);
       }
       setSelectedCharacter(null);
@@ -440,6 +466,7 @@ Focus only on the student's contributions. Mark passed=true only if the learner 
             environmentImageUrl={environmentImageUrl}
             onEnvironmentUpdate={setEnvironmentImageUrl}
             activeQuest={activeQuest}
+            previousQuestOutcome={lastQuestOutcome}
             isSaving={isSaving} // pass saving state
           />
         ) : null;

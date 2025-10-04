@@ -1,6 +1,6 @@
 import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { GoogleGenAI, Type } from '@google/genai';
-import type { Character, ConversationTurn, SavedConversation, Quest } from '../types';
+import type { Character, ConversationTurn, SavedConversation, Quest, QuestAssessment } from '../types';
 import { useGeminiLive } from '../hooks/useGeminiLive';
 import { useAmbientAudio } from '../hooks/useAmbientAudio';
 import { ConnectionState } from '../types';
@@ -21,6 +21,7 @@ interface ConversationViewProps {
   environmentImageUrl: string | null;
   onEnvironmentUpdate: (url: string | null) => void;
   activeQuest: Quest | null;
+  previousQuestOutcome?: QuestAssessment | null;
   isSaving: boolean;
 }
 
@@ -99,13 +100,23 @@ const ArtifactDisplay: React.FC<{ artifact: NonNullable<ConversationTurn['artifa
     );
   };
 
-const ConversationView: React.FC<ConversationViewProps> = ({ character, onEndConversation, environmentImageUrl, onEnvironmentUpdate, activeQuest, isSaving }) => {
+const ConversationView: React.FC<ConversationViewProps> = ({ character, onEndConversation, environmentImageUrl, onEnvironmentUpdate, activeQuest, previousQuestOutcome, isSaving }) => {
   const [transcript, setTranscript] = useState<ConversationTurn[]>([]);
   const [textInput, setTextInput] = useState('');
   const [dynamicSuggestions, setDynamicSuggestions] = useState<string[]>([]);
   const [isFetchingSuggestions, setIsFetchingSuggestions] = useState(false);
   const [isGeneratingVisual, setIsGeneratingVisual] = useState(false);
   const [generationMessage, setGenerationMessage] = useState('');
+
+  const questFeedback = useMemo(() => {
+    if (!activeQuest || !previousQuestOutcome) {
+      return null;
+    }
+    if (previousQuestOutcome.questId !== activeQuest.id) {
+      return null;
+    }
+    return previousQuestOutcome;
+  }, [activeQuest, previousQuestOutcome]);
 
   const initialAudioSrc = AMBIENCE_LIBRARY.find(a => a.tag === character.ambienceTag)?.audioSrc ?? null;
   const { isMuted: isAmbienceMuted, toggleMute: toggleAmbienceMute, changeTrack: changeAmbienceTrack } = useAmbientAudio(initialAudioSrc);
@@ -555,6 +566,52 @@ ${contextTranscript}
                         </ul>
                     </div>
                 </div>
+            )}
+
+            {questFeedback && (
+              <div
+                className={`mt-4 w-full max-w-xs text-left rounded-lg border p-4 space-y-3 animate-fade-in ${
+                  questFeedback.passed
+                    ? 'bg-emerald-900/40 border-emerald-800/70'
+                    : 'bg-red-900/40 border-red-800/70'
+                }`}
+              >
+                <div className="flex items-center justify-between gap-3">
+                  <p className="font-bold text-xs uppercase tracking-wide text-amber-200">Latest Feedback</p>
+                  <span
+                    className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${
+                      questFeedback.passed
+                        ? 'bg-emerald-600/80 text-emerald-50'
+                        : 'bg-red-600/80 text-red-50'
+                    }`}
+                  >
+                    {questFeedback.passed ? 'Completed' : 'Needs Review'}
+                  </span>
+                </div>
+                {questFeedback.summary && (
+                  <p className="text-sm leading-relaxed text-amber-50/90">{questFeedback.summary}</p>
+                )}
+                {!questFeedback.passed && questFeedback.improvements.length > 0 && (
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-red-200 mb-1">Focus When You Return</p>
+                    <ul className="list-disc list-inside space-y-1 text-sm text-red-100/90">
+                      {questFeedback.improvements.map((item) => (
+                        <li key={item}>{item}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                {questFeedback.evidence.length > 0 && (
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-emerald-200/90 mb-1">What Went Well</p>
+                    <ul className="list-disc list-inside space-y-1 text-sm text-emerald-100/90">
+                      {questFeedback.evidence.map((item) => (
+                        <li key={item}>{item}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
             )}
             
             <div className="mt-6 text-left w-full max-w-xs">
