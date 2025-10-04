@@ -109,6 +109,7 @@ const App: React.FC = () => {
   const [completedQuests, setCompletedQuests] = useState<string[]>([]);
   const [lastQuestOutcome, setLastQuestOutcome] = useState<QuestAssessment | null>(null);
   const [inProgressQuestIds, setInProgressQuestIds] = useState<string[]>([]);
+  const [questCreatorPrefill, setQuestCreatorPrefill] = useState<string | null>(null);
 
   const allQuests = useMemo(() => [...customQuests, ...QUESTS], [customQuests]);
 
@@ -286,8 +287,30 @@ const App: React.FC = () => {
     setActiveQuest((current) => (current?.id === questId ? null : current));
   };
 
+  const openQuestCreator = (goal?: string | null) => {
+    setQuestCreatorPrefill(goal ?? null);
+    setView('questCreator');
+  };
+
+  const handleCreateQuestFromNextSteps = (steps: string[], questTitle?: string) => {
+    const trimmedSteps = steps.map((step) => step.trim()).filter(Boolean);
+    if (trimmedSteps.length === 0) {
+      openQuestCreator();
+      return;
+    }
+
+    const bulletList = trimmedSteps.map((step) => `- ${step}`).join('\n');
+    const intro = questTitle
+      ? `I need a follow-up quest to improve at "${questTitle}".`
+      : 'I need a new quest to improve my understanding.';
+    const prefill = `${intro}\nFocus on:\n${bulletList}`;
+
+    openQuestCreator(prefill);
+  };
+
   // NEW: handle a freshly-generated quest & mentor from QuestCreator
   const startGeneratedQuest = (quest: Quest, mentor: Character) => {
+    setQuestCreatorPrefill(null);
     setCustomQuests((prev) => {
       const existingIndex = prev.findIndex((q) => q.id === quest.id);
       let updated: Quest[];
@@ -517,6 +540,7 @@ Focus only on the student's contributions. Mark passed=true only if the learner 
           <HistoryView
             onBack={() => setView('selector')}
             onResumeConversation={handleResumeConversation}
+            onCreateQuestFromNextSteps={handleCreateQuestFromNextSteps}
           />
         );
       case 'creator':
@@ -530,7 +554,7 @@ Focus only on the student's contributions. Mark passed=true only if the learner 
             quests={allQuests}
             characters={allCharacters}
             completedQuestIds={completedQuests}
-            onCreateQuest={() => setView('questCreator')}
+            onCreateQuest={() => openQuestCreator()}
             inProgressQuestIds={inProgressQuestIds}
             onDeleteQuest={handleDeleteQuest}
             deletableQuestIds={customQuests.map((quest) => quest.id)}
@@ -539,11 +563,19 @@ Focus only on the student's contributions. Mark passed=true only if the learner 
       }
       case 'questCreator': {
         const allChars = [...customCharacters, ...CHARACTERS];
+        const handleBack = () => {
+          setQuestCreatorPrefill(null);
+          setView('selector');
+        };
+        const handleQuestReady = (quest: Quest, character: Character) => {
+          setQuestCreatorPrefill(null);
+          startGeneratedQuest(quest, character);
+        };
         return (
           <QuestCreator
             characters={allChars}
-            onBack={() => setView('selector')}
-            onQuestReady={startGeneratedQuest}
+            onBack={handleBack}
+            onQuestReady={handleQuestReady}
             onCharacterCreated={(newChar) => {
               const updated = [newChar, ...customCharacters];
               setCustomCharacters(updated);
@@ -551,6 +583,7 @@ Focus only on the student's contributions. Mark passed=true only if the learner 
                 localStorage.setItem(CUSTOM_CHARACTERS_KEY, JSON.stringify(updated));
               } catch {}
             }}
+            initialGoal={questCreatorPrefill ?? undefined}
           />
         );
       }
@@ -624,6 +657,18 @@ Focus only on the student's contributions. Mark passed=true only if the learner 
                         <li key={item}>{item}</li>
                       ))}
                     </ul>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        handleCreateQuestFromNextSteps(
+                          lastQuestOutcome.improvements,
+                          lastQuestOutcome.questTitle
+                        )
+                      }
+                      className="mt-3 inline-flex items-center text-sm font-semibold text-teal-200 border border-teal-500/60 px-3 py-1.5 rounded-md hover:bg-teal-600/20 focus:outline-none focus:ring-2 focus:ring-teal-400/60"
+                    >
+                      Turn next steps into a new quest
+                    </button>
                   </div>
                 )}
 
@@ -657,7 +702,7 @@ Focus only on the student's contributions. Mark passed=true only if the learner 
 
               {/* NEW CTA */}
               <button
-                onClick={() => setView('questCreator')}
+                onClick={() => openQuestCreator()}
                 className="bg-teal-700 hover:bg-teal-600 text-white font-bold py-3 px-8 rounded-lg transition-colors duration-300 w-full sm:w-auto"
               >
                 Create Your Quest
