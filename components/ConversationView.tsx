@@ -22,6 +22,7 @@ interface ConversationViewProps {
   onEnvironmentUpdate: (url: string | null) => void;
   activeQuest: Quest | null;
   isSaving: boolean;
+  resumeConversationId?: string;
 }
 
 const loadConversations = (): SavedConversation[] => {
@@ -99,7 +100,7 @@ const ArtifactDisplay: React.FC<{ artifact: NonNullable<ConversationTurn['artifa
     );
   };
 
-const ConversationView: React.FC<ConversationViewProps> = ({ character, onEndConversation, environmentImageUrl, onEnvironmentUpdate, activeQuest, isSaving }) => {
+const ConversationView: React.FC<ConversationViewProps> = ({ character, onEndConversation, environmentImageUrl, onEnvironmentUpdate, activeQuest, isSaving, resumeConversationId }) => {
   const [transcript, setTranscript] = useState<ConversationTurn[]>([]);
   const [textInput, setTextInput] = useState('');
   const [dynamicSuggestions, setDynamicSuggestions] = useState<string[]>([]);
@@ -152,8 +153,31 @@ const ConversationView: React.FC<ConversationViewProps> = ({ character, onEndCon
       text: character.greeting,
     };
 
+    const history = loadConversations();
+
+    sessionQuestRef.current = {};
+
+    if (resumeConversationId) {
+      const resumedConversation = history.find((conversation) => conversation.id === resumeConversationId);
+      if (resumedConversation) {
+        if (resumedConversation.transcript.length > 0) {
+          setTranscript(resumedConversation.transcript);
+        } else {
+          setTranscript([greetingTurn]);
+        }
+        onEnvironmentUpdate(resumedConversation.environmentImageUrl || null);
+        sessionIdRef.current = resumedConversation.id;
+        sessionQuestRef.current = resumedConversation.questId
+          ? {
+              questId: resumedConversation.questId,
+              questTitle: resumedConversation.questTitle,
+            }
+          : {};
+        return;
+      }
+    }
+
     if (activeQuest) {
-      const history = loadConversations();
       const existingQuestConversation = history.find(
         (c) => c.questId === activeQuest.id
       );
@@ -175,7 +199,6 @@ const ConversationView: React.FC<ConversationViewProps> = ({ character, onEndCon
         };
       }
     } else {
-      const history = loadConversations();
       const existingConversation = history.find((c) => c.characterId === character.id);
       if (existingConversation && existingConversation.transcript.length > 0) {
         setTranscript(existingConversation.transcript);
@@ -200,7 +223,7 @@ const ConversationView: React.FC<ConversationViewProps> = ({ character, onEndCon
           : {};
       }
     }
-  }, [character, onEnvironmentUpdate, activeQuest]);
+  }, [character, onEnvironmentUpdate, activeQuest, resumeConversationId]);
 
     // Cycle through placeholders for text input
     useEffect(() => {
