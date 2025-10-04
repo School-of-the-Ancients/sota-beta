@@ -101,6 +101,7 @@ const App: React.FC = () => {
   const [customQuests, setCustomQuests] = useState<Quest[]>([]);
   const [environmentImageUrl, setEnvironmentImageUrl] = useState<string | null>(null);
   const [activeQuest, setActiveQuest] = useState<Quest | null>(null);
+  const [resumeConversationId, setResumeConversationId] = useState<string | null>(null);
 
   // end-conversation save/AI-eval flag
   const [isSaving, setIsSaving] = useState(false);
@@ -165,6 +166,7 @@ const App: React.FC = () => {
     setSelectedCharacter(character);
     setView('conversation');
     setActiveQuest(null); // clear any quest when directly picking a character
+    setResumeConversationId(null);
     const url = new URL(window.location.href);
     url.searchParams.set('character', character.id);
     window.history.pushState({}, '', url);
@@ -177,6 +179,7 @@ const App: React.FC = () => {
       setActiveQuest(quest);
       setSelectedCharacter(characterForQuest);
       setView('conversation');
+      setResumeConversationId(null);
       const url = new URL(window.location.href);
       url.searchParams.set('character', characterForQuest.id);
       window.history.pushState({}, '', url);
@@ -237,8 +240,44 @@ const App: React.FC = () => {
     setActiveQuest(quest);
     setSelectedCharacter(mentor);
     setView('conversation');
+    setResumeConversationId(null);
     const url = new URL(window.location.href);
     url.searchParams.set('character', mentor.id);
+    window.history.pushState({}, '', url);
+  };
+
+  const handleResumeConversation = (conversationId: string) => {
+    const history = loadConversations();
+    const conversation = history.find((c) => c.id === conversationId);
+
+    if (!conversation) {
+      console.warn(`Conversation with id ${conversationId} not found in history.`);
+      return;
+    }
+
+    const allCharacters = [...customCharacters, ...CHARACTERS];
+    const conversationCharacter = allCharacters.find((c) => c.id === conversation.characterId);
+
+    if (!conversationCharacter) {
+      console.warn(`Character with id ${conversation.characterId} could not be found for resume.`);
+      return;
+    }
+
+    setSelectedCharacter(conversationCharacter);
+    setResumeConversationId(conversationId);
+
+    if (conversation.questId) {
+      const questToResume = allQuests.find((quest) => quest.id === conversation.questId);
+      setActiveQuest(questToResume ?? null);
+    } else {
+      setActiveQuest(null);
+    }
+
+    setEnvironmentImageUrl(conversation.environmentImageUrl ?? null);
+    setView('conversation');
+
+    const url = new URL(window.location.href);
+    url.searchParams.set('character', conversationCharacter.id);
     window.history.pushState({}, '', url);
   };
 
@@ -424,6 +463,7 @@ Focus only on the student's contributions. Mark passed=true only if the learner 
       setView('selector');
       setEnvironmentImageUrl(null);
       setActiveQuest(null);
+      setResumeConversationId(null);
       window.history.pushState({}, '', window.location.pathname);
     }
   };
@@ -441,10 +481,11 @@ Focus only on the student's contributions. Mark passed=true only if the learner 
             onEnvironmentUpdate={setEnvironmentImageUrl}
             activeQuest={activeQuest}
             isSaving={isSaving} // pass saving state
+            resumeConversationId={resumeConversationId}
           />
         ) : null;
       case 'history':
-        return <HistoryView onBack={() => setView('selector')} />;
+        return <HistoryView onBack={() => setView('selector')} onResume={handleResumeConversation} />;
       case 'creator':
         return <CharacterCreator onCharacterCreated={handleCharacterCreated} onBack={() => setView('selector')} />;
       case 'quests': {

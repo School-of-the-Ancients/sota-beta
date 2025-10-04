@@ -38,9 +38,10 @@ const ArtifactDisplay: React.FC<{ artifact: NonNullable<ConversationTurn['artifa
 
 interface HistoryViewProps {
   onBack: () => void;
+  onResume: (conversationId: string) => void;
 }
 
-const HistoryView: React.FC<HistoryViewProps> = ({ onBack }) => {
+const HistoryView: React.FC<HistoryViewProps> = ({ onBack, onResume }) => {
   const [history, setHistory] = useState<SavedConversation[]>([]);
   const [selectedConversation, setSelectedConversation] = useState<SavedConversation | null>(null);
 
@@ -176,6 +177,12 @@ const HistoryView: React.FC<HistoryViewProps> = ({ onBack }) => {
             <button onClick={() => setSelectedConversation(null)} className="bg-amber-600 hover:bg-amber-500 text-black font-bold py-2 px-6 rounded-lg transition-colors">
               Back to History
             </button>
+            <button
+              onClick={() => onResume(selectedConversation.id)}
+              className="bg-emerald-600 hover:bg-emerald-500 text-black font-bold py-2 px-6 rounded-lg transition-colors"
+            >
+              Resume Conversation
+            </button>
             <button onClick={handleDownload} className="flex items-center justify-center gap-2 bg-blue-800/70 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded-lg transition-colors">
               <DownloadIcon className="w-5 h-5" />
               Download Study Guide
@@ -219,6 +226,12 @@ const HistoryView: React.FC<HistoryViewProps> = ({ onBack }) => {
               </div>
               <div className="flex gap-2 self-end sm:self-center">
                 <button onClick={() => setSelectedConversation(conv)} className="bg-blue-800/70 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition-colors">View</button>
+                <button
+                  onClick={() => onResume(conv.id)}
+                  className="bg-emerald-700/70 hover:bg-emerald-600 text-white font-bold py-2 px-4 rounded-lg transition-colors"
+                >
+                  Resume
+                </button>
                 <button onClick={() => handleDelete(conv.id)} className="bg-red-800/70 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg transition-colors">Delete</button>
               </div>
             </div>
