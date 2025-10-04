@@ -185,6 +185,17 @@ const App: React.FC = () => {
     }
   };
 
+  const handleResumeQuest = (questId: string) => {
+    const questToResume = allQuests.find((quest) => quest.id === questId);
+    if (questToResume) {
+      setLastQuestOutcome(null);
+      handleSelectQuest(questToResume);
+    } else {
+      console.warn(`Quest with ID ${questId} not found. Redirecting to quest list.`);
+      setView('quests');
+    }
+  };
+
   const handleCharacterCreated = (newCharacter: Character) => {
     const updatedCharacters = [newCharacter, ...customCharacters];
     setCustomCharacters(updatedCharacters);
@@ -537,6 +548,15 @@ Focus only on the student's contributions. Mark passed=true only if the learner 
                       ))}
                     </ul>
                   </div>
+                )}
+
+                {!lastQuestOutcome.passed && (
+                  <button
+                    onClick={() => handleResumeQuest(lastQuestOutcome.questId)}
+                    className="mt-6 inline-flex items-center text-sm font-semibold text-amber-200 hover:text-amber-100 underline"
+                  >
+                    Continue quest?
+                  </button>
                 )}
               </div>
             )}
