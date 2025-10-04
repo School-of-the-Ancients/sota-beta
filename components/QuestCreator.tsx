@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { GoogleGenAI, Type } from '@google/genai';
 import type { Character, PersonaData, Quest } from '../types';
 import { AMBIENCE_LIBRARY, AVAILABLE_VOICES } from '../constants';
@@ -18,6 +18,7 @@ interface QuestCreatorProps {
   onBack: () => void;
   onQuestReady: (quest: Quest, character: Character) => void;
   onCharacterCreated: (character: Character) => void;
+  initialGoal?: string;
 }
 
 /** Pretty, branded SVG fallback if portrait generation fails */
@@ -52,12 +53,17 @@ const QuestCreator: React.FC<QuestCreatorProps> = ({
   onBack,
   onQuestReady,
   onCharacterCreated,
+  initialGoal,
 }) => {
-  const [goal, setGoal] = useState('');
+  const [goal, setGoal] = useState(initialGoal ?? '');
   const [prefs, setPrefs] = useState({ difficulty: 'auto', style: 'auto', time: 'auto' });
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState('');
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setGoal(initialGoal ?? '');
+  }, [initialGoal]);
 
   const findCharacterByName = (name: string): Character | null => {
     const lower = name.trim().toLowerCase();
