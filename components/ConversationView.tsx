@@ -142,6 +142,7 @@ const ConversationView: React.FC<ConversationViewProps> = ({ character, onEndCon
   const [placeholder, setPlaceholder] = useState(placeholders[0]);
 
   const sessionIdRef = useRef(`conv_${character.id}_${Date.now()}`);
+  const questMetadataRef = useRef<{ questId: string; questTitle?: string } | null>(null);
 
   // Load existing conversation or start a new one with a greeting
   useEffect(() => {
@@ -152,6 +153,7 @@ const ConversationView: React.FC<ConversationViewProps> = ({ character, onEndCon
     };
 
     if (activeQuest) {
+      questMetadataRef.current = { questId: activeQuest.id, questTitle: activeQuest.title };
       const history = loadConversations();
       const existingQuestConversation = history.find(
         (c) => c.questId === activeQuest.id
@@ -171,12 +173,21 @@ const ConversationView: React.FC<ConversationViewProps> = ({ character, onEndCon
       if (existingConversation && existingConversation.transcript.length > 0) {
           setTranscript(existingConversation.transcript);
           onEnvironmentUpdate(existingConversation.environmentImageUrl || null);
-          sessionIdRef.current = existingConversation.id; 
+          sessionIdRef.current = existingConversation.id;
+          if (existingConversation.questId) {
+            questMetadataRef.current = {
+              questId: existingConversation.questId,
+              questTitle: existingConversation.questTitle,
+            };
+          } else {
+            questMetadataRef.current = null;
+          }
       } else {
           // This is a new conversation or an empty one from history
           setTranscript([greetingTurn]);
           onEnvironmentUpdate(null);
           sessionIdRef.current = existingConversation ? existingConversation.id : `conv_${character.id}_${Date.now()}`;
+          questMetadataRef.current = null;
       }
     }
   }, [character, onEnvironmentUpdate, activeQuest]);
@@ -449,6 +460,10 @@ ${contextTranscript}
   useEffect(() => {
     if (transcript.length === 0 && !environmentImageUrl) return;
 
+    const questDetails = questMetadataRef.current || (activeQuest
+      ? { questId: activeQuest.id, questTitle: activeQuest.title }
+      : null);
+
     const conversation: SavedConversation = {
       id: sessionIdRef.current,
       characterId: character.id,
@@ -457,10 +472,10 @@ ${contextTranscript}
       timestamp: Date.now(),
       transcript,
       environmentImageUrl: environmentImageUrl || undefined,
-      ...(activeQuest
+      ...(questDetails
         ? {
-            questId: activeQuest.id,
-            questTitle: activeQuest.title,
+            questId: questDetails.questId,
+            ...(questDetails.questTitle ? { questTitle: questDetails.questTitle } : {}),
           }
         : {}),
     };
@@ -482,6 +497,10 @@ ${contextTranscript}
         const initialSrc = AMBIENCE_LIBRARY.find(a => a.tag === character.ambienceTag)?.audioSrc ?? null;
         changeAmbienceTrack(initialSrc);
         
+        const questDetails = questMetadataRef.current || (activeQuest
+          ? { questId: activeQuest.id, questTitle: activeQuest.title }
+          : null);
+
         const clearedConversation: SavedConversation = {
             id: sessionIdRef.current,
             characterId: character.id,
@@ -490,10 +509,10 @@ ${contextTranscript}
             timestamp: Date.now(),
             transcript: [greetingTurn],
             environmentImageUrl: undefined,
-            ...(activeQuest
+            ...(questDetails
               ? {
-                  questId: activeQuest.id,
-                  questTitle: activeQuest.title,
+                  questId: questDetails.questId,
+                  ...(questDetails.questTitle ? { questTitle: questDetails.questTitle } : {}),
                 }
               : {}),
         };
