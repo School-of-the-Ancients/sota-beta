@@ -96,3 +96,22 @@ export interface Quest {
   duration: string;
   focusPoints: string[];
 }
+
+export interface QuestPrefillContext {
+  conversationId: string;
+  characterName: string;
+  questTitle?: string;
+  timestamp: number;
+}
+
+export interface QuestPrefill {
+  goal: string;
+  focusPoints?: string[];
+  mentorName?: string;
+  context?: QuestPrefillContext;
+  insights?: {
+    nextSteps: string[];
+    takeaways: string[];
+    overview?: string;
+  };
+}

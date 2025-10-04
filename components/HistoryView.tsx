@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
-import type { SavedConversation, ConversationTurn } from '../types';
+import type { SavedConversation, ConversationTurn, QuestPrefill } from '../types';
 import DownloadIcon from './icons/DownloadIcon';
 
 const HISTORY_KEY = 'school-of-the-ancients-history';
@@ -39,15 +39,40 @@ const ArtifactDisplay: React.FC<{ artifact: NonNullable<ConversationTurn['artifa
 interface HistoryViewProps {
   onBack: () => void;
   onResumeConversation: (conversation: SavedConversation) => void;
+  onCreateQuestFromInsights: (prefill: QuestPrefill) => void;
 }
 
-const HistoryView: React.FC<HistoryViewProps> = ({ onBack, onResumeConversation }) => {
+const HistoryView: React.FC<HistoryViewProps> = ({ onBack, onResumeConversation, onCreateQuestFromInsights }) => {
   const [history, setHistory] = useState<SavedConversation[]>([]);
   const [selectedConversation, setSelectedConversation] = useState<SavedConversation | null>(null);
+  const [showQuestBuilder, setShowQuestBuilder] = useState(false);
+  const [selectedNextSteps, setSelectedNextSteps] = useState<string[]>([]);
+  const [selectedTakeaways, setSelectedTakeaways] = useState<string[]>([]);
+  const [additionalNotes, setAdditionalNotes] = useState('');
+  const [questBuilderError, setQuestBuilderError] = useState<string | null>(null);
 
   useEffect(() => {
     setHistory(loadConversations());
   }, []);
+
+  useEffect(() => {
+    if (!selectedConversation) {
+      setShowQuestBuilder(false);
+      setSelectedNextSteps([]);
+      setSelectedTakeaways([]);
+      setAdditionalNotes('');
+      setQuestBuilderError(null);
+      return;
+    }
+
+    const improvements = selectedConversation.questAssessment?.improvements ?? [];
+    const takeaways = selectedConversation.summary?.takeaways ?? [];
+    setSelectedNextSteps(improvements);
+    setSelectedTakeaways(takeaways);
+    setAdditionalNotes('');
+    setQuestBuilderError(null);
+    setShowQuestBuilder(false);
+  }, [selectedConversation]);
 
   const handleDelete = (id: string) => {
     if (window.confirm('Are you sure you want to delete this conversation?')) {
@@ -61,7 +86,7 @@ const HistoryView: React.FC<HistoryViewProps> = ({ onBack, onResumeConversation 
 
   const handleDownload = () => {
     if (!selectedConversation) return;
-  
+
     let content = `Study Guide: Conversation with ${selectedConversation.characterName}\n`;
     content += `Date: ${new Date(selectedConversation.timestamp).toLocaleString()}\n`;
     content += `==================================================\n\n`;
@@ -97,11 +122,85 @@ const HistoryView: React.FC<HistoryViewProps> = ({ onBack, onResumeConversation 
     URL.revokeObjectURL(url);
   };
 
+  const toggleNextStep = (item: string) => {
+    setSelectedNextSteps((prev) =>
+      prev.includes(item) ? prev.filter((entry) => entry !== item) : [...prev, item]
+    );
+  };
+
+  const toggleTakeaway = (item: string) => {
+    setSelectedTakeaways((prev) =>
+      prev.includes(item) ? prev.filter((entry) => entry !== item) : [...prev, item]
+    );
+  };
+
+  const handleCreateFollowUpQuest = () => {
+    if (!selectedConversation) return;
+
+    const trimmedNotes = additionalNotes.trim();
+    if (selectedNextSteps.length === 0 && selectedTakeaways.length === 0 && !trimmedNotes) {
+      setQuestBuilderError('Select at least one insight or add notes to guide the quest.');
+      return;
+    }
+
+    setQuestBuilderError(null);
+
+    const sections: string[] = [];
+    const questTitle = selectedConversation.questTitle;
+
+    const introduction = questTitle
+      ? `Design a follow-up quest with ${selectedConversation.characterName} that builds on "${questTitle}".`
+      : `Design a follow-up quest with ${selectedConversation.characterName} to continue my learning.`;
+    sections.push(introduction);
+
+    if (selectedNextSteps.length > 0) {
+      sections.push(
+        `Next steps I'd like to practice:\n${selectedNextSteps.map((item) => `- ${item}`).join('\n')}`
+      );
+    }
+
+    if (selectedTakeaways.length > 0) {
+      sections.push(
+        `Key takeaways to deepen:\n${selectedTakeaways.map((item) => `- ${item}`).join('\n')}`
+      );
+    }
+
+    if (trimmedNotes) {
+      sections.push(trimmedNotes);
+    }
+
+    const goal = sections.join('\n\n');
+    const focusPoints = Array.from(new Set([...selectedNextSteps, ...selectedTakeaways]));
+
+    const prefill: QuestPrefill = {
+      goal,
+      focusPoints,
+      mentorName: selectedConversation.characterName,
+      context: {
+        conversationId: selectedConversation.id,
+        characterName: selectedConversation.characterName,
+        questTitle,
+        timestamp: selectedConversation.timestamp,
+      },
+      insights: {
+        nextSteps: selectedNextSteps,
+        takeaways: selectedTakeaways,
+        overview: selectedConversation.summary?.overview,
+      },
+    };
+
+    onCreateQuestFromInsights(prefill);
+  };
+
   const sortedHistory = useMemo(() => {
     return [...history].sort((a, b) => b.timestamp - a.timestamp);
   }, [history]);
 
   if (selectedConversation) {
+    const improvements = selectedConversation.questAssessment?.improvements ?? [];
+    const takeaways = selectedConversation.summary?.takeaways ?? [];
+    const hasQuestInsights = improvements.length > 0 || takeaways.length > 0;
+
     return (
       <div className="max-w-4xl mx-auto bg-cover bg-center bg-[#202020] p-4 md:p-6 rounded-2xl shadow-2xl border border-gray-700 animate-fade-in relative"
         style={{ backgroundImage: selectedConversation.environmentImageUrl ? `url(${selectedConversation.environmentImageUrl})` : 'none' }}
@@ -161,6 +260,112 @@ const HistoryView: React.FC<HistoryViewProps> = ({ onBack, onResumeConversation 
               <ul className="list-disc list-inside space-y-1 text-gray-300">
                 {selectedConversation.summary.takeaways.map((item, i) => <li key={i}>{item}</li>)}
               </ul>
+            </div>
+          )}
+
+          {hasQuestInsights && (
+            <div className="mb-4 bg-blue-900/20 p-4 rounded-lg border border-blue-700/60">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                <div>
+                  <h3 className="text-lg font-bold text-blue-200">Turn insights into a new quest</h3>
+                  <p className="text-sm text-blue-100/80">
+                    Select the next steps or key takeaways you want to practice and we will pre-fill a fresh quest for you.
+                  </p>
+                </div>
+                <button
+                  onClick={() => setShowQuestBuilder((prev) => !prev)}
+                  className="self-start sm:self-auto bg-blue-500/80 hover:bg-blue-400 text-black font-semibold py-2 px-4 rounded-lg transition-colors"
+                >
+                  {showQuestBuilder ? 'Hide Quest Builder' : 'Plan Follow-up Quest'}
+                </button>
+              </div>
+
+              {showQuestBuilder && (
+                <div className="mt-4 space-y-4">
+                  {questBuilderError && (
+                    <div className="bg-red-900/50 border border-red-700 text-red-200 text-sm px-3 py-2 rounded-lg">
+                      {questBuilderError}
+                    </div>
+                  )}
+
+                  {improvements.length > 0 && (
+                    <div>
+                      <p className="text-sm font-semibold text-amber-200 uppercase tracking-wide mb-2">Quest Next Steps</p>
+                      <div className="space-y-2">
+                        {improvements.map((item) => (
+                          <label key={item} className="flex items-start gap-2 text-sm text-gray-100">
+                            <input
+                              type="checkbox"
+                              className="mt-1 h-4 w-4 rounded border-gray-500 bg-gray-800 text-blue-400 focus:ring-blue-400"
+                              checked={selectedNextSteps.includes(item)}
+                              onChange={() => toggleNextStep(item)}
+                            />
+                            <span>{item}</span>
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {takeaways.length > 0 && (
+                    <div>
+                      <p className="text-sm font-semibold text-blue-200 uppercase tracking-wide mb-2">Key Takeaways</p>
+                      <div className="space-y-2">
+                        {takeaways.map((item) => (
+                          <label key={item} className="flex items-start gap-2 text-sm text-gray-100">
+                            <input
+                              type="checkbox"
+                              className="mt-1 h-4 w-4 rounded border-gray-500 bg-gray-800 text-blue-400 focus:ring-blue-400"
+                              checked={selectedTakeaways.includes(item)}
+                              onChange={() => toggleTakeaway(item)}
+                            />
+                            <span>{item}</span>
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-200 mb-2" htmlFor="quest-notes">
+                      Additional notes for your quest
+                    </label>
+                    <textarea
+                      id="quest-notes"
+                      rows={3}
+                      value={additionalNotes}
+                      onChange={(event) => setAdditionalNotes(event.target.value)}
+                      placeholder="Add any specific skills, deadlines, or context you want the new quest to consider."
+                      className="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-400"
+                    />
+                    <p className="text-xs text-gray-400 mt-2">
+                      These details will be sent to the quest creator so you can fine-tune the goal before launching it.
+                    </p>
+                  </div>
+
+                  <div className="flex flex-col sm:flex-row gap-3 sm:justify-end">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedNextSteps(improvements);
+                        setSelectedTakeaways(takeaways);
+                        setAdditionalNotes('');
+                        setQuestBuilderError(null);
+                      }}
+                      className="bg-gray-800/80 hover:bg-gray-700 text-gray-200 font-semibold py-2 px-4 rounded-lg transition-colors"
+                    >
+                      Reset Selections
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleCreateFollowUpQuest}
+                      className="bg-emerald-500/80 hover:bg-emerald-400 text-black font-semibold py-2 px-4 rounded-lg transition-colors"
+                    >
+                      Build Follow-up Quest
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 

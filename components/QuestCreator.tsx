@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { GoogleGenAI, Type } from '@google/genai';
-import type { Character, PersonaData, Quest } from '../types';
+import type { Character, PersonaData, Quest, QuestPrefill } from '../types';
 import { AMBIENCE_LIBRARY, AVAILABLE_VOICES } from '../constants';
 
 type QuestDraft = {
@@ -18,6 +18,7 @@ interface QuestCreatorProps {
   onBack: () => void;
   onQuestReady: (quest: Quest, character: Character) => void;
   onCharacterCreated: (character: Character) => void;
+  prefill?: QuestPrefill;
 }
 
 /** Pretty, branded SVG fallback if portrait generation fails */
@@ -52,12 +53,24 @@ const QuestCreator: React.FC<QuestCreatorProps> = ({
   onBack,
   onQuestReady,
   onCharacterCreated,
+  prefill,
 }) => {
-  const [goal, setGoal] = useState('');
+  const [goal, setGoal] = useState(prefill?.goal ?? '');
   const [prefs, setPrefs] = useState({ difficulty: 'auto', style: 'auto', time: 'auto' });
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [mentorPreference, setMentorPreference] = useState(prefill?.mentorName ?? '');
+
+  useEffect(() => {
+    setGoal(prefill?.goal ?? '');
+    setMentorPreference(prefill?.mentorName ?? '');
+  }, [prefill]);
+
+  const prefillContext = prefill?.context;
+  const prefillInsights = prefill?.insights;
+  const prefillFocusPoints = prefill?.focusPoints ?? [];
+  const formattedPrefillDate = prefillContext ? new Date(prefillContext.timestamp).toLocaleString() : null;
 
   const findCharacterByName = (name: string): Character | null => {
     const lower = name.trim().toLowerCase();
@@ -235,6 +248,43 @@ const QuestCreator: React.FC<QuestCreatorProps> = ({
       return;
     }
 
+    const trimmedMentorPreference = mentorPreference.trim();
+    const focusPrefill = prefill?.focusPoints ?? [];
+    const insights = prefill?.insights;
+    const contextInfo = prefill?.context;
+
+    const contextSections: string[] = [];
+    if (contextInfo?.questTitle) {
+      contextSections.push(`Previous quest: ${contextInfo.questTitle}`);
+    }
+    if (contextInfo?.characterName) {
+      contextSections.push(`Mentor from conversation: ${contextInfo.characterName}`);
+    }
+    if (contextInfo?.timestamp) {
+      const contextDate = new Date(contextInfo.timestamp).toLocaleString();
+      contextSections.push(`Conversation date: ${contextDate}`);
+    }
+    if (insights?.overview) {
+      contextSections.push(`Conversation summary: ${insights.overview}`);
+    }
+    if (insights?.nextSteps && insights.nextSteps.length > 0) {
+      contextSections.push(`Next steps to address:\n- ${insights.nextSteps.join('\n- ')}`);
+    }
+    if (insights?.takeaways && insights.takeaways.length > 0) {
+      contextSections.push(`Key takeaways to deepen:\n- ${insights.takeaways.join('\n- ')}`);
+    }
+    if (focusPrefill.length > 0) {
+      contextSections.push(`Suggested focus areas:\n- ${focusPrefill.join('\n- ')}`);
+    }
+
+    const contextBlock = contextSections.length > 0
+      ? `\n\nContext for this quest based on the learner's conversation:\n${contextSections.join('\n')}`
+      : '';
+
+    const mentorHint = trimmedMentorPreference
+      ? `\nPreferred mentor to continue with: ${trimmedMentorPreference}. If they are unsuitable for the goal, choose the best alternative.`
+      : '';
+
     try {
       setLoading(true);
       setMsg('Designing your quest…');
@@ -246,14 +296,15 @@ const QuestCreator: React.FC<QuestCreatorProps> = ({
 
       const draftPrompt = `You are the Quest Architect. Convert this learner goal into a concise quest and pick the most appropriate historical mentor.
 
-Goal: "${clean}"
+Goal: "${clean}"${mentorHint}${contextBlock}
+
 Preferences (may be 'auto'):
 - Difficulty: ${prefs.difficulty}
 - Style (empirical / ethical / canonical / craft / integrative): ${prefs.style}
 - Time (e.g., 10–15 min, 1 week): ${prefs.time}
 
 Return JSON with:
-{
+{ 
   "title": string,
   "description": string,
   "objective": string,
@@ -368,6 +419,81 @@ Return JSON with:
         {error && (
           <div className="bg-red-900/50 border border-red-700 text-red-300 p-3 rounded-lg mb-6">
             {error}
+          </div>
+        )}
+
+        {prefill && (
+          <div className="mb-6 bg-gray-900/60 border border-blue-700/40 rounded-lg p-4 text-sm text-gray-200 space-y-4">
+            <div>
+              <p className="text-xs uppercase tracking-wide text-blue-200/80 font-semibold">Follow-up quest context</p>
+              <h3 className="text-lg font-semibold text-amber-200 mt-1">
+                {prefillContext?.questTitle
+                  ? `Build on "${prefillContext.questTitle}"`
+                  : `Continue learning with ${prefillContext?.characterName ?? (mentorPreference || 'your mentor')}`}
+              </h3>
+              {prefillContext && (
+                <p className="text-xs text-gray-400 mt-1">
+                  Conversation with {prefillContext.characterName}
+                  {formattedPrefillDate ? ` on ${formattedPrefillDate}` : ''}
+                </p>
+              )}
+            </div>
+
+            {prefillInsights?.overview && (
+              <p className="text-gray-300 leading-relaxed text-sm">
+                {prefillInsights.overview}
+              </p>
+            )}
+
+            {prefillInsights?.nextSteps && prefillInsights.nextSteps.length > 0 && (
+              <div>
+                <p className="text-xs uppercase tracking-wide font-semibold text-amber-200 mb-1">Next steps selected</p>
+                <ul className="list-disc list-inside space-y-1 text-gray-300">
+                  {prefillInsights.nextSteps.map((item, index) => (
+                    <li key={`next-${index}`}>{item}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {prefillInsights?.takeaways && prefillInsights.takeaways.length > 0 && (
+              <div>
+                <p className="text-xs uppercase tracking-wide font-semibold text-blue-200 mb-1">Key takeaways to deepen</p>
+                <ul className="list-disc list-inside space-y-1 text-gray-300">
+                  {prefillInsights.takeaways.map((item, index) => (
+                    <li key={`takeaway-${index}`}>{item}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {prefillFocusPoints.length > 0 && (
+              <div>
+                <p className="text-xs uppercase tracking-wide font-semibold text-teal-200 mb-1">Suggested focus areas</p>
+                <ul className="list-disc list-inside space-y-1 text-gray-300">
+                  {prefillFocusPoints.map((item, index) => (
+                    <li key={`focus-${index}`}>{item}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            <div>
+              <label htmlFor="mentor-preference" className="block text-xs uppercase tracking-wide text-gray-400 mb-1 font-semibold">
+                Preferred mentor for this quest
+              </label>
+              <input
+                id="mentor-preference"
+                type="text"
+                value={mentorPreference}
+                onChange={(event) => setMentorPreference(event.target.value)}
+                placeholder="e.g., Continue with Aristotle"
+                className="w-full bg-gray-800 border border-gray-600 rounded-lg px-3 py-2 text-sm text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-400"
+              />
+              <p className="text-xs text-gray-400 mt-1">
+                We will try to keep this mentor if they fit these goals, or suggest a better match if needed.
+              </p>
+            </div>
           </div>
         )}
 

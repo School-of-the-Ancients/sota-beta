@@ -8,6 +8,7 @@ import type {
   SavedConversation,
   Summary,
   QuestAssessment,
+  QuestPrefill,
 } from './types';
 
 import CharacterSelector from './components/CharacterSelector';
@@ -102,6 +103,7 @@ const App: React.FC = () => {
   const [environmentImageUrl, setEnvironmentImageUrl] = useState<string | null>(null);
   const [activeQuest, setActiveQuest] = useState<Quest | null>(null);
   const [resumeConversationId, setResumeConversationId] = useState<string | null>(null);
+  const [questPrefill, setQuestPrefill] = useState<QuestPrefill | null>(null);
 
   // end-conversation save/AI-eval flag
   const [isSaving, setIsSaving] = useState(false);
@@ -167,6 +169,7 @@ const App: React.FC = () => {
     setView('conversation');
     setActiveQuest(null); // clear any quest when directly picking a character
     setResumeConversationId(null);
+    setQuestPrefill(null);
     const url = new URL(window.location.href);
     url.searchParams.set('character', character.id);
     window.history.pushState({}, '', url);
@@ -180,6 +183,7 @@ const App: React.FC = () => {
       setSelectedCharacter(characterForQuest);
       setView('conversation');
       setResumeConversationId(null);
+      setQuestPrefill(null);
       const url = new URL(window.location.href);
       url.searchParams.set('character', characterForQuest.id);
       window.history.pushState({}, '', url);
@@ -198,6 +202,11 @@ const App: React.FC = () => {
       return;
     }
     handleSelectQuest(questToResume);
+  };
+
+  const handleCreateQuestFromInsights = (prefill: QuestPrefill) => {
+    setQuestPrefill({ ...prefill });
+    setView('questCreator');
   };
 
   const handleResumeConversation = (conversation: SavedConversation) => {
@@ -304,6 +313,7 @@ const App: React.FC = () => {
     setSelectedCharacter(mentor);
     setView('conversation');
     setResumeConversationId(null);
+    setQuestPrefill(null);
     const url = new URL(window.location.href);
     url.searchParams.set('character', mentor.id);
     window.history.pushState({}, '', url);
@@ -517,6 +527,7 @@ Focus only on the student's contributions. Mark passed=true only if the learner 
           <HistoryView
             onBack={() => setView('selector')}
             onResumeConversation={handleResumeConversation}
+            onCreateQuestFromInsights={handleCreateQuestFromInsights}
           />
         );
       case 'creator':
@@ -530,7 +541,10 @@ Focus only on the student's contributions. Mark passed=true only if the learner 
             quests={allQuests}
             characters={allCharacters}
             completedQuestIds={completedQuests}
-            onCreateQuest={() => setView('questCreator')}
+            onCreateQuest={() => {
+              setQuestPrefill(null);
+              setView('questCreator');
+            }}
             inProgressQuestIds={inProgressQuestIds}
             onDeleteQuest={handleDeleteQuest}
             deletableQuestIds={customQuests.map((quest) => quest.id)}
@@ -541,8 +555,12 @@ Focus only on the student's contributions. Mark passed=true only if the learner 
         const allChars = [...customCharacters, ...CHARACTERS];
         return (
           <QuestCreator
+            key={questPrefill?.context?.conversationId ?? 'manual-quest'}
             characters={allChars}
-            onBack={() => setView('selector')}
+            onBack={() => {
+              setQuestPrefill(null);
+              setView('selector');
+            }}
             onQuestReady={startGeneratedQuest}
             onCharacterCreated={(newChar) => {
               const updated = [newChar, ...customCharacters];
@@ -551,6 +569,7 @@ Focus only on the student's contributions. Mark passed=true only if the learner 
                 localStorage.setItem(CUSTOM_CHARACTERS_KEY, JSON.stringify(updated));
               } catch {}
             }}
+            prefill={questPrefill ?? undefined}
           />
         );
       }
