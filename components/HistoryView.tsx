@@ -39,11 +39,50 @@ const ArtifactDisplay: React.FC<{ artifact: NonNullable<ConversationTurn['artifa
 interface HistoryViewProps {
   onBack: () => void;
   onResumeConversation: (conversation: SavedConversation) => void;
+  onCreateQuestFromNotes: (notes: string) => void;
 }
 
-const HistoryView: React.FC<HistoryViewProps> = ({ onBack, onResumeConversation }) => {
+const buildQuestNotes = (
+  conversation: SavedConversation,
+  includeImprovements: boolean,
+  includeTakeaways: boolean,
+) => {
+  const sections: string[] = [];
+
+  sections.push(
+    `Create a follow-up quest to help me keep learning after working with ${conversation.characterName}.`,
+  );
+
+  if (includeImprovements && conversation.questAssessment?.improvements?.length) {
+    const improvements = conversation.questAssessment.improvements
+      .map(item => item.trim())
+      .filter(Boolean);
+    if (improvements.length > 0) {
+      sections.push(
+        ['Next steps I still need to work on:', ...improvements.map(item => `- ${item}`)].join('\n'),
+      );
+    }
+  }
+
+  if (includeTakeaways && conversation.summary?.takeaways?.length) {
+    const takeaways = conversation.summary.takeaways.map(item => item.trim()).filter(Boolean);
+    if (takeaways.length > 0) {
+      sections.push(
+        ['Key ideas to reinforce in the new quest:', ...takeaways.map(item => `- ${item}`)].join('\n'),
+      );
+    }
+  }
+
+  return sections.join('\n\n');
+};
+
+const HistoryView: React.FC<HistoryViewProps> = ({ onBack, onResumeConversation, onCreateQuestFromNotes }) => {
   const [history, setHistory] = useState<SavedConversation[]>([]);
   const [selectedConversation, setSelectedConversation] = useState<SavedConversation | null>(null);
+  const [includeImprovements, setIncludeImprovements] = useState(false);
+  const [includeTakeaways, setIncludeTakeaways] = useState(false);
+  const [questNotes, setQuestNotes] = useState('');
+  const [userEditedNotes, setUserEditedNotes] = useState(false);
 
   useEffect(() => {
     setHistory(loadConversations());
@@ -100,6 +139,54 @@ const HistoryView: React.FC<HistoryViewProps> = ({ onBack, onResumeConversation 
   const sortedHistory = useMemo(() => {
     return [...history].sort((a, b) => b.timestamp - a.timestamp);
   }, [history]);
+
+  useEffect(() => {
+    if (!selectedConversation) {
+      setQuestNotes('');
+      setIncludeImprovements(false);
+      setIncludeTakeaways(false);
+      setUserEditedNotes(false);
+      return;
+    }
+
+    const hasImprovements = Boolean(selectedConversation.questAssessment?.improvements?.length);
+    const hasTakeaways = Boolean(selectedConversation.summary?.takeaways?.length);
+
+    const defaultIncludeImprovements = hasImprovements;
+    const defaultIncludeTakeaways = hasTakeaways;
+
+    setIncludeImprovements(defaultIncludeImprovements);
+    setIncludeTakeaways(defaultIncludeTakeaways);
+    setQuestNotes(buildQuestNotes(selectedConversation, defaultIncludeImprovements, defaultIncludeTakeaways));
+    setUserEditedNotes(false);
+  }, [selectedConversation]);
+
+  const handleToggleImprovements = (checked: boolean) => {
+    setIncludeImprovements(checked);
+    if (!selectedConversation) return;
+    setQuestNotes(buildQuestNotes(selectedConversation, checked, includeTakeaways));
+    setUserEditedNotes(false);
+  };
+
+  const handleToggleTakeaways = (checked: boolean) => {
+    setIncludeTakeaways(checked);
+    if (!selectedConversation) return;
+    setQuestNotes(buildQuestNotes(selectedConversation, includeImprovements, checked));
+    setUserEditedNotes(false);
+  };
+
+  const handleQuestNoteChange = (value: string) => {
+    setQuestNotes(value);
+    setUserEditedNotes(true);
+  };
+
+  const handleResetNotes = () => {
+    if (!selectedConversation) return;
+    setQuestNotes(buildQuestNotes(selectedConversation, includeImprovements, includeTakeaways));
+    setUserEditedNotes(false);
+  };
+
+  const canCreateQuest = questNotes.trim().length > 0;
 
   if (selectedConversation) {
     return (
@@ -163,6 +250,78 @@ const HistoryView: React.FC<HistoryViewProps> = ({ onBack, onResumeConversation 
               </ul>
             </div>
           )}
+
+          {(selectedConversation.summary?.takeaways?.length || selectedConversation.questAssessment?.improvements?.length) ? (
+            <div className="mb-6 bg-gray-900/70 p-4 rounded-lg border border-teal-700/60">
+              <h3 className="text-lg font-bold text-teal-200 mb-2">Design a Follow-up Quest</h3>
+              <p className="text-sm text-gray-300 mb-4">
+                Use the reflections from this session to draft a new quest. Adjust the notes below or add your own focus before continuing.
+              </p>
+
+              <div className="flex flex-col sm:flex-row gap-4 mb-4">
+                {selectedConversation.questAssessment?.improvements?.length ? (
+                  <label className="inline-flex items-center gap-2 text-sm text-gray-200 bg-gray-800/60 border border-gray-700 rounded-lg px-3 py-2">
+                    <input
+                      type="checkbox"
+                      checked={includeImprovements}
+                      onChange={e => handleToggleImprovements(e.target.checked)}
+                      className="accent-amber-400"
+                    />
+                    Include quest next steps
+                  </label>
+                ) : null}
+                {selectedConversation.summary?.takeaways?.length ? (
+                  <label className="inline-flex items-center gap-2 text-sm text-gray-200 bg-gray-800/60 border border-gray-700 rounded-lg px-3 py-2">
+                    <input
+                      type="checkbox"
+                      checked={includeTakeaways}
+                      onChange={e => handleToggleTakeaways(e.target.checked)}
+                      className="accent-amber-400"
+                    />
+                    Include key takeaways
+                  </label>
+                ) : null}
+                <button
+                  type="button"
+                  onClick={handleResetNotes}
+                  className="text-sm font-semibold text-teal-200 hover:text-teal-100 underline-offset-2 hover:underline"
+                >
+                  Reset from selections
+                </button>
+              </div>
+
+              <textarea
+                value={questNotes}
+                onChange={e => handleQuestNoteChange(e.target.value)}
+                rows={6}
+                placeholder="Summarize what you want the next quest to focus on..."
+                className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 text-gray-200 focus:outline-none focus:ring-2 focus:ring-teal-400"
+              />
+
+              <div className="mt-4 flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between">
+                {userEditedNotes ? (
+                  <p className="text-xs text-gray-400">Custom notes applied. Reset to rebuild from takeaways.</p>
+                ) : (
+                  <p className="text-xs text-gray-400">These notes will pre-fill the quest creator.</p>
+                )}
+                <button
+                  type="button"
+                  disabled={!canCreateQuest}
+                  onClick={() => {
+                    if (!canCreateQuest) return;
+                    onCreateQuestFromNotes(questNotes.trim());
+                  }}
+                  className={`inline-flex items-center justify-center px-4 py-2 rounded-lg font-semibold transition-colors ${
+                    canCreateQuest
+                      ? 'bg-teal-600 hover:bg-teal-500 text-black'
+                      : 'bg-gray-700 text-gray-400 cursor-not-allowed'
+                  }`}
+                >
+                  Create quest from these notes
+                </button>
+              </div>
+            </div>
+          ) : null}
 
           <div className="bg-gray-900/50 p-4 rounded-lg border border-gray-700 max-h-[60vh] overflow-y-auto space-y-4">
             {selectedConversation.transcript.map((turn, index) => (
