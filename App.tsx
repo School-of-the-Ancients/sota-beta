@@ -91,6 +91,32 @@ const saveCustomQuests = (quests: Quest[]) => {
 
 // ---- App -------------------------------------------------------------------
 
+const formatNextStepsSeed = (
+  steps: string[],
+  context?: { questTitle?: string; characterName?: string }
+) => {
+  const trimmed = steps.map((step) => step.trim()).filter(Boolean);
+  if (trimmed.length === 0) {
+    return '';
+  }
+
+  const fragments: string[] = [];
+  if (context?.questTitle) {
+    fragments.push(`after working on the quest "${context.questTitle}"`);
+  }
+  if (context?.characterName) {
+    fragments.push(`with ${context.characterName}`);
+  }
+
+  const intro =
+    fragments.length > 0
+      ? `I need a follow-up quest ${fragments.join(' ')}.`
+      : 'I need a follow-up quest.';
+
+  const bullets = trimmed.map((step) => `- ${step}`).join('\n');
+  return `${intro} Help me improve:\n${bullets}`;
+};
+
 const App: React.FC = () => {
   const [selectedCharacter, setSelectedCharacter] = useState<Character | null>(null);
   const [view, setView] = useState<
@@ -109,6 +135,8 @@ const App: React.FC = () => {
   const [completedQuests, setCompletedQuests] = useState<string[]>([]);
   const [lastQuestOutcome, setLastQuestOutcome] = useState<QuestAssessment | null>(null);
   const [inProgressQuestIds, setInProgressQuestIds] = useState<string[]>([]);
+  const [lastQuestMentorName, setLastQuestMentorName] = useState<string | null>(null);
+  const [questCreatorSeed, setQuestCreatorSeed] = useState<string>('');
 
   const allQuests = useMemo(() => [...customQuests, ...QUESTS], [customQuests]);
 
@@ -161,6 +189,19 @@ const App: React.FC = () => {
   }, [syncQuestProgress]);
 
   // ---- Navigation helpers ----
+
+  const goToQuestCreator = useCallback((seed?: string) => {
+    setQuestCreatorSeed(seed ?? '');
+    setView('questCreator');
+  }, []);
+
+  const handleCreateFollowUpQuest = useCallback(
+    (steps: string[], context?: { questTitle?: string; characterName?: string }) => {
+      const seed = formatNextStepsSeed(steps, context);
+      goToQuestCreator(seed);
+    },
+    [goToQuestCreator]
+  );
 
   const handleSelectCharacter = (character: Character) => {
     setSelectedCharacter(character);
@@ -288,6 +329,7 @@ const App: React.FC = () => {
 
   // NEW: handle a freshly-generated quest & mentor from QuestCreator
   const startGeneratedQuest = (quest: Quest, mentor: Character) => {
+    setQuestCreatorSeed('');
     setCustomQuests((prev) => {
       const existingIndex = prev.findIndex((q) => q.id === quest.id);
       let updated: Quest[];
@@ -484,8 +526,12 @@ Focus only on the student's contributions. Mark passed=true only if the learner 
       setIsSaving(false);
       if (questAssessment) {
         setLastQuestOutcome(questAssessment);
+        setLastQuestMentorName(selectedCharacter.name);
       } else if (activeQuest) {
         setLastQuestOutcome(null);
+        setLastQuestMentorName(null);
+      } else {
+        setLastQuestMentorName(null);
       }
       setSelectedCharacter(null);
       setView('selector');
@@ -517,6 +563,7 @@ Focus only on the student's contributions. Mark passed=true only if the learner 
           <HistoryView
             onBack={() => setView('selector')}
             onResumeConversation={handleResumeConversation}
+            onCreateQuestFromNextSteps={handleCreateFollowUpQuest}
           />
         );
       case 'creator':
@@ -530,7 +577,7 @@ Focus only on the student's contributions. Mark passed=true only if the learner 
             quests={allQuests}
             characters={allCharacters}
             completedQuestIds={completedQuests}
-            onCreateQuest={() => setView('questCreator')}
+            onCreateQuest={() => goToQuestCreator()}
             inProgressQuestIds={inProgressQuestIds}
             onDeleteQuest={handleDeleteQuest}
             deletableQuestIds={customQuests.map((quest) => quest.id)}
@@ -542,8 +589,12 @@ Focus only on the student's contributions. Mark passed=true only if the learner 
         return (
           <QuestCreator
             characters={allChars}
-            onBack={() => setView('selector')}
+            onBack={() => {
+              setQuestCreatorSeed('');
+              setView('selector');
+            }}
             onQuestReady={startGeneratedQuest}
+            initialGoal={questCreatorSeed}
             onCharacterCreated={(newChar) => {
               const updated = [newChar, ...customCharacters];
               setCustomCharacters(updated);
@@ -624,6 +675,18 @@ Focus only on the student's contributions. Mark passed=true only if the learner 
                         <li key={item}>{item}</li>
                       ))}
                     </ul>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        handleCreateFollowUpQuest(lastQuestOutcome.improvements, {
+                          questTitle: lastQuestOutcome.questTitle,
+                          characterName: lastQuestMentorName ?? undefined,
+                        })
+                      }
+                      className="mt-3 inline-flex items-center gap-2 rounded-lg border border-red-500/60 bg-red-900/20 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-red-100 hover:bg-red-800/30"
+                    >
+                      Turn these into a new quest
+                    </button>
                   </div>
                 )}
 
@@ -657,7 +720,7 @@ Focus only on the student's contributions. Mark passed=true only if the learner 
 
               {/* NEW CTA */}
               <button
-                onClick={() => setView('questCreator')}
+                onClick={() => goToQuestCreator()}
                 className="bg-teal-700 hover:bg-teal-600 text-white font-bold py-3 px-8 rounded-lg transition-colors duration-300 w-full sm:w-auto"
               >
                 Create Your Quest

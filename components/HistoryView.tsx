@@ -39,9 +39,17 @@ const ArtifactDisplay: React.FC<{ artifact: NonNullable<ConversationTurn['artifa
 interface HistoryViewProps {
   onBack: () => void;
   onResumeConversation: (conversation: SavedConversation) => void;
+  onCreateQuestFromNextSteps: (
+    steps: string[],
+    context?: { questTitle?: string; characterName?: string }
+  ) => void;
 }
 
-const HistoryView: React.FC<HistoryViewProps> = ({ onBack, onResumeConversation }) => {
+const HistoryView: React.FC<HistoryViewProps> = ({
+  onBack,
+  onResumeConversation,
+  onCreateQuestFromNextSteps,
+}) => {
   const [history, setHistory] = useState<SavedConversation[]>([]);
   const [selectedConversation, setSelectedConversation] = useState<SavedConversation | null>(null);
 
@@ -144,6 +152,18 @@ const HistoryView: React.FC<HistoryViewProps> = ({ onBack, onResumeConversation 
                             <li key={item}>{item}</li>
                           ))}
                         </ul>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            onCreateQuestFromNextSteps(selectedConversation.questAssessment!.improvements, {
+                              questTitle: selectedConversation.questTitle,
+                              characterName: selectedConversation.characterName,
+                            })
+                          }
+                          className="mt-3 inline-flex items-center gap-2 rounded-lg border border-amber-500/50 bg-amber-900/30 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-amber-100 hover:bg-amber-800/40"
+                        >
+                          Build a follow-up quest
+                        </button>
                       </div>
                     )}
                   </div>

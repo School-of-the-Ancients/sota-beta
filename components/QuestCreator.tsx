@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { GoogleGenAI, Type } from '@google/genai';
 import type { Character, PersonaData, Quest } from '../types';
 import { AMBIENCE_LIBRARY, AVAILABLE_VOICES } from '../constants';
@@ -18,6 +18,7 @@ interface QuestCreatorProps {
   onBack: () => void;
   onQuestReady: (quest: Quest, character: Character) => void;
   onCharacterCreated: (character: Character) => void;
+  initialGoal?: string;
 }
 
 /** Pretty, branded SVG fallback if portrait generation fails */
@@ -52,12 +53,18 @@ const QuestCreator: React.FC<QuestCreatorProps> = ({
   onBack,
   onQuestReady,
   onCharacterCreated,
+  initialGoal,
 }) => {
-  const [goal, setGoal] = useState('');
+  const [goal, setGoal] = useState(initialGoal ?? '');
   const [prefs, setPrefs] = useState({ difficulty: 'auto', style: 'auto', time: 'auto' });
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const hasPrefilledGoal = Boolean(initialGoal && initialGoal.trim());
+
+  useEffect(() => {
+    setGoal(initialGoal ?? '');
+  }, [initialGoal]);
 
   const findCharacterByName = (name: string): Character | null => {
     const lower = name.trim().toLowerCase();
@@ -368,6 +375,12 @@ Return JSON with:
         {error && (
           <div className="bg-red-900/50 border border-red-700 text-red-300 p-3 rounded-lg mb-6">
             {error}
+          </div>
+        )}
+
+        {hasPrefilledGoal && !error && (
+          <div className="mb-4 rounded-lg border border-teal-700 bg-teal-900/40 p-3 text-sm text-teal-100">
+            Loaded from your mentor's next steps. Refine or add details before generating the follow-up quest.
           </div>
         )}
 
