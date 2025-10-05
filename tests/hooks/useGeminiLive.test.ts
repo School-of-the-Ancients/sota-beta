@@ -187,6 +187,38 @@ describe('useGeminiLive', () => {
         expect(mockLiveSession.sendToolResponse).toHaveBeenCalled();
     });
 
+    it('embeds quest completion and quiz directives into the system instruction', async () => {
+        let capturedConfig: any;
+
+        mockConnect.mockImplementation(({ callbacks, config }) => {
+            capturedConfig = config;
+            Promise.resolve().then(() => callbacks.onopen());
+            return Promise.resolve(mockLiveSession);
+        });
+
+        renderHook(() =>
+            useGeminiLive(
+                'base instruction text',
+                'test-voice',
+                'Ancient Attic',
+                mockOnTurnComplete,
+                mockOnEnvironmentChangeRequest,
+                mockOnArtifactDisplayRequest,
+                mockQuest,
+            ),
+        );
+
+        await waitFor(() => expect(mockConnect).toHaveBeenCalled());
+
+        expect(capturedConfig?.systemInstruction).toBeTruthy();
+        expect(capturedConfig.systemInstruction).toContain('YOUR CURRENT MISSION');
+        expect(capturedConfig.systemInstruction).toContain(mockQuest.objective);
+        expect(capturedConfig.systemInstruction).toContain(mockQuest.focusPoints[0]);
+        expect(capturedConfig.systemInstruction).toMatch(/quiz/i);
+        expect(capturedConfig.systemInstruction).toMatch(/congratulate/i);
+        expect(capturedConfig.systemInstruction).toContain('base instruction text');
+    });
+
     it('should toggle microphone and update connection state', async () => {
         const { result } = renderHook(() =>
             useGeminiLive('system-instruction', 'test-voice', 'en-US', mockOnTurnComplete, mockOnEnvironmentChangeRequest, mockOnArtifactDisplayRequest, null)

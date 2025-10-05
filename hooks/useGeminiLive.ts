@@ -273,7 +273,16 @@ export const useGeminiLive = (
 
             let finalSystemInstruction = baseInstruction;
             if (activeQuest) {
-                finalSystemInstruction = `YOUR CURRENT MISSION: As a mentor, your primary goal is to guide the student to understand the following: "${activeQuest.objective}". Tailor your questions and explanations to lead them towards this goal.\n\n---\n\n${baseInstruction}`;
+                const focusPoints = Array.isArray(activeQuest.focusPoints)
+                    ? activeQuest.focusPoints.filter((point) => typeof point === 'string' && point.trim().length > 0)
+                    : [];
+                const focusPointChecklist = focusPoints.length > 0
+                    ? `Curriculum focus points to weave into the dialogue:\n${focusPoints
+                        .map((point, index) => `${index + 1}. ${point.trim()}`)
+                        .join('\n')}\n\n`
+                    : '';
+
+                finalSystemInstruction = `YOUR CURRENT MISSION: As a mentor, your primary goal is to guide the student to understand the following quest objective: "${activeQuest.objective}". Tailor your questions and explanations to lead them towards this goal.\n\n${focusPointChecklist}Mentor directives:\n1. Introduce each focus point naturally, checking for understanding before moving forward.\n2. Keep track of which focus points have been fully covered during the session.\n3. As soon as every focus point is complete, clearly tell the student that the quest curriculum is finished.\n4. Immediately lead a brief verbal mastery quiz of three questions tied to the objective. Ask questions one at a time, allow the student to answer, and give supportive corrections when needed.\n5. If the student struggles, revisit the relevant focus point with hints before marking the quest complete.\n6. After the quiz, summarize what they achieved, congratulate them, and encourage their next step.\n\n---\n\n${baseInstruction}`;
             }
 
             const sessionResumptionConfig: SessionResumptionConfig = {};
