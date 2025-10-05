@@ -199,7 +199,15 @@ export const useGeminiLive = (
 
             let finalSystemInstruction = baseInstruction;
             if (activeQuest) {
-                finalSystemInstruction = `YOUR CURRENT MISSION: As a mentor, your primary goal is to guide the student to understand the following: "${activeQuest.objective}". Tailor your questions and explanations to lead them towards this goal.\n\n---\n\n${baseInstruction}`;
+                const focusChecklist = (activeQuest.focusPoints && activeQuest.focusPoints.length > 0)
+                    ? activeQuest.focusPoints.map((point, index) => `${index + 1}. ${point}`).join('\n')
+                    : '1. Explore the quest objective in depth.';
+
+                const questMission = `YOUR CURRENT MISSION: As a mentor, guide the student toward mastering "${activeQuest.objective}" within the quest "${activeQuest.title}". Adapt your dialogue, explanations, and challenges to serve this objective.`;
+
+                const completionProtocol = `PROGRESS & COMPLETION PROTOCOL:\n- Track progress across these focus points and reference this progress when helpful or when the learner asks what remains:\n${focusChecklist}\n- Explicitly note which focus points are completed versus outstanding to keep the learner oriented.\n- Once every focus point has been meaningfully addressed, clearly announce that the planned lesson content is complete.\n- Immediately conduct a short verbal mastery check (2-3 targeted questions) covering the quest objective and focus points.\n- Use the learner's responses to decide whether to celebrate completion with a summary and optional next steps, or to revisit and reinforce any gaps before re-running the mastery check.`;
+
+                finalSystemInstruction = `${questMission}\n\n${completionProtocol}\n\n---\n\n${baseInstruction}`;
             }
 
             const sessionPromise = ai.live.connect({
