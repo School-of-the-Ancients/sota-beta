@@ -54,6 +54,37 @@ function createBlob(data: Float32Array): Blob {
     };
 }
 
+function parseDurationToMs(duration?: string | null): number | null {
+    if (!duration) {
+        return null;
+    }
+
+    const trimmed = duration.trim();
+    if (!trimmed) {
+        return null;
+    }
+
+    const secondsMatch = trimmed.match(/^(-?\d+(?:\.\d+)?)s$/i);
+    if (secondsMatch) {
+        const seconds = Number.parseFloat(secondsMatch[1]);
+        return Number.isNaN(seconds) ? null : Math.max(seconds * 1000, 0);
+    }
+
+    const isoMatch = trimmed.match(/^PT(?:(\d+(?:\.\d+)?)H)?(?:(\d+(?:\.\d+)?)M)?(?:(\d+(?:\.\d+)?)S)?$/i);
+    if (isoMatch) {
+        const hours = isoMatch[1] ? Number.parseFloat(isoMatch[1]) : 0;
+        const minutes = isoMatch[2] ? Number.parseFloat(isoMatch[2]) : 0;
+        const seconds = isoMatch[3] ? Number.parseFloat(isoMatch[3]) : 0;
+        if ([hours, minutes, seconds].some(value => Number.isNaN(value))) {
+            return null;
+        }
+        const totalMs = (hours * 3600 + minutes * 60 + seconds) * 1000;
+        return Math.max(totalMs, 0);
+    }
+
+    return null;
+}
+
 const changeEnvironmentFunctionDeclaration: FunctionDeclaration = {
     name: 'changeEnvironment',
     parameters: {
@@ -113,6 +144,10 @@ export const useGeminiLive = (
     const userTranscriptionRef = useRef('');
     const modelTranscriptionRef = useRef('');
     const isMicActiveRef = useRef(isMicActive);
+    const sessionHandleRef = useRef<string | null>(null);
+    const pendingResumptionHandleRef = useRef<string | null>(null);
+    const sessionRenewalTimeoutRef = useRef<number | null>(null);
+    const isRenewingSessionRef = useRef(false);
     useEffect(() => {
         isMicActiveRef.current = isMicActive;
     }, [isMicActive]);
@@ -155,12 +190,51 @@ export const useGeminiLive = (
         });
     }, []);
 
+    const clearScheduledRenewal = useCallback(() => {
+        if (sessionRenewalTimeoutRef.current !== null) {
+            window.clearTimeout(sessionRenewalTimeoutRef.current);
+            sessionRenewalTimeoutRef.current = null;
+        }
+    }, []);
+
+    const disconnect = useCallback(() => {
+        clearScheduledRenewal();
+        isRenewingSessionRef.current = false;
+
+        sessionPromiseRef.current?.then((session) => session.close()).catch(err => {
+            console.warn('Error during session close:', err);
+        });
+
+        mediaStreamRef.current?.getTracks().forEach(track => track.stop());
+
+        if (scriptProcessorRef.current && mediaStreamSourceRef.current) {
+            try {
+                mediaStreamSourceRef.current.disconnect(scriptProcessorRef.current);
+                scriptProcessorRef.current.disconnect();
+            } catch (e) {
+                // Ignore errors
+            }
+        }
+        scriptProcessorRef.current = null;
+        mediaStreamSourceRef.current = null;
+
+        inputAudioContextRef.current?.close().catch(console.error);
+        outputAudioContextRef.current?.close().catch(console.error);
+
+        inputAudioContextRef.current = null;
+        outputAudioContextRef.current = null;
+        mediaStreamRef.current = null;
+        sessionPromiseRef.current = null;
+
+        setConnectionState(ConnectionState.DISCONNECTED);
+    }, [clearScheduledRenewal]);
+
     const sendTextMessage = useCallback((text: string) => {
         if (!text.trim()) return;
-        
+
         onTurnCompleteRef.current({ user: text, model: '' });
         userTranscriptionRef.current = ''; // Clear after adding to transcript
-        
+
         setConnectionState(ConnectionState.THINKING);
         sessionPromiseRef.current?.then((session) => {
             try {
@@ -200,6 +274,13 @@ export const useGeminiLive = (
             let finalSystemInstruction = baseInstruction;
             if (activeQuest) {
                 finalSystemInstruction = `YOUR CURRENT MISSION: As a mentor, your primary goal is to guide the student to understand the following: "${activeQuest.objective}". Tailor your questions and explanations to lead them towards this goal.\n\n---\n\n${baseInstruction}`;
+            }
+
+            const sessionResumptionConfig: { handle?: string; resumable?: boolean } = {};
+            if (pendingResumptionHandleRef.current) {
+                sessionResumptionConfig.handle = pendingResumptionHandleRef.current;
+            } else {
+                sessionResumptionConfig.resumable = true;
             }
 
             const sessionPromise = ai.live.connect({
@@ -283,7 +364,48 @@ export const useGeminiLive = (
                                 setUserTranscription('');
                                 setModelTranscription('');
                             }
-                            
+
+                            if (message.sessionResumptionUpdate) {
+                                const { newHandle, resumable } = message.sessionResumptionUpdate;
+                                if (resumable && typeof newHandle === 'string' && newHandle.trim()) {
+                                    sessionHandleRef.current = newHandle;
+                                }
+                            }
+
+                            if (message.goAway?.timeLeft) {
+                                const parsedMs = parseDurationToMs(message.goAway.timeLeft);
+                                if (parsedMs !== null) {
+                                    const normalizedMs = parsedMs || 0;
+                                    if (!isRenewingSessionRef.current && sessionRenewalTimeoutRef.current === null) {
+                                        if (sessionHandleRef.current) {
+                                            const bufferMs = 5000;
+                                            const delay = Math.max(normalizedMs - bufferMs, 0);
+                                            sessionRenewalTimeoutRef.current = window.setTimeout(() => {
+                                                sessionRenewalTimeoutRef.current = null;
+                                                pendingResumptionHandleRef.current = sessionHandleRef.current;
+                                                isRenewingSessionRef.current = true;
+                                                try {
+                                                    disconnect();
+                                                } finally {
+                                                    window.setTimeout(() => {
+                                                        connect().catch(err => {
+                                                            console.error('Failed to renew Gemini Live session:', err);
+                                                            setConnectionState(ConnectionState.ERROR);
+                                                        }).finally(() => {
+                                                            isRenewingSessionRef.current = false;
+                                                        });
+                                                    }, 0);
+                                                }
+                                            }, delay);
+                                        } else {
+                                            console.warn('Received goAway notice but no resumable session handle is available.');
+                                        }
+                                    }
+                                } else {
+                                    console.warn('Unable to parse goAway timeLeft value:', message.goAway.timeLeft);
+                                }
+                            }
+
                             const interrupted = message.serverContent?.interrupted;
                             if (interrupted) {
                                 for (const source of audioBufferSources.current.values()) {
@@ -342,8 +464,11 @@ export const useGeminiLive = (
                     },
                     systemInstruction: finalSystemInstruction,
                     tools: [{functionDeclarations: [changeEnvironmentFunctionDeclaration, displayArtifactFunctionDeclaration]}],
+                    sessionResumption: sessionResumptionConfig,
                 },
             });
+
+            pendingResumptionHandleRef.current = null;
 
             sessionPromise.catch(err => {
                 console.error('Failed to establish Gemini Live session:', err);
@@ -356,37 +481,7 @@ export const useGeminiLive = (
             console.error('Failed to connect to Gemini Live:', error);
             setConnectionState(ConnectionState.ERROR);
         }
-    }, [systemInstruction, voiceName, activeQuest]);
-
-    const disconnect = useCallback(() => {
-        sessionPromiseRef.current?.then((session) => session.close()).catch(err => {
-            console.warn('Error during session close:', err);
-        });
-
-        mediaStreamRef.current?.getTracks().forEach(track => track.stop());
-
-        if (scriptProcessorRef.current && mediaStreamSourceRef.current) {
-            try {
-                mediaStreamSourceRef.current.disconnect(scriptProcessorRef.current);
-                scriptProcessorRef.current.disconnect();
-            } catch (e) {
-                // Ignore errors
-            }
-        }
-        scriptProcessorRef.current = null;
-        mediaStreamSourceRef.current = null;
-
-
-        inputAudioContextRef.current?.close().catch(console.error);
-        outputAudioContextRef.current?.close().catch(console.error);
-
-        inputAudioContextRef.current = null;
-        outputAudioContextRef.current = null;
-        mediaStreamRef.current = null;
-        sessionPromiseRef.current = null;
-
-        setConnectionState(ConnectionState.DISCONNECTED);
-    }, []);
+    }, [systemInstruction, voiceName, voiceAccent, activeQuest, disconnect]);
 
     useEffect(() => {
         connect();
