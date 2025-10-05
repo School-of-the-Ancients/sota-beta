@@ -477,10 +477,9 @@ ${contextTranscript}
     }
   }, [character.name]);
 
-  useEffect(() => {
-    if (transcript.length > 0 && transcript[transcript.length - 1].speaker === 'model') {
-      updateDynamicSuggestions(transcript);
-    }
+  const handleRequestSuggestions = useCallback(() => {
+    if (transcript.length === 0) return;
+    void updateDynamicSuggestions(transcript);
   }, [transcript, updateDynamicSuggestions]);
 
   // Auto-save conversation on transcript change
@@ -619,7 +618,17 @@ ${contextTranscript}
                 </div>
             ) : (
                 <div className="animate-fade-in">
-                <h4 className="text-md font-bold text-amber-200 mb-2 text-center">Topics to Explore</h4>
+                <div className="flex items-center justify-between mb-2">
+                    <h4 className="text-md font-bold text-amber-200">Topics to Explore</h4>
+                    <button
+                      type="button"
+                      onClick={handleRequestSuggestions}
+                      disabled={isFetchingSuggestions}
+                      className="text-xs font-semibold uppercase tracking-wide text-amber-200 bg-amber-900/40 hover:bg-amber-800/50 border border-amber-800/70 px-3 py-1.5 rounded-md transition-colors duration-200 disabled:opacity-60 disabled:cursor-not-allowed"
+                    >
+                      {isFetchingSuggestions ? 'Generating...' : 'Suggest prompts'}
+                    </button>
+                </div>
                 {isFetchingSuggestions ? (
                     <div className="space-y-2">
                     <div className="w-full bg-gray-800/60 p-3 rounded-lg h-[44px] animate-pulse"></div>
