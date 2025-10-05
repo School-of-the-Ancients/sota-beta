@@ -110,6 +110,12 @@ export const useGeminiLive = (
     const scriptProcessorRef = useRef<ScriptProcessorNode | null>(null);
     const mediaStreamSourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
 
+    const latestSessionHandleRef = useRef<string | null>(null);
+    const resumptionHandleRef = useRef<string | null>(null);
+    const extendInProgressRef = useRef(false);
+    const extendSessionRef = useRef<(() => Promise<void>) | null>(null);
+    const lastExtendAttemptRef = useRef<number>(0);
+
     const userTranscriptionRef = useRef('');
     const modelTranscriptionRef = useRef('');
     const isMicActiveRef = useRef(isMicActive);
@@ -186,6 +192,9 @@ export const useGeminiLive = (
 
         try {
             const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+
+            const pendingResumptionHandle = resumptionHandleRef.current;
+            resumptionHandleRef.current = null;
 
             const sanitizedAccent = voiceAccent?.trim();
             let baseInstruction = systemInstruction.trim();
@@ -269,7 +278,27 @@ export const useGeminiLive = (
                                     });
                                   });
                                 }
-                              }
+                            }
+
+                            const resumptionUpdate = message.sessionResumptionUpdate;
+                            if (resumptionUpdate?.newHandle && resumptionUpdate.resumable !== false) {
+                                latestSessionHandleRef.current = resumptionUpdate.newHandle;
+                            }
+
+                            const goAway = message.goAway;
+                            if (goAway) {
+                                const now = Date.now();
+                                const previousAttempt = lastExtendAttemptRef.current;
+                                if (now - previousAttempt > 5000) {
+                                    lastExtendAttemptRef.current = now;
+                                    const extendFn = extendSessionRef.current;
+                                    if (extendFn) {
+                                        void extendFn();
+                                    } else {
+                                        console.warn('Received goAway notification but no extension handler is available.');
+                                    }
+                                }
+                            }
 
                             if (message.serverContent?.turnComplete) {
                                 if (userTranscriptionRef.current.trim() || modelTranscriptionRef.current.trim()) {
@@ -342,6 +371,10 @@ export const useGeminiLive = (
                     },
                     systemInstruction: finalSystemInstruction,
                     tools: [{functionDeclarations: [changeEnvironmentFunctionDeclaration, displayArtifactFunctionDeclaration]}],
+                    sessionResumption: {
+                        transparent: true,
+                        ...(pendingResumptionHandle ? { handle: pendingResumptionHandle } : {}),
+                    },
                 },
             });
 
@@ -387,6 +420,40 @@ export const useGeminiLive = (
 
         setConnectionState(ConnectionState.DISCONNECTED);
     }, []);
+
+    const extendSession = useCallback(async () => {
+        if (extendInProgressRef.current) {
+            return;
+        }
+
+        const handle = latestSessionHandleRef.current;
+        if (!handle) {
+            console.warn('No session resumption handle available; cannot extend the Gemini Live session.');
+            return;
+        }
+
+        extendInProgressRef.current = true;
+        resumptionHandleRef.current = handle;
+
+        try {
+            disconnect();
+            await connect();
+        } catch (error) {
+            console.error('Failed to extend Gemini Live session:', error);
+            resumptionHandleRef.current = null;
+            latestSessionHandleRef.current = null;
+            try {
+                await connect();
+            } catch (fallbackError) {
+                console.error('Failed to establish a fresh Gemini Live session after extension failure:', fallbackError);
+                setConnectionState(ConnectionState.ERROR);
+            }
+        } finally {
+            extendInProgressRef.current = false;
+        }
+    }, [connect, disconnect]);
+
+    extendSessionRef.current = extendSession;
 
     useEffect(() => {
         connect();
