@@ -273,7 +273,7 @@ export const useGeminiLive = (
 
             let finalSystemInstruction = baseInstruction;
             if (activeQuest) {
-                finalSystemInstruction = `YOUR CURRENT MISSION: As a mentor, your primary goal is to guide the student to understand the following: "${activeQuest.objective}". Tailor your questions and explanations to lead them towards this goal.\n\n---\n\n${baseInstruction}`;
+                finalSystemInstruction = `YOUR CURRENT MISSION: As a mentor, your primary goal is to guide the student to understand the following: "${activeQuest.objective}". Tailor your questions and explanations to lead them towards this goal. After all objectives are completed, give a brief verbal overview quiz, then congratulate and let the student know that the quest is completed. \n\n---\n\n${baseInstruction}`;
             }
 
             const sessionResumptionConfig: SessionResumptionConfig = {};
