@@ -93,6 +93,23 @@ export interface SavedConversation {
   questAssessment?: QuestAssessment;
 }
 
+export interface QuizQuestion {
+  id: string;
+  prompt: string;
+  options: string[];
+  answer: number;
+  objectiveTag?: string;
+}
+
+export interface QuizResult {
+  questId: string;
+  correct: number;
+  total: number;
+  scoreRatio: number;
+  passed: boolean;
+  missedObjectiveTags: string[];
+}
+
 export interface Quest {
   id: string;
   title: string;
