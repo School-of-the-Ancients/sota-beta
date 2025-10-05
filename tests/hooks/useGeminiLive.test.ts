@@ -86,6 +86,10 @@ describe('useGeminiLive', () => {
         });
     });
 
+    afterEach(() => {
+        vi.useRealTimers();
+    });
+
     it('should initialize with CONNECTING state and transition to LISTENING', async () => {
         const { result } = renderHook(() =>
             useGeminiLive('system-instruction', 'test-voice', 'en-US', mockOnTurnComplete, mockOnEnvironmentChangeRequest, mockOnArtifactDisplayRequest, null)
@@ -98,6 +102,8 @@ describe('useGeminiLive', () => {
         });
 
         expect(mockConnect).toHaveBeenCalled();
+        const firstCallArgs = mockConnect.mock.calls[0][0];
+        expect(firstCallArgs.config?.sessionResumption).toMatchObject({ transparent: true });
     });
 
     it('should handle sending a text message', async () => {
@@ -185,6 +191,43 @@ describe('useGeminiLive', () => {
 
         expect(mockOnEnvironmentChangeRequest).toHaveBeenCalledWith('A new world');
         expect(mockLiveSession.sendToolResponse).toHaveBeenCalled();
+    });
+
+    it('should reconnect with a session handle when a goAway is received', async () => {
+        vi.useFakeTimers();
+
+        const openCallbacks: Array<() => void> = [];
+        const messageCallbacks: Array<(msg: any) => void> = [];
+
+        mockConnect.mockImplementation(({ callbacks }) => {
+            openCallbacks.push(callbacks.onopen);
+            messageCallbacks.push(callbacks.onmessage);
+            return Promise.resolve(mockLiveSession);
+        });
+
+        renderHook(() =>
+            useGeminiLive('system-instruction', 'test-voice', 'en-US', mockOnTurnComplete, mockOnEnvironmentChangeRequest, mockOnArtifactDisplayRequest, null)
+        );
+
+        await act(async () => {
+            openCallbacks[0]();
+        });
+
+        await act(async () => {
+            messageCallbacks[0]({ sessionResumptionUpdate: { resumable: true, newHandle: 'session-handle-1' } });
+        });
+
+        await act(async () => {
+            messageCallbacks[0]({ goAway: { timeLeft: '60s' } });
+        });
+
+        await act(async () => {
+            vi.advanceTimersByTime(60000);
+        });
+
+        expect(mockConnect).toHaveBeenCalledTimes(2);
+        const resumeCallArgs = mockConnect.mock.calls[1][0];
+        expect(resumeCallArgs.config?.sessionResumption).toMatchObject({ transparent: true, handle: 'session-handle-1' });
     });
 
     it('should toggle microphone and update connection state', async () => {

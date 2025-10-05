@@ -88,6 +88,24 @@ const changeEnvironmentFunctionDeclaration: FunctionDeclaration = {
     },
   };
 
+type SessionResumptionHandle = {
+    handle: string;
+    lastConsumedClientMessageIndex?: string;
+};
+
+const SESSION_EXTENSION_BUFFER_MS = 5000;
+
+function parseDurationToMs(duration?: string): number | null {
+    if (!duration) return null;
+    const match = duration.trim().match(/^(\d+)(?:\.(\d+))?s$/i);
+    if (!match) {
+        return null;
+    }
+    const seconds = parseInt(match[1], 10);
+    const fractional = match[2] ? parseFloat(`0.${match[2]}`) : 0;
+    return Math.round((seconds + fractional) * 1000);
+}
+
 export const useGeminiLive = (
     systemInstruction: string,
     voiceName: string,
@@ -113,6 +131,9 @@ export const useGeminiLive = (
     const userTranscriptionRef = useRef('');
     const modelTranscriptionRef = useRef('');
     const isMicActiveRef = useRef(isMicActive);
+    const sessionResumptionHandleRef = useRef<SessionResumptionHandle | null>(null);
+    const goAwayTimeoutRef = useRef<number | null>(null);
+    const isExtendingSessionRef = useRef(false);
     useEffect(() => {
         isMicActiveRef.current = isMicActive;
     }, [isMicActive]);
@@ -126,6 +147,13 @@ export const useGeminiLive = (
     onEnvironmentChangeRequestRef.current = onEnvironmentChangeRequest;
     const onArtifactDisplayRequestRef = useRef(onArtifactDisplayRequest);
     onArtifactDisplayRequestRef.current = onArtifactDisplayRequest;
+
+    const clearScheduledExtension = useCallback(() => {
+        if (goAwayTimeoutRef.current !== null) {
+            clearTimeout(goAwayTimeoutRef.current);
+            goAwayTimeoutRef.current = null;
+        }
+    }, []);
 
     const toggleMicrophone = useCallback(() => {
         setIsMicActive(prevIsActive => {
@@ -175,7 +203,41 @@ export const useGeminiLive = (
         });
     }, []);
 
-    const connect = useCallback(async () => {
+    const disconnect = useCallback((options?: { skipState?: boolean }) => {
+        sessionPromiseRef.current?.then((session) => session.close()).catch(err => {
+            console.warn('Error during session close:', err);
+        });
+
+        mediaStreamRef.current?.getTracks().forEach(track => track.stop());
+
+        if (scriptProcessorRef.current && mediaStreamSourceRef.current) {
+            try {
+                mediaStreamSourceRef.current.disconnect(scriptProcessorRef.current);
+                scriptProcessorRef.current.disconnect();
+            } catch (e) {
+                // Ignore errors
+            }
+        }
+        scriptProcessorRef.current = null;
+        mediaStreamSourceRef.current = null;
+
+
+        inputAudioContextRef.current?.close().catch(console.error);
+        outputAudioContextRef.current?.close().catch(console.error);
+
+        inputAudioContextRef.current = null;
+        outputAudioContextRef.current = null;
+        mediaStreamRef.current = null;
+        sessionPromiseRef.current = null;
+
+        clearScheduledExtension();
+
+        if (!options?.skipState) {
+            setConnectionState(ConnectionState.DISCONNECTED);
+        }
+    }, [clearScheduledExtension]);
+
+    const connect = useCallback(async (options?: { resumeHandle?: string | null }) => {
         setConnectionState(ConnectionState.CONNECTING);
 
         if (!process.env.API_KEY) {
@@ -200,6 +262,11 @@ export const useGeminiLive = (
             let finalSystemInstruction = baseInstruction;
             if (activeQuest) {
                 finalSystemInstruction = `YOUR CURRENT MISSION: As a mentor, your primary goal is to guide the student to understand the following: "${activeQuest.objective}". Tailor your questions and explanations to lead them towards this goal.\n\n---\n\n${baseInstruction}`;
+            }
+
+            const sessionResumptionConfig: Record<string, unknown> = { transparent: true };
+            if (options?.resumeHandle) {
+                sessionResumptionConfig.handle = options.resumeHandle;
             }
 
             const sessionPromise = ai.live.connect({
@@ -239,6 +306,39 @@ export const useGeminiLive = (
                         try {
                             let currentInput = userTranscriptionRef.current;
                             let currentOutput = modelTranscriptionRef.current;
+
+                            if (message.sessionResumptionUpdate?.resumable && message.sessionResumptionUpdate.newHandle) {
+                                sessionResumptionHandleRef.current = {
+                                    handle: message.sessionResumptionUpdate.newHandle,
+                                    lastConsumedClientMessageIndex: message.sessionResumptionUpdate.lastConsumedClientMessageIndex,
+                                };
+                            }
+
+                            if (message.goAway) {
+                                const timeLeftMs = parseDurationToMs(message.goAway.timeLeft);
+                                const delay = timeLeftMs === null
+                                    ? 0
+                                    : Math.max(0, timeLeftMs - SESSION_EXTENSION_BUFFER_MS);
+                                clearScheduledExtension();
+                                goAwayTimeoutRef.current = window.setTimeout(() => {
+                                    if (isExtendingSessionRef.current) {
+                                        return;
+                                    }
+                                    const handleSnapshot = sessionResumptionHandleRef.current?.handle;
+                                    if (!handleSnapshot) {
+                                        console.warn('Received goAway message but no resumable handle is available to extend the session.');
+                                        return;
+                                    }
+                                    isExtendingSessionRef.current = true;
+                                    disconnect({ skipState: true });
+                                    connect({ resumeHandle: handleSnapshot }).catch(err => {
+                                        console.error('Failed to extend Gemini Live session automatically:', err);
+                                        setConnectionState(ConnectionState.ERROR);
+                                    }).finally(() => {
+                                        isExtendingSessionRef.current = false;
+                                    });
+                                }, delay);
+                            }
 
                             if (message.serverContent?.inputTranscription) {
                                 currentInput += message.serverContent.inputTranscription.text;
@@ -342,6 +442,7 @@ export const useGeminiLive = (
                     },
                     systemInstruction: finalSystemInstruction,
                     tools: [{functionDeclarations: [changeEnvironmentFunctionDeclaration, displayArtifactFunctionDeclaration]}],
+                    sessionResumption: sessionResumptionConfig,
                 },
             });
 
@@ -351,42 +452,14 @@ export const useGeminiLive = (
             });
 
             sessionPromiseRef.current = sessionPromise;
+            clearScheduledExtension();
+            isExtendingSessionRef.current = false;
 
         } catch (error) {
             console.error('Failed to connect to Gemini Live:', error);
             setConnectionState(ConnectionState.ERROR);
         }
-    }, [systemInstruction, voiceName, activeQuest]);
-
-    const disconnect = useCallback(() => {
-        sessionPromiseRef.current?.then((session) => session.close()).catch(err => {
-            console.warn('Error during session close:', err);
-        });
-
-        mediaStreamRef.current?.getTracks().forEach(track => track.stop());
-
-        if (scriptProcessorRef.current && mediaStreamSourceRef.current) {
-            try {
-                mediaStreamSourceRef.current.disconnect(scriptProcessorRef.current);
-                scriptProcessorRef.current.disconnect();
-            } catch (e) {
-                // Ignore errors
-            }
-        }
-        scriptProcessorRef.current = null;
-        mediaStreamSourceRef.current = null;
-
-
-        inputAudioContextRef.current?.close().catch(console.error);
-        outputAudioContextRef.current?.close().catch(console.error);
-
-        inputAudioContextRef.current = null;
-        outputAudioContextRef.current = null;
-        mediaStreamRef.current = null;
-        sessionPromiseRef.current = null;
-
-        setConnectionState(ConnectionState.DISCONNECTED);
-    }, []);
+    }, [systemInstruction, voiceName, voiceAccent, activeQuest, clearScheduledExtension, disconnect]);
 
     useEffect(() => {
         connect();
