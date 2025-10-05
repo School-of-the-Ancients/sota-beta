@@ -25,6 +25,7 @@ const CUSTOM_CHARACTERS_KEY = 'school-of-the-ancients-custom-characters';
 const HISTORY_KEY = 'school-of-the-ancients-history';
 const COMPLETED_QUESTS_KEY = 'school-of-the-ancients-completed-quests';
 const CUSTOM_QUESTS_KEY = 'school-of-the-ancients-custom-quests';
+const ACTIVE_QUEST_KEY = 'school-of-the-ancients-active-quest-id';
 
 // ---- Local storage helpers -------------------------------------------------
 
@@ -89,6 +90,46 @@ const saveCustomQuests = (quests: Quest[]) => {
   }
 };
 
+const loadActiveQuestId = (): string | null => {
+  try {
+    return localStorage.getItem(ACTIVE_QUEST_KEY);
+  } catch (error) {
+    console.error('Failed to load active quest:', error);
+    return null;
+  }
+};
+
+const saveActiveQuestId = (questId: string | null) => {
+  try {
+    if (questId) {
+      localStorage.setItem(ACTIVE_QUEST_KEY, questId);
+    } else {
+      localStorage.removeItem(ACTIVE_QUEST_KEY);
+    }
+  } catch (error) {
+    console.error('Failed to persist active quest:', error);
+  }
+};
+
+const updateCharacterQueryParam = (characterId: string, mode: 'push' | 'replace') => {
+  try {
+    const params = new URLSearchParams(window.location.search);
+    params.set('character', characterId);
+    const pathname = typeof window.location.pathname === 'string' && window.location.pathname
+      ? window.location.pathname
+      : '/';
+    const newSearch = params.toString();
+    const nextUrl = `${pathname}${newSearch ? `?${newSearch}` : ''}`;
+    if (mode === 'push') {
+      window.history.pushState({}, '', nextUrl);
+    } else {
+      window.history.replaceState({}, '', nextUrl);
+    }
+  } catch (error) {
+    console.warn('Failed to update character query parameter:', error);
+  }
+};
+
 // ---- App -------------------------------------------------------------------
 
 const App: React.FC = () => {
@@ -150,7 +191,13 @@ const App: React.FC = () => {
 
     setInProgressQuestIds((prev) => prev.filter((id) => !removedQuestIds.includes(id)));
 
-    setActiveQuest((current) => (current && removedQuestIds.includes(current.id) ? null : current));
+    setActiveQuest((current) => {
+      if (current && removedQuestIds.includes(current.id)) {
+        saveActiveQuestId(null);
+        return null;
+      }
+      return current;
+    });
   }, [customQuests, customCharacters]);
 
   const syncQuestProgress = useCallback(() => {
@@ -185,15 +232,41 @@ const App: React.FC = () => {
       setCustomQuests(loadedCustomQuests);
     }
 
+    const allCharacters = [...loadedCustomCharacters, ...CHARACTERS];
+    const availableQuests = [...loadedCustomQuests, ...QUESTS];
+
+    let characterToSelect: Character | null = null;
+
+    const storedActiveQuestId = loadActiveQuestId();
+    if (storedActiveQuestId) {
+      const storedQuest = availableQuests.find((quest) => quest.id === storedActiveQuestId) || null;
+      if (storedQuest) {
+        setActiveQuest(storedQuest);
+        const questCharacter = allCharacters.find((c) => c.id === storedQuest.characterId) || null;
+        if (questCharacter) {
+          characterToSelect = questCharacter;
+        } else {
+          console.warn(`Character with ID ${storedQuest.characterId} not found for stored active quest.`);
+          saveActiveQuestId(null);
+        }
+      } else {
+        saveActiveQuestId(null);
+      }
+    }
+
     const urlParams = new URLSearchParams(window.location.search);
     const characterId = urlParams.get('character');
-    if (characterId) {
-      const allCharacters = [...loadedCustomCharacters, ...CHARACTERS];
+    if (!characterToSelect && characterId) {
       const characterFromUrl = allCharacters.find((c) => c.id === characterId);
       if (characterFromUrl) {
-        setSelectedCharacter(characterFromUrl);
-        setView('conversation');
+        characterToSelect = characterFromUrl;
       }
+    }
+
+    if (characterToSelect) {
+      setSelectedCharacter(characterToSelect);
+      setView('conversation');
+      updateCharacterQueryParam(characterToSelect.id, 'replace');
     }
 
     setCompletedQuests(loadCompletedQuests());
@@ -207,10 +280,9 @@ const App: React.FC = () => {
     setSelectedCharacter(character);
     setView('conversation');
     setActiveQuest(null); // clear any quest when directly picking a character
+    saveActiveQuestId(null);
     setResumeConversationId(null);
-    const url = new URL(window.location.href);
-    url.searchParams.set('character', character.id);
-    window.history.pushState({}, '', url);
+    updateCharacterQueryParam(character.id, 'push');
   };
 
   const handleSelectQuest = (quest: Quest) => {
@@ -218,12 +290,11 @@ const App: React.FC = () => {
     const characterForQuest = allCharacters.find((c) => c.id === quest.characterId);
     if (characterForQuest) {
       setActiveQuest(quest);
+      saveActiveQuestId(quest.id);
       setSelectedCharacter(characterForQuest);
       setView('conversation');
       setResumeConversationId(null);
-      const url = new URL(window.location.href);
-      url.searchParams.set('character', characterForQuest.id);
-      window.history.pushState({}, '', url);
+      updateCharacterQueryParam(characterForQuest.id, 'push');
     } else {
       console.error(`Character with ID ${quest.characterId} not found for the selected quest.`);
     }
@@ -258,19 +329,20 @@ const App: React.FC = () => {
       const questToResume = allQuests.find((quest) => quest.id === conversation.questId);
       if (questToResume) {
         setActiveQuest(questToResume);
+        saveActiveQuestId(questToResume.id);
       } else {
         console.warn(`Quest with ID ${conversation.questId} not found while resuming conversation.`);
         setActiveQuest(null);
+        saveActiveQuestId(null);
       }
     } else {
       setActiveQuest(null);
+      saveActiveQuestId(null);
     }
 
     setView('conversation');
 
-    const url = new URL(window.location.href);
-    url.searchParams.set('character', characterToResume.id);
-    window.history.pushState({}, '', url);
+    updateCharacterQueryParam(characterToResume.id, 'push');
   };
 
   const handleCharacterCreated = (newCharacter: Character) => {
@@ -324,7 +396,13 @@ const App: React.FC = () => {
 
     setInProgressQuestIds((prev) => prev.filter((id) => id !== questId));
 
-    setActiveQuest((current) => (current?.id === questId ? null : current));
+    setActiveQuest((current) => {
+      if (current?.id === questId) {
+        saveActiveQuestId(null);
+        return null;
+      }
+      return current;
+    });
   };
 
   const openQuestCreator = (goal?: string | null) => {
@@ -364,12 +442,11 @@ const App: React.FC = () => {
       return updated;
     });
     setActiveQuest(quest);
+    saveActiveQuestId(quest.id);
     setSelectedCharacter(mentor);
     setView('conversation');
     setResumeConversationId(null);
-    const url = new URL(window.location.href);
-    url.searchParams.set('character', mentor.id);
-    window.history.pushState({}, '', url);
+    updateCharacterQueryParam(mentor.id, 'push');
   };
 
   // ---- End conversation: summarize & (if quest) evaluate mastery ----
@@ -548,15 +625,16 @@ Focus only on the student's contributions. Mark passed=true only if the learner 
       if (questAssessment) {
         setLastQuestOutcome(questAssessment);
       } else if (activeQuest) {
-        setLastQuestOutcome(null);
-      }
-      setSelectedCharacter(null);
-      setView('selector');
-      setEnvironmentImageUrl(null);
-      setActiveQuest(null);
-      setResumeConversationId(null);
-      window.history.pushState({}, '', window.location.pathname);
+      setLastQuestOutcome(null);
     }
+    setSelectedCharacter(null);
+    setView('selector');
+    setEnvironmentImageUrl(null);
+    setActiveQuest(null);
+    saveActiveQuestId(null);
+    setResumeConversationId(null);
+    window.history.pushState({}, '', window.location.pathname);
+  }
   };
 
   // ---- View switcher ----
