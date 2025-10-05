@@ -122,7 +122,8 @@ const changeEnvironmentFunctionDeclaration: FunctionDeclaration = {
 export const useGeminiLive = (
     systemInstruction: string,
     voiceName: string,
-    voiceAccent?: string,
+    voiceAccent: string | undefined,
+    languageCode: string,
     onTurnComplete: (turn: { user: string; model: string }) => void,
     onEnvironmentChangeRequest: (description: string) => void,
     onArtifactDisplayRequest: (name: string, description: string) => void,
@@ -262,6 +263,7 @@ export const useGeminiLive = (
             const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
             const sanitizedAccent = voiceAccent?.trim();
+            const sanitizedLanguageCode = languageCode?.trim();
             let baseInstruction = systemInstruction.trim();
             if (sanitizedAccent) {
                 const accentDirective = `Always speak using ${sanitizedAccent}, ensuring the accent, gender, and tone remain consistent. If your voice deviates from ${sanitizedAccent}, correct it immediately before continuing.`;
@@ -281,6 +283,7 @@ export const useGeminiLive = (
                 sessionResumptionConfig.handle = pendingResumptionHandleRef.current;
             }
 
+            const inputTranscriptionConfig = sanitizedLanguageCode ? { languageCode: sanitizedLanguageCode } : {};
             const sessionPromise = ai.live.connect({
                 model: 'gemini-2.5-flash-native-audio-preview-09-2025',
                 callbacks: {
@@ -455,9 +458,10 @@ export const useGeminiLive = (
                 },
                 config: {
                     responseModalities: [Modality.AUDIO],
-                    inputAudioTranscription: {},
-                    outputAudioTranscription: {},
+                    inputAudioTranscription: inputTranscriptionConfig,
+                    outputAudioTranscription: sanitizedLanguageCode ? { languageCode: sanitizedLanguageCode } : {},
                     speechConfig: {
+                        ...(sanitizedLanguageCode ? { languageCode: sanitizedLanguageCode } : {}),
                         voiceConfig: { prebuiltVoiceConfig: { voiceName: voiceName } },
                     },
                     systemInstruction: finalSystemInstruction,
@@ -479,7 +483,7 @@ export const useGeminiLive = (
             console.error('Failed to connect to Gemini Live:', error);
             setConnectionState(ConnectionState.ERROR);
         }
-    }, [systemInstruction, voiceName, voiceAccent, activeQuest, disconnect]);
+    }, [systemInstruction, voiceName, voiceAccent, languageCode, activeQuest, disconnect]);
 
     useEffect(() => {
         connect();

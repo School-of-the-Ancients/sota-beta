@@ -5,6 +5,11 @@ export interface VoiceProfile {
   description: string;
 }
 
+export interface LanguageOption {
+  code: string;
+  label: string;
+}
+
 export interface Ambience {
   tag: string;
   description: string;

@@ -13,6 +13,11 @@ vi.mock('../../constants', () => ({
     AVAILABLE_VOICES: [
         { name: 'socrates-voice', gender: 'male', description: 'a thoughtful male timbre' },
     ],
+    SUPPORTED_LANGUAGES: [
+        { code: 'en-US', label: 'English (United States)' },
+        { code: 'en-GB', label: 'English (United Kingdom)' },
+    ],
+    DEFAULT_LANGUAGE_CODE: 'en-US',
 }));
 
 const mockGenerateContent = vi.fn();
@@ -37,8 +42,8 @@ const useGeminiLiveMock = vi.fn();
 
 vi.mock('../../hooks/useGeminiLive', () => ({
   useGeminiLive: vi.fn((
-    sysInstruction, voice, accent,
-    onTurnComplete, onEnvironmentChange, onArtifactDisplay
+    sysInstruction, voice, accent, languageCode,
+    onTurnComplete, onEnvironmentChange, onArtifactDisplay,
   ) => {
     onTurnCompleteCallback = onTurnComplete;
     onEnvironmentChangeRequestCallback = onEnvironmentChange;

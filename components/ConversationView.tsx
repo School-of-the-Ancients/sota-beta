@@ -4,7 +4,7 @@ import type { Character, ConversationTurn, SavedConversation, Quest } from '../t
 import { useGeminiLive } from '../hooks/useGeminiLive';
 import { useAmbientAudio } from '../hooks/useAmbientAudio';
 import { ConnectionState } from '../types';
-import { AMBIENCE_LIBRARY } from '../constants';
+import { AMBIENCE_LIBRARY, SUPPORTED_LANGUAGES, DEFAULT_LANGUAGE_CODE } from '../constants';
 import MicrophoneIcon from './icons/MicrophoneIcon';
 import MicrophoneOffIcon from './icons/MicrophoneOffIcon';
 import WaveformIcon from './icons/WaveformIcon';
@@ -14,6 +14,7 @@ import MuteIcon from './icons/MuteIcon';
 import UnmuteIcon from './icons/UnmuteIcon';
 
 const HISTORY_KEY = 'school-of-the-ancients-history';
+const LANGUAGE_KEY = 'school-of-the-ancients-language-code';
 
 interface ConversationViewProps {
   character: Character;
@@ -115,6 +116,17 @@ const ConversationView: React.FC<ConversationViewProps> = ({
   const [isFetchingSuggestions, setIsFetchingSuggestions] = useState(false);
   const [isGeneratingVisual, setIsGeneratingVisual] = useState(false);
   const [generationMessage, setGenerationMessage] = useState('');
+  const [languageCode, setLanguageCode] = useState(() => {
+    try {
+      const stored = localStorage.getItem(LANGUAGE_KEY);
+      if (stored && SUPPORTED_LANGUAGES.some((lang) => lang.code === stored)) {
+        return stored;
+      }
+    } catch (error) {
+      console.warn('Failed to read language preference:', error);
+    }
+    return DEFAULT_LANGUAGE_CODE;
+  });
 
   const initialAudioSrc = AMBIENCE_LIBRARY.find(a => a.tag === character.ambienceTag)?.audioSrc ?? null;
   const { isMuted: isAmbienceMuted, toggleMute: toggleAmbienceMute, changeTrack: changeAmbienceTrack } = useAmbientAudio(initialAudioSrc);
@@ -149,6 +161,14 @@ const ConversationView: React.FC<ConversationViewProps> = ({
   }, [character.name, character.suggestedPrompts]);
   
   const [placeholder, setPlaceholder] = useState(placeholders[0]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(LANGUAGE_KEY, languageCode);
+    } catch (error) {
+      console.warn('Failed to persist language preference:', error);
+    }
+  }, [languageCode]);
 
   const sessionIdRef = useRef(`conv_${character.id}_${Date.now()}`);
   const sessionQuestRef = useRef<{ questId?: string; questTitle?: string }>({});
@@ -422,6 +442,7 @@ const ConversationView: React.FC<ConversationViewProps> = ({
     character.systemInstruction,
     character.voiceName,
     character.voiceAccent,
+    languageCode,
     handleTurnComplete,
     handleEnvironmentChange,
     handleArtifactDisplay,
@@ -574,7 +595,31 @@ ${contextTranscript}
             </div>
             <h2 className="text-2xl sm:text-3xl font-bold text-amber-200 mt-8">{character.name}</h2>
             <p className="text-gray-400 italic">{character.title}</p>
-            
+
+            <div className="mt-4 w-full max-w-xs text-left">
+              <label
+                className="block text-xs font-semibold text-amber-300 uppercase tracking-wide mb-1"
+                htmlFor="language-select"
+              >
+                Conversation language
+              </label>
+              <select
+                id="language-select"
+                value={languageCode}
+                onChange={(event) => setLanguageCode(event.target.value)}
+                className="w-full bg-gray-800/70 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-200 focus:outline-none focus:ring-2 focus:ring-amber-500"
+              >
+                {SUPPORTED_LANGUAGES.map((lang) => (
+                  <option key={lang.code} value={lang.code}>
+                    {lang.label}
+                  </option>
+                ))}
+              </select>
+              <p className="mt-1 text-[11px] text-gray-400">
+                Transcription and speech will default to this language unless you explicitly ask for another.
+              </p>
+            </div>
+
             {activeQuest && (
                 <div className="mt-4 p-4 w-full max-w-xs bg-amber-900/40 border border-amber-800/80 rounded-lg text-left animate-fade-in space-y-3">
                     <div>

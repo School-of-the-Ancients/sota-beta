@@ -1,4 +1,17 @@
-import type { Character, Ambience, Quest, VoiceProfile } from './types';
+import type { Character, Ambience, Quest, VoiceProfile, LanguageOption } from './types';
+
+// Language availability aligns with Gemini Live + Chirp 3 HD coverage.
+// https://cloud.google.com/text-to-speech/docs/chirp3-hd#language_availability
+// https://cloud.google.com/vertex-ai/generative-ai/docs/models/gemini/2-5-flash#live-api-native-audio
+export const SUPPORTED_LANGUAGES: LanguageOption[] = [
+  { code: 'en-US', label: 'English (United States)' },
+  { code: 'en-GB', label: 'English (United Kingdom)' },
+  { code: 'es-ES', label: 'Spanish (Spain)' },
+  { code: 'fr-FR', label: 'French (France)' },
+  { code: 'de-DE', label: 'German (Germany)' },
+];
+
+export const DEFAULT_LANGUAGE_CODE = SUPPORTED_LANGUAGES[0].code;
 
 // Voice metadata mirrors the Chirp 3: HD voice catalog genders published by Google.
 // https://cloud.google.com/text-to-speech/docs/chirp3-hd#voice_options

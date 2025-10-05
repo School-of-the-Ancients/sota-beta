@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { renderHook, act, waitFor } from '@testing-library/react';
 import { useGeminiLive } from '../../hooks/useGeminiLive';
+import { DEFAULT_LANGUAGE_CODE } from '../../constants';
 import { ConnectionState, Quest } from '../../types';
 
 // Mock @google/genai
@@ -88,7 +89,7 @@ describe('useGeminiLive', () => {
 
     it('should initialize with CONNECTING state and transition to LISTENING', async () => {
         const { result } = renderHook(() =>
-            useGeminiLive('system-instruction', 'test-voice', 'en-US', mockOnTurnComplete, mockOnEnvironmentChangeRequest, mockOnArtifactDisplayRequest, null)
+            useGeminiLive('system-instruction', 'test-voice', 'Attic accent', DEFAULT_LANGUAGE_CODE, mockOnTurnComplete, mockOnEnvironmentChangeRequest, mockOnArtifactDisplayRequest, null)
         );
 
         expect(result.current.connectionState).toBe(ConnectionState.CONNECTING);
@@ -102,7 +103,7 @@ describe('useGeminiLive', () => {
 
     it('should handle sending a text message', async () => {
         const { result } = renderHook(() =>
-            useGeminiLive('system-instruction', 'test-voice', 'en-US', mockOnTurnComplete, mockOnEnvironmentChangeRequest, mockOnArtifactDisplayRequest, null)
+            useGeminiLive('system-instruction', 'test-voice', 'Attic accent', DEFAULT_LANGUAGE_CODE, mockOnTurnComplete, mockOnEnvironmentChangeRequest, mockOnArtifactDisplayRequest, null)
         );
 
         await waitFor(() => expect(result.current.connectionState).toBe(ConnectionState.LISTENING));
@@ -119,6 +120,22 @@ describe('useGeminiLive', () => {
         });
     });
 
+    it('should pass the selected language to the live session config', async () => {
+        renderHook(() =>
+            useGeminiLive('system-instruction', 'test-voice', 'Attic accent', DEFAULT_LANGUAGE_CODE, mockOnTurnComplete, mockOnEnvironmentChangeRequest, mockOnArtifactDisplayRequest, null)
+        );
+
+        await waitFor(() => expect(mockConnect).toHaveBeenCalled());
+
+        const lastCall = mockConnect.mock.calls[mockConnect.mock.calls.length - 1][0];
+        expect(lastCall.config.inputAudioTranscription).toEqual({ languageCode: DEFAULT_LANGUAGE_CODE });
+        expect(lastCall.config.outputAudioTranscription).toEqual({ languageCode: DEFAULT_LANGUAGE_CODE });
+        expect(lastCall.config.speechConfig).toMatchObject({
+            languageCode: DEFAULT_LANGUAGE_CODE,
+            voiceConfig: { prebuiltVoiceConfig: { voiceName: 'test-voice' } },
+        });
+    });
+
     it('should handle incoming transcriptions and turn completion', async () => {
         let openCallback: () => void;
         let messageCallback: (msg: any) => void;
@@ -130,7 +147,7 @@ describe('useGeminiLive', () => {
         });
 
         const { result } = renderHook(() =>
-            useGeminiLive('system-instruction', 'test-voice', 'en-US', mockOnTurnComplete, mockOnEnvironmentChangeRequest, mockOnArtifactDisplayRequest, null)
+            useGeminiLive('system-instruction', 'test-voice', 'Attic accent', DEFAULT_LANGUAGE_CODE, mockOnTurnComplete, mockOnEnvironmentChangeRequest, mockOnArtifactDisplayRequest, null)
         );
 
         await act(async () => {
@@ -171,7 +188,7 @@ describe('useGeminiLive', () => {
         });
 
         renderHook(() =>
-            useGeminiLive('system-instruction', 'test-voice', 'en-US', mockOnTurnComplete, mockOnEnvironmentChangeRequest, mockOnArtifactDisplayRequest, null)
+            useGeminiLive('system-instruction', 'test-voice', 'Attic accent', DEFAULT_LANGUAGE_CODE, mockOnTurnComplete, mockOnEnvironmentChangeRequest, mockOnArtifactDisplayRequest, null)
         );
 
         await act(async () => {
@@ -189,7 +206,7 @@ describe('useGeminiLive', () => {
 
     it('should toggle microphone and update connection state', async () => {
         const { result } = renderHook(() =>
-            useGeminiLive('system-instruction', 'test-voice', 'en-US', mockOnTurnComplete, mockOnEnvironmentChangeRequest, mockOnArtifactDisplayRequest, null)
+            useGeminiLive('system-instruction', 'test-voice', 'Attic accent', DEFAULT_LANGUAGE_CODE, mockOnTurnComplete, mockOnEnvironmentChangeRequest, mockOnArtifactDisplayRequest, null)
         );
 
         await waitFor(() => expect(result.current.connectionState).toBe(ConnectionState.LISTENING));
@@ -214,7 +231,7 @@ describe('useGeminiLive', () => {
 
     it('should handle disconnect properly', async () => {
         const { result, unmount } = renderHook(() =>
-            useGeminiLive('system-instruction', 'test-voice', 'en-US', mockOnTurnComplete, mockOnEnvironmentChangeRequest, mockOnArtifactDisplayRequest, null)
+            useGeminiLive('system-instruction', 'test-voice', 'Attic accent', DEFAULT_LANGUAGE_CODE, mockOnTurnComplete, mockOnEnvironmentChangeRequest, mockOnArtifactDisplayRequest, null)
         );
 
         await waitFor(() => expect(result.current.connectionState).toBe(ConnectionState.LISTENING));
@@ -241,7 +258,7 @@ describe('useGeminiLive', () => {
         });
 
         const { result } = renderHook(() =>
-            useGeminiLive('system-instruction', 'test-voice', 'en-US', mockOnTurnComplete, mockOnEnvironmentChangeRequest, mockOnArtifactDisplayRequest, null)
+            useGeminiLive('system-instruction', 'test-voice', 'Attic accent', DEFAULT_LANGUAGE_CODE, mockOnTurnComplete, mockOnEnvironmentChangeRequest, mockOnArtifactDisplayRequest, null)
         );
 
         await waitFor(() => expect(result.current.connectionState).toBe(ConnectionState.LISTENING));
@@ -257,7 +274,7 @@ describe('useGeminiLive', () => {
 
     it('should include quest objective in system instructions if a quest is active', async () => {
         renderHook(() =>
-            useGeminiLive('system-instruction', 'test-voice', 'en-US', mockOnTurnComplete, mockOnEnvironmentChangeRequest, mockOnArtifactDisplayRequest, mockQuest)
+            useGeminiLive('system-instruction', 'test-voice', 'Attic accent', DEFAULT_LANGUAGE_CODE, mockOnTurnComplete, mockOnEnvironmentChangeRequest, mockOnArtifactDisplayRequest, mockQuest)
         );
 
         await waitFor(() => {
