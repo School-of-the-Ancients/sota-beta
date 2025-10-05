@@ -171,7 +171,8 @@ describe('ConversationView', () => {
         });
     });
 
-    it('should fetch and display dynamic suggestions', async () => {
+    it('should fetch and display dynamic suggestions when requested', async () => {
+        const user = userEvent.setup();
         // Specific mock for this test's needs
         mockGenerateContent.mockResolvedValue({ text: JSON.stringify({ suggestions: ['Dynamic Suggestion 1', 'Dynamic Suggestion 2'] }) });
 
@@ -180,6 +181,11 @@ describe('ConversationView', () => {
         act(() => {
             onTurnCompleteCallback({ user: 'Tell me something.', model: 'Something has been told.' });
         });
+
+        const suggestButton = await screen.findByRole('button', { name: /suggest prompts/i });
+        expect(mockGenerateContent).not.toHaveBeenCalled();
+
+        await user.click(suggestButton);
 
         expect(await screen.findByText('Dynamic Suggestion 1')).toBeInTheDocument();
         expect(await screen.findByText('Dynamic Suggestion 2')).toBeInTheDocument();
