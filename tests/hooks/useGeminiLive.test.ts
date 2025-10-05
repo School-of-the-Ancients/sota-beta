@@ -187,6 +187,33 @@ describe('useGeminiLive', () => {
         expect(mockLiveSession.sendToolResponse).toHaveBeenCalled();
     });
 
+    it('augments the system instruction with quest roadmap and completion protocol', async () => {
+        renderHook(() =>
+            useGeminiLive(
+                'base-instruction',
+                'test-voice',
+                'en-US',
+                mockOnTurnComplete,
+                mockOnEnvironmentChangeRequest,
+                mockOnArtifactDisplayRequest,
+                mockQuest,
+            ),
+        );
+
+        await waitFor(() => {
+            expect(mockConnect).toHaveBeenCalled();
+        });
+
+        const latestCall = mockConnect.mock.calls[mockConnect.mock.calls.length - 1];
+        const { config } = latestCall[0];
+        expect(config.systemInstruction).toContain(mockQuest.objective);
+        mockQuest.focusPoints.forEach((point) => {
+            expect(config.systemInstruction).toContain(point);
+        });
+        expect(config.systemInstruction).toContain('Quest Completion Check');
+        expect(config.systemInstruction).toContain('QUEST ROADMAP');
+    });
+
     it('should toggle microphone and update connection state', async () => {
         const { result } = renderHook(() =>
             useGeminiLive('system-instruction', 'test-voice', 'en-US', mockOnTurnComplete, mockOnEnvironmentChangeRequest, mockOnArtifactDisplayRequest, null)

@@ -199,7 +199,19 @@ export const useGeminiLive = (
 
             let finalSystemInstruction = baseInstruction;
             if (activeQuest) {
-                finalSystemInstruction = `YOUR CURRENT MISSION: As a mentor, your primary goal is to guide the student to understand the following: "${activeQuest.objective}". Tailor your questions and explanations to lead them towards this goal.\n\n---\n\n${baseInstruction}`;
+                const focusChecklist = activeQuest.focusPoints
+                    .map((point, index) => `${index + 1}. ${point}`)
+                    .join('\n');
+
+                const questGuidanceSections = [
+                    `YOUR CURRENT MISSION: As a mentor, your primary goal is to guide the student to understand the following learning objective: "${activeQuest.objective}". Tailor your questions and explanations to lead them towards this goal.`,
+                    focusChecklist
+                        ? `QUEST ROADMAP: These are the specific focus areas you must cover and reference during the session. Mark your progress aloud so the student knows what has been explored and what remains:\n${focusChecklist}`
+                        : null,
+                    'QUEST COMPLETION PROTOCOL:\n- Throughout the session, explicitly acknowledge when a focus area has been covered and remind the student of the remaining items.\n- Once all focus areas have been addressed, conduct a brief "Quest Completion Check"—ask 2-3 targeted verbal quiz questions or mini-scenarios that confirm the student can articulate the learning objective.\n- After the check, clearly declare whether the quest is complete. If it is, celebrate completion and summarize the mastered focus areas. If not, specify which focus areas or ideas still need attention and guide the student back through them.'
+                ].filter(Boolean);
+
+                finalSystemInstruction = `${questGuidanceSections.join('\n\n')}\n\n---\n\n${baseInstruction}`;
             }
 
             const sessionPromise = ai.live.connect({
