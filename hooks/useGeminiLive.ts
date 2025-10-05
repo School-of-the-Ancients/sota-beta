@@ -138,8 +138,10 @@ export const useGeminiLive = (
     const inputAudioContextRef = useRef<AudioContext | null>(null);
     const outputAudioContextRef = useRef<AudioContext | null>(null);
     const mediaStreamRef = useRef<MediaStream | null>(null);
+    const audioWorkletNodeRef = useRef<AudioWorkletNode | null>(null);
     const scriptProcessorRef = useRef<ScriptProcessorNode | null>(null);
     const mediaStreamSourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
+    const silentGainNodeRef = useRef<GainNode | null>(null);
 
     const userTranscriptionRef = useRef('');
     const modelTranscriptionRef = useRef('');
@@ -166,20 +168,49 @@ export const useGeminiLive = (
         setIsMicActive(prevIsActive => {
             const nextIsActive = !prevIsActive;
             const source = mediaStreamSourceRef.current;
-            const processor = scriptProcessorRef.current;
+            const workletNode = audioWorkletNodeRef.current;
+            const scriptProcessorNode = scriptProcessorRef.current;
             const context = inputAudioContextRef.current;
 
-            if (!source || !processor || !context) {
+            if (!source || (!workletNode && !scriptProcessorNode) || !context) {
                 return nextIsActive;
             }
 
             try {
                 if (nextIsActive) {
-                    source.connect(processor);
-                    processor.connect(context.destination);
+                    if (workletNode) {
+                        source.connect(workletNode);
+                        if (!silentGainNodeRef.current) {
+                            const silentGain = context.createGain();
+                            silentGain.gain.value = 0;
+                            workletNode.connect(silentGain);
+                            silentGain.connect(context.destination);
+                            silentGainNodeRef.current = silentGain;
+                        }
+                    }
+
+                    if (scriptProcessorNode) {
+                        source.connect(scriptProcessorNode);
+                        try {
+                            scriptProcessorNode.connect(context.destination);
+                        } catch (connectError) {
+                            // Ignore if already connected.
+                        }
+                    }
                     setConnectionState(ConnectionState.LISTENING);
                 } else {
-                    source.disconnect(processor);
+                    if (workletNode) {
+                        source.disconnect(workletNode);
+                    }
+
+                    if (scriptProcessorNode) {
+                        try {
+                            source.disconnect(scriptProcessorNode);
+                            scriptProcessorNode.disconnect();
+                        } catch (disconnectError) {
+                            // Ignore when already disconnected.
+                        }
+                    }
                     setConnectionState(ConnectionState.CONNECTED);
                 }
             } catch (e) {
@@ -207,6 +238,19 @@ export const useGeminiLive = (
 
         mediaStreamRef.current?.getTracks().forEach(track => track.stop());
 
+        if (audioWorkletNodeRef.current && mediaStreamSourceRef.current) {
+            try {
+                mediaStreamSourceRef.current.disconnect(audioWorkletNodeRef.current);
+                if (silentGainNodeRef.current) {
+                    audioWorkletNodeRef.current.disconnect(silentGainNodeRef.current);
+                    silentGainNodeRef.current.disconnect();
+                } else {
+                    audioWorkletNodeRef.current.disconnect();
+                }
+            } catch (e) {
+                // Ignore errors
+            }
+        }
         if (scriptProcessorRef.current && mediaStreamSourceRef.current) {
             try {
                 mediaStreamSourceRef.current.disconnect(scriptProcessorRef.current);
@@ -215,8 +259,13 @@ export const useGeminiLive = (
                 // Ignore errors
             }
         }
+        if (audioWorkletNodeRef.current) {
+            audioWorkletNodeRef.current.port.onmessage = null;
+        }
+        audioWorkletNodeRef.current = null;
         scriptProcessorRef.current = null;
         mediaStreamSourceRef.current = null;
+        silentGainNodeRef.current = null;
 
         inputAudioContextRef.current?.close().catch(console.error);
         outputAudioContextRef.current?.close().catch(console.error);
@@ -295,23 +344,79 @@ export const useGeminiLive = (
                         const source = inputAudioContextRef.current.createMediaStreamSource(mediaStreamRef.current);
                         mediaStreamSourceRef.current = source;
 
-                        const scriptProcessor = inputAudioContextRef.current.createScriptProcessor(4096, 1, 1);
-                        scriptProcessorRef.current = scriptProcessor;
+                        let initialized = false;
+                        const audioWorklet = inputAudioContextRef.current.audioWorklet;
+                        if (audioWorklet && typeof audioWorklet.addModule === 'function') {
+                            try {
+                                const workletModuleUrl = new URL('../audio/microphoneWorkletProcessor.js', import.meta.url);
+                                await audioWorklet.addModule(workletModuleUrl);
 
-                        scriptProcessor.onaudioprocess = (audioProcessingEvent) => {
-                            const inputData = audioProcessingEvent.inputBuffer.getChannelData(0);
-                            const pcmBlob = createBlob(inputData);
-                            sessionPromiseRef.current?.then((session) => {
-                                session.sendRealtimeInput({ media: pcmBlob });
-                            }).catch(err => {
-                                console.warn('Error sending audio data; session may be closing.', err);
-                            });
-                        };
+                                const audioWorkletNode = new AudioWorkletNode(inputAudioContextRef.current, 'microphone-processor', {
+                                    numberOfInputs: 1,
+                                    numberOfOutputs: 1,
+                                    channelCount: 1,
+                                });
+                                audioWorkletNodeRef.current = audioWorkletNode;
 
-                        if (isMicActiveRef.current) {
-                            source.connect(scriptProcessor);
-                            scriptProcessor.connect(inputAudioContextRef.current.destination);
-                            setConnectionState(ConnectionState.LISTENING);
+                                audioWorkletNode.port.onmessage = (event) => {
+                                    const inputData = event.data as Float32Array | undefined;
+                                    if (!(inputData instanceof Float32Array)) {
+                                        return;
+                                    }
+
+                                    if (!isMicActiveRef.current) {
+                                        return;
+                                    }
+
+                                    const pcmBlob = createBlob(inputData);
+                                    sessionPromiseRef.current?.then((session) => {
+                                        session.sendRealtimeInput({ media: pcmBlob });
+                                    }).catch(err => {
+                                        console.warn('Error sending audio data; session may be closing.', err);
+                                    });
+                                };
+
+                                if (isMicActiveRef.current) {
+                                    source.connect(audioWorkletNode);
+                                    if (!silentGainNodeRef.current) {
+                                        const silentGain = inputAudioContextRef.current.createGain();
+                                        silentGain.gain.value = 0;
+                                        audioWorkletNode.connect(silentGain);
+                                        silentGain.connect(inputAudioContextRef.current.destination);
+                                        silentGainNodeRef.current = silentGain;
+                                    }
+                                    setConnectionState(ConnectionState.LISTENING);
+                                }
+
+                                initialized = true;
+                            } catch (audioInitError) {
+                                console.warn('AudioWorkletNode unavailable, falling back to ScriptProcessorNode:', audioInitError);
+                            }
+                        }
+
+                        if (!initialized) {
+                            const scriptProcessor = inputAudioContextRef.current.createScriptProcessor(4096, 1, 1);
+                            scriptProcessorRef.current = scriptProcessor;
+
+                            scriptProcessor.onaudioprocess = (audioProcessingEvent) => {
+                                if (!isMicActiveRef.current) {
+                                    return;
+                                }
+
+                                const inputData = audioProcessingEvent.inputBuffer.getChannelData(0);
+                                const pcmBlob = createBlob(inputData);
+                                sessionPromiseRef.current?.then((session) => {
+                                    session.sendRealtimeInput({ media: pcmBlob });
+                                }).catch(err => {
+                                    console.warn('Error sending audio data; session may be closing.', err);
+                                });
+                            };
+
+                            if (isMicActiveRef.current) {
+                                source.connect(scriptProcessor);
+                                scriptProcessor.connect(inputAudioContextRef.current.destination);
+                                setConnectionState(ConnectionState.LISTENING);
+                            }
                         }
                     },
                     onmessage: async (message: LiveServerMessage) => {
