@@ -1,6 +1,6 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { GoogleGenAI, LiveServerMessage, Modality, Blob, FunctionDeclaration, Type } from '@google/genai';
+import { GoogleGenAI, LiveServerMessage, Modality, Blob, FunctionDeclaration, Type, SessionResumptionConfig } from '@google/genai';
 import { ConnectionState, Quest } from '../types';
 
 // Audio Encoding & Decoding functions
@@ -276,7 +276,7 @@ export const useGeminiLive = (
                 finalSystemInstruction = `YOUR CURRENT MISSION: As a mentor, your primary goal is to guide the student to understand the following: "${activeQuest.objective}". Tailor your questions and explanations to lead them towards this goal.\n\n---\n\n${baseInstruction}`;
             }
 
-            const sessionResumptionConfig: Record<string, unknown> = { transparent: true };
+            const sessionResumptionConfig: SessionResumptionConfig = {};
             if (pendingResumptionHandleRef.current) {
                 sessionResumptionConfig.handle = pendingResumptionHandleRef.current;
             }
