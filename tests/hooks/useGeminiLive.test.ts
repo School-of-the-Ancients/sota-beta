@@ -269,5 +269,8 @@ describe('useGeminiLive', () => {
 
         expect(systemInstruction).toContain(mockQuest.objective);
         expect(systemInstruction).toContain('system-instruction');
+        expect(systemInstruction).toContain('QUEST COMPLETION PROTOCOL');
+        expect(systemInstruction).toContain('3-question mastery quiz');
+        expect(systemInstruction).toContain('Asking questions');
     });
 });

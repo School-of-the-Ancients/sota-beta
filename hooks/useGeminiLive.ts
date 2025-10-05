@@ -273,7 +273,33 @@ export const useGeminiLive = (
 
             let finalSystemInstruction = baseInstruction;
             if (activeQuest) {
-                finalSystemInstruction = `YOUR CURRENT MISSION: As a mentor, your primary goal is to guide the student to understand the following: "${activeQuest.objective}". Tailor your questions and explanations to lead them towards this goal.\n\n---\n\n${baseInstruction}`;
+                const focusPointsList = (activeQuest.focusPoints ?? [])
+                    .map((point, index) => `${index + 1}. ${point}`)
+                    .join('\n');
+
+                const questHeader = `YOUR CURRENT MISSION: As a mentor, your primary goal is to guide the student to understand the following: "${activeQuest.objective}". Tailor your questions and explanations to lead them towards this goal.`;
+
+                const questFocusSection = focusPointsList
+                    ? `QUEST FOCUS POINTS:\n${focusPointsList}`
+                    : '';
+
+                const questCompletionProtocol = [
+                    'QUEST COMPLETION PROTOCOL:',
+                    '1. Actively keep track of each focus point above and guide the learner through all of them during the quest.',
+                    '2. As soon as every focus point has been covered and the learner demonstrates understanding (or requests to finish), pause instruction and clearly say that the quest curriculum is complete before continuing.',
+                    '3. Immediately transition into a short 3-question mastery quiz that checks the quest objective and focus points. Ask one question at a time, wait for the learner’s answer, and adapt follow-up questions if they struggle.',
+                    '4. After the quiz, deliver supportive feedback summarizing their performance, reinforce any corrections, and invite them to reflect or request the next quest. Do not introduce new curriculum material unless they explicitly ask for it.',
+                ].join('\n');
+
+                finalSystemInstruction = [
+                    questHeader,
+                    questFocusSection,
+                    questCompletionProtocol,
+                    '---',
+                    baseInstruction,
+                ]
+                    .filter(section => section && section.trim().length > 0)
+                    .join('\n\n');
             }
 
             const sessionResumptionConfig: SessionResumptionConfig = {};
