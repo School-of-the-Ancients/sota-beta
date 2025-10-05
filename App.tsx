@@ -25,6 +25,13 @@ const CUSTOM_CHARACTERS_KEY = 'school-of-the-ancients-custom-characters';
 const HISTORY_KEY = 'school-of-the-ancients-history';
 const COMPLETED_QUESTS_KEY = 'school-of-the-ancients-completed-quests';
 const CUSTOM_QUESTS_KEY = 'school-of-the-ancients-custom-quests';
+const ACTIVE_QUEST_KEY = 'school-of-the-ancients-active-quest';
+
+type StoredActiveQuest = {
+  questId: string;
+  characterId: string;
+  resumeConversationId?: string | null;
+};
 
 // ---- Local storage helpers -------------------------------------------------
 
@@ -89,6 +96,39 @@ const saveCustomQuests = (quests: Quest[]) => {
   }
 };
 
+const loadActiveQuestState = (): StoredActiveQuest | null => {
+  try {
+    const stored = localStorage.getItem(ACTIVE_QUEST_KEY);
+    if (!stored) {
+      return null;
+    }
+    const parsed = JSON.parse(stored) as StoredActiveQuest;
+    if (!parsed.questId || !parsed.characterId) {
+      return null;
+    }
+    return parsed;
+  } catch (error) {
+    console.error('Failed to load active quest state:', error);
+    return null;
+  }
+};
+
+const saveActiveQuestState = (state: StoredActiveQuest) => {
+  try {
+    localStorage.setItem(ACTIVE_QUEST_KEY, JSON.stringify(state));
+  } catch (error) {
+    console.error('Failed to save active quest state:', error);
+  }
+};
+
+const clearActiveQuestState = () => {
+  try {
+    localStorage.removeItem(ACTIVE_QUEST_KEY);
+  } catch (error) {
+    console.error('Failed to clear active quest state:', error);
+  }
+};
+
 // ---- App -------------------------------------------------------------------
 
 const App: React.FC = () => {
@@ -150,7 +190,13 @@ const App: React.FC = () => {
 
     setInProgressQuestIds((prev) => prev.filter((id) => !removedQuestIds.includes(id)));
 
-    setActiveQuest((current) => (current && removedQuestIds.includes(current.id) ? null : current));
+    setActiveQuest((current) => {
+      if (current && removedQuestIds.includes(current.id)) {
+        clearActiveQuestState();
+        return null;
+      }
+      return current;
+    });
   }, [customQuests, customCharacters]);
 
   const syncQuestProgress = useCallback(() => {
@@ -197,6 +243,38 @@ const App: React.FC = () => {
     }
 
     setCompletedQuests(loadCompletedQuests());
+    const storedActiveQuest = loadActiveQuestState();
+    if (storedActiveQuest) {
+      const allCharacters = [...loadedCustomCharacters, ...CHARACTERS];
+      const allAvailableQuests = [...loadedCustomQuests, ...QUESTS];
+      const activeCharacter = allCharacters.find((c) => c.id === storedActiveQuest.characterId);
+      const quest = allAvailableQuests.find((q) => q.id === storedActiveQuest.questId);
+      if (activeCharacter && quest) {
+        setSelectedCharacter(activeCharacter);
+        setActiveQuest(quest);
+        setView('conversation');
+        const resumeId = storedActiveQuest.resumeConversationId ?? null;
+        let resolvedResumeId = resumeId;
+        if (resumeId) {
+          const existingConversation = loadConversations().find((c) => c.id === resumeId);
+          if (existingConversation) {
+            setEnvironmentImageUrl(existingConversation.environmentImageUrl || null);
+          } else {
+            resolvedResumeId = null;
+            setEnvironmentImageUrl(null);
+          }
+        }
+        setResumeConversationId(resolvedResumeId);
+        if (!resolvedResumeId) {
+          saveActiveQuestState({ questId: quest.id, characterId: activeCharacter.id });
+        }
+        const url = new URL(window.location.href);
+        url.searchParams.set('character', activeCharacter.id);
+        window.history.replaceState({}, '', url);
+      } else {
+        clearActiveQuestState();
+      }
+    }
     syncQuestProgress();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [syncQuestProgress]);
@@ -208,6 +286,7 @@ const App: React.FC = () => {
     setView('conversation');
     setActiveQuest(null); // clear any quest when directly picking a character
     setResumeConversationId(null);
+    clearActiveQuestState();
     const url = new URL(window.location.href);
     url.searchParams.set('character', character.id);
     window.history.pushState({}, '', url);
@@ -221,6 +300,10 @@ const App: React.FC = () => {
       setSelectedCharacter(characterForQuest);
       setView('conversation');
       setResumeConversationId(null);
+      saveActiveQuestState({
+        questId: quest.id,
+        characterId: characterForQuest.id,
+      });
       const url = new URL(window.location.href);
       url.searchParams.set('character', characterForQuest.id);
       window.history.pushState({}, '', url);
@@ -258,12 +341,19 @@ const App: React.FC = () => {
       const questToResume = allQuests.find((quest) => quest.id === conversation.questId);
       if (questToResume) {
         setActiveQuest(questToResume);
+        saveActiveQuestState({
+          questId: questToResume.id,
+          characterId: characterToResume.id,
+          resumeConversationId: conversation.id,
+        });
       } else {
         console.warn(`Quest with ID ${conversation.questId} not found while resuming conversation.`);
         setActiveQuest(null);
+        clearActiveQuestState();
       }
     } else {
       setActiveQuest(null);
+      clearActiveQuestState();
     }
 
     setView('conversation');
@@ -324,7 +414,13 @@ const App: React.FC = () => {
 
     setInProgressQuestIds((prev) => prev.filter((id) => id !== questId));
 
-    setActiveQuest((current) => (current?.id === questId ? null : current));
+    setActiveQuest((current) => {
+      if (current?.id === questId) {
+        clearActiveQuestState();
+        return null;
+      }
+      return current;
+    });
   };
 
   const openQuestCreator = (goal?: string | null) => {
@@ -367,6 +463,7 @@ const App: React.FC = () => {
     setSelectedCharacter(mentor);
     setView('conversation');
     setResumeConversationId(null);
+    saveActiveQuestState({ questId: quest.id, characterId: mentor.id });
     const url = new URL(window.location.href);
     url.searchParams.set('character', mentor.id);
     window.history.pushState({}, '', url);
@@ -555,6 +652,7 @@ Focus only on the student's contributions. Mark passed=true only if the learner 
       setEnvironmentImageUrl(null);
       setActiveQuest(null);
       setResumeConversationId(null);
+      clearActiveQuestState();
       window.history.pushState({}, '', window.location.pathname);
     }
   };
