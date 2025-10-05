@@ -110,6 +110,11 @@ export const useGeminiLive = (
     const scriptProcessorRef = useRef<ScriptProcessorNode | null>(null);
     const mediaStreamSourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
 
+    const sessionResumptionHandleRef = useRef<string | null>(null);
+    const pendingResumeHandleRef = useRef<string | null>(null);
+    const isExtendingRef = useRef(false);
+    const extendSessionRef = useRef<() => Promise<void>>(async () => {});
+
     const userTranscriptionRef = useRef('');
     const modelTranscriptionRef = useRef('');
     const isMicActiveRef = useRef(isMicActive);
@@ -202,6 +207,13 @@ export const useGeminiLive = (
                 finalSystemInstruction = `YOUR CURRENT MISSION: As a mentor, your primary goal is to guide the student to understand the following: "${activeQuest.objective}". Tailor your questions and explanations to lead them towards this goal.\n\n---\n\n${baseInstruction}`;
             }
 
+            const resumeHandle = pendingResumeHandleRef.current;
+            const sessionResumptionConfig: Record<string, any> = { transparent: true };
+            if (resumeHandle) {
+                sessionResumptionConfig.handle = resumeHandle;
+            }
+            pendingResumeHandleRef.current = null;
+
             const sessionPromise = ai.live.connect({
                 model: 'gemini-2.5-flash-native-audio-preview-09-2025',
                 callbacks: {
@@ -249,6 +261,15 @@ export const useGeminiLive = (
                                 currentOutput += message.serverContent.outputTranscription.text;
                                 setModelTranscription(currentOutput);
                                 modelTranscriptionRef.current = currentOutput;
+                            }
+
+                            if (message.sessionResumptionUpdate?.newHandle) {
+                                sessionResumptionHandleRef.current = message.sessionResumptionUpdate.newHandle;
+                            }
+
+                            if (message.goAway?.timeLeft != null) {
+                                console.info('Session approaching maximum length; extending conversation.', message.goAway.timeLeft);
+                                void extendSessionRef.current();
                             }
 
                             if (message.toolCall) {
@@ -342,6 +363,7 @@ export const useGeminiLive = (
                     },
                     systemInstruction: finalSystemInstruction,
                     tools: [{functionDeclarations: [changeEnvironmentFunctionDeclaration, displayArtifactFunctionDeclaration]}],
+                    sessionResumption: sessionResumptionConfig,
                 },
             });
 
@@ -356,14 +378,24 @@ export const useGeminiLive = (
             console.error('Failed to connect to Gemini Live:', error);
             setConnectionState(ConnectionState.ERROR);
         }
-    }, [systemInstruction, voiceName, activeQuest]);
+    }, [systemInstruction, voiceName, voiceAccent, activeQuest]);
 
-    const disconnect = useCallback(() => {
-        sessionPromiseRef.current?.then((session) => session.close()).catch(err => {
-            console.warn('Error during session close:', err);
-        });
+    const disconnect = useCallback(async () => {
+        const sessionPromise = sessionPromiseRef.current;
+        sessionPromiseRef.current = null;
 
-        mediaStreamRef.current?.getTracks().forEach(track => track.stop());
+        if (sessionPromise) {
+            try {
+                const session = await sessionPromise;
+                session.close();
+            } catch (err) {
+                console.warn('Error during session close:', err);
+            }
+        }
+
+        if (mediaStreamRef.current) {
+            mediaStreamRef.current.getTracks().forEach(track => track.stop());
+        }
 
         if (scriptProcessorRef.current && mediaStreamSourceRef.current) {
             try {
@@ -376,22 +408,61 @@ export const useGeminiLive = (
         scriptProcessorRef.current = null;
         mediaStreamSourceRef.current = null;
 
+        if (inputAudioContextRef.current) {
+            try {
+                await inputAudioContextRef.current.close();
+            } catch (error) {
+                console.warn('Error closing input audio context:', error);
+            }
+        }
 
-        inputAudioContextRef.current?.close().catch(console.error);
-        outputAudioContextRef.current?.close().catch(console.error);
+        if (outputAudioContextRef.current) {
+            try {
+                await outputAudioContextRef.current.close();
+            } catch (error) {
+                console.warn('Error closing output audio context:', error);
+            }
+        }
 
         inputAudioContextRef.current = null;
         outputAudioContextRef.current = null;
         mediaStreamRef.current = null;
-        sessionPromiseRef.current = null;
 
         setConnectionState(ConnectionState.DISCONNECTED);
     }, []);
 
+    const extendSession = useCallback(async () => {
+        if (isExtendingRef.current) {
+            return;
+        }
+
+        const resumeHandle = sessionResumptionHandleRef.current;
+        if (!resumeHandle) {
+            console.warn('Received goAway notification but no session resumption handle is available.');
+            return;
+        }
+
+        isExtendingRef.current = true;
+        pendingResumeHandleRef.current = resumeHandle;
+
+        try {
+            await disconnect();
+            setConnectionState(ConnectionState.CONNECTING);
+            await connect();
+        } catch (error) {
+            console.error('Failed to extend Gemini Live session:', error);
+            setConnectionState(ConnectionState.ERROR);
+        } finally {
+            isExtendingRef.current = false;
+        }
+    }, [connect, disconnect]);
+
+    extendSessionRef.current = extendSession;
+
     useEffect(() => {
-        connect();
+        void connect();
         return () => {
-            disconnect();
+            void disconnect();
         };
     }, [connect, disconnect]);
 
