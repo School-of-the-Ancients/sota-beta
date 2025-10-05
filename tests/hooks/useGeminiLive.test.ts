@@ -66,6 +66,7 @@ window.AudioContext = vi.fn(() => mockAudioContext);
 const mockOnTurnComplete = vi.fn();
 const mockOnEnvironmentChangeRequest = vi.fn();
 const mockOnArtifactDisplayRequest = vi.fn();
+const mockOnQuestCurriculumComplete = vi.fn();
 const mockQuest: Quest = {
     id: 'quest-1',
     title: 'The Socratic Method',
@@ -88,7 +89,7 @@ describe('useGeminiLive', () => {
 
     it('should initialize with CONNECTING state and transition to LISTENING', async () => {
         const { result } = renderHook(() =>
-            useGeminiLive('system-instruction', 'test-voice', 'en-US', mockOnTurnComplete, mockOnEnvironmentChangeRequest, mockOnArtifactDisplayRequest, null)
+            useGeminiLive('system-instruction', 'test-voice', 'en-US', mockOnTurnComplete, mockOnEnvironmentChangeRequest, mockOnArtifactDisplayRequest, mockOnQuestCurriculumComplete, null)
         );
 
         expect(result.current.connectionState).toBe(ConnectionState.CONNECTING);
@@ -102,7 +103,7 @@ describe('useGeminiLive', () => {
 
     it('should handle sending a text message', async () => {
         const { result } = renderHook(() =>
-            useGeminiLive('system-instruction', 'test-voice', 'en-US', mockOnTurnComplete, mockOnEnvironmentChangeRequest, mockOnArtifactDisplayRequest, null)
+            useGeminiLive('system-instruction', 'test-voice', 'en-US', mockOnTurnComplete, mockOnEnvironmentChangeRequest, mockOnArtifactDisplayRequest, mockOnQuestCurriculumComplete, null)
         );
 
         await waitFor(() => expect(result.current.connectionState).toBe(ConnectionState.LISTENING));
@@ -257,7 +258,7 @@ describe('useGeminiLive', () => {
 
     it('should include quest objective in system instructions if a quest is active', async () => {
         renderHook(() =>
-            useGeminiLive('system-instruction', 'test-voice', 'en-US', mockOnTurnComplete, mockOnEnvironmentChangeRequest, mockOnArtifactDisplayRequest, mockQuest)
+            useGeminiLive('system-instruction', 'test-voice', 'en-US', mockOnTurnComplete, mockOnEnvironmentChangeRequest, mockOnArtifactDisplayRequest, mockOnQuestCurriculumComplete, mockQuest)
         );
 
         await waitFor(() => {

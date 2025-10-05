@@ -100,7 +100,7 @@ const changeEnvironmentFunctionDeclaration: FunctionDeclaration = {
     },
   };
   
-  const displayArtifactFunctionDeclaration: FunctionDeclaration = {
+const displayArtifactFunctionDeclaration: FunctionDeclaration = {
     name: 'displayArtifact',
     parameters: {
       type: Type.OBJECT,
@@ -119,6 +119,31 @@ const changeEnvironmentFunctionDeclaration: FunctionDeclaration = {
     },
   };
 
+const questCompleteFunctionDeclaration: FunctionDeclaration = {
+    name: 'questComplete',
+    parameters: {
+      type: Type.OBJECT,
+      description:
+        'Call this exactly once when you have fully covered every focus point in the active quest and the student is ready for the mastery quiz.',
+      properties: {
+        summary: {
+          type: Type.STRING,
+          description: 'One or two sentences that acknowledge the curriculum is complete.',
+        },
+        coveredFocusPoints: {
+          type: Type.ARRAY,
+          items: { type: Type.STRING },
+          description: 'The focus points that were addressed in this conversation.',
+        },
+        nextStep: {
+          type: Type.STRING,
+          description: 'Encourage the learner to take the mastery quiz next.',
+        },
+      },
+      required: ['summary'],
+    },
+  };
+
 export const useGeminiLive = (
     systemInstruction: string,
     voiceName: string,
@@ -126,6 +151,7 @@ export const useGeminiLive = (
     onTurnComplete: (turn: { user: string; model: string }) => void,
     onEnvironmentChangeRequest: (description: string) => void,
     onArtifactDisplayRequest: (name: string, description: string) => void,
+    onQuestCurriculumComplete: (payload: { summary?: string; coveredFocusPoints?: string[]; nextStep?: string }) => void,
     activeQuest: Quest | null,
 ) => {
     const [connectionState, setConnectionState] = useState<ConnectionState>(ConnectionState.IDLE);
@@ -161,6 +187,8 @@ export const useGeminiLive = (
     onEnvironmentChangeRequestRef.current = onEnvironmentChangeRequest;
     const onArtifactDisplayRequestRef = useRef(onArtifactDisplayRequest);
     onArtifactDisplayRequestRef.current = onArtifactDisplayRequest;
+    const onQuestCurriculumCompleteRef = useRef(onQuestCurriculumComplete);
+    onQuestCurriculumCompleteRef.current = onQuestCurriculumComplete;
 
     const toggleMicrophone = useCallback(() => {
         setIsMicActive(prevIsActive => {
@@ -273,7 +301,21 @@ export const useGeminiLive = (
 
             let finalSystemInstruction = baseInstruction;
             if (activeQuest) {
-                finalSystemInstruction = `YOUR CURRENT MISSION: As a mentor, your primary goal is to guide the student to understand the following: "${activeQuest.objective}". Tailor your questions and explanations to lead them towards this goal.\n\n---\n\n${baseInstruction}`;
+                const focusList = activeQuest.focusPoints
+                  .map((point, index) => `${index + 1}. ${point}`)
+                  .join('\n');
+                const questDirective =
+                  `YOUR CURRENT MISSION: As a mentor, your primary goal is to guide the student to understand the following: "${activeQuest.objective}".` +
+                  '\n' +
+                  'Focus points to cover (track each one carefully in order to unlock the mastery quiz):' +
+                  `\n${focusList}` +
+                  '\n\n' +
+                  'When you have thoroughly discussed every focus point:' +
+                  '\n1. Call questComplete() with a summary and the list of focus points you covered.' +
+                  '\n2. After the function call, clearly tell the student that the curriculum is complete.' +
+                  '\n3. Invite them to take the mastery quiz and avoid introducing new lesson content unless they ask for review.' +
+                  '\n\n---\n\n';
+                finalSystemInstruction = `${questDirective}${baseInstruction}`;
             }
 
             const sessionResumptionConfig: SessionResumptionConfig = {};
@@ -336,8 +378,15 @@ export const useGeminiLive = (
                                     onEnvironmentChangeRequestRef.current(fc.args.description);
                                   } else if (fc.name === 'displayArtifact' && fc.args && typeof fc.args.name === 'string' && typeof fc.args.description === 'string') {
                                     onArtifactDisplayRequestRef.current(fc.args.name, fc.args.description);
+                                  } else if (fc.name === 'questComplete') {
+                                    const summary = typeof fc.args?.summary === 'string' ? fc.args.summary : undefined;
+                                    const covered = Array.isArray(fc.args?.coveredFocusPoints)
+                                      ? fc.args.coveredFocusPoints.filter((item: unknown) => typeof item === 'string')
+                                      : undefined;
+                                    const nextStep = typeof fc.args?.nextStep === 'string' ? fc.args.nextStep : undefined;
+                                    onQuestCurriculumCompleteRef.current({ summary, coveredFocusPoints: covered, nextStep });
                                   }
-                        
+
                                   sessionPromiseRef.current?.then((session) => {
                                     session.sendToolResponse({
                                       functionResponses: {
@@ -461,7 +510,7 @@ export const useGeminiLive = (
                         voiceConfig: { prebuiltVoiceConfig: { voiceName: voiceName } },
                     },
                     systemInstruction: finalSystemInstruction,
-                    tools: [{functionDeclarations: [changeEnvironmentFunctionDeclaration, displayArtifactFunctionDeclaration]}],
+                    tools: [{functionDeclarations: [changeEnvironmentFunctionDeclaration, displayArtifactFunctionDeclaration, questCompleteFunctionDeclaration]}],
                     sessionResumption: sessionResumptionConfig,
                 },
             });

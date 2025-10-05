@@ -151,6 +151,7 @@ const App: React.FC = () => {
   const [lastQuestOutcome, setLastQuestOutcome] = useState<QuestAssessment | null>(null);
   const [inProgressQuestIds, setInProgressQuestIds] = useState<string[]>([]);
   const [questCreatorPrefill, setQuestCreatorPrefill] = useState<string | null>(null);
+  const [pendingQuestAssessment, setPendingQuestAssessment] = useState<QuestAssessment | null>(null);
 
   const allQuests = useMemo(() => [...customQuests, ...QUESTS], [customQuests]);
 
@@ -449,11 +450,42 @@ const App: React.FC = () => {
     updateCharacterQueryParam(mentor.id, 'push');
   };
 
+  const handleQuestQuizComplete = useCallback((assessment: QuestAssessment) => {
+    setPendingQuestAssessment(assessment);
+  }, []);
+
   // ---- End conversation: summarize & (if quest) evaluate mastery ----
   const handleEndConversation = async (transcript: ConversationTurn[], sessionId: string) => {
     if (!selectedCharacter) return;
     setIsSaving(true);
     let questAssessment: QuestAssessment | null = null;
+    const pendingAssessmentForQuest =
+      activeQuest && pendingQuestAssessment && pendingQuestAssessment.questId === activeQuest.id
+        ? pendingQuestAssessment
+        : null;
+
+    const applyQuestCompletion = (assessment: QuestAssessment) => {
+      setCompletedQuests((prev) => {
+        if (assessment.passed) {
+          if (prev.includes(assessment.questId)) {
+            saveCompletedQuests(prev);
+            return prev;
+          }
+          const updated = [...prev, assessment.questId];
+          saveCompletedQuests(updated);
+          return updated;
+        }
+
+        if (!prev.includes(assessment.questId)) {
+          saveCompletedQuests(prev);
+          return prev;
+        }
+
+        const updated = prev.filter((id) => id !== assessment.questId);
+        saveCompletedQuests(updated);
+        return updated;
+      });
+    };
 
     try {
       const conversationHistory = loadConversations();
@@ -535,8 +567,16 @@ ${transcriptText}`;
         }
       }
 
-      // If this was a quest session, evaluate mastery
-      if (ai && activeQuest) {
+      if (pendingAssessmentForQuest) {
+        questAssessment = pendingAssessmentForQuest;
+        updatedConversation = {
+          ...updatedConversation,
+          questId: pendingAssessmentForQuest.questId,
+          questTitle: pendingAssessmentForQuest.questTitle,
+          questAssessment: pendingAssessmentForQuest,
+        };
+        applyQuestCompletion(pendingAssessmentForQuest);
+      } else if (ai && activeQuest) {
         const questTranscriptText = transcript.map((turn) => `${turn.speakerName}: ${turn.text}`).join('\n\n');
 
         if (questTranscriptText.trim()) {
@@ -585,27 +625,7 @@ Focus only on the student's contributions. Mark passed=true only if the learner 
             questAssessment,
           };
 
-          if (questAssessment.passed) {
-            setCompletedQuests((prev) => {
-              if (prev.includes(activeQuest.id)) {
-                saveCompletedQuests(prev);
-                return prev;
-              }
-              const updated = [...prev, activeQuest.id]; // FIX
-              saveCompletedQuests(updated);
-              return updated;
-            });
-          } else {
-            setCompletedQuests((prev) => {
-              if (!prev.includes(activeQuest.id)) {
-                saveCompletedQuests(prev);
-                return prev;
-              }
-              const updated = prev.filter((id) => id !== activeQuest.id);
-              saveCompletedQuests(updated);
-              return updated;
-            });
-          }
+          applyQuestCompletion(questAssessment);
         }
       } else if (activeQuest) {
         // Ensure quest metadata is retained even without AI assistance.
@@ -622,20 +642,27 @@ Focus only on the student's contributions. Mark passed=true only if the learner 
       console.error('Failed to finalize conversation:', error);
     } finally {
       setIsSaving(false);
+      setPendingQuestAssessment(null);
       if (questAssessment) {
         setLastQuestOutcome(questAssessment);
       } else if (activeQuest) {
-      setLastQuestOutcome(null);
+        setLastQuestOutcome(null);
+      }
+      setSelectedCharacter(null);
+      setView('selector');
+      setEnvironmentImageUrl(null);
+      setActiveQuest(null);
+      saveActiveQuestId(null);
+      setResumeConversationId(null);
+      window.history.pushState({}, '', window.location.pathname);
     }
-    setSelectedCharacter(null);
-    setView('selector');
-    setEnvironmentImageUrl(null);
-    setActiveQuest(null);
-    saveActiveQuestId(null);
-    setResumeConversationId(null);
-    window.history.pushState({}, '', window.location.pathname);
-  }
   };
+
+  useEffect(() => {
+    if (!activeQuest) {
+      setPendingQuestAssessment(null);
+    }
+  }, [activeQuest?.id]);
 
   // ---- View switcher ----
 
@@ -651,6 +678,7 @@ Focus only on the student's contributions. Mark passed=true only if the learner 
             activeQuest={activeQuest}
             isSaving={isSaving} // pass saving state
             resumeConversationId={resumeConversationId}
+            onQuestQuizComplete={handleQuestQuizComplete}
           />
         ) : null;
       case 'history':

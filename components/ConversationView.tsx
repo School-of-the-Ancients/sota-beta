@@ -1,6 +1,6 @@
 import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { GoogleGenAI, Type } from '@google/genai';
-import type { Character, ConversationTurn, SavedConversation, Quest } from '../types';
+import type { Character, ConversationTurn, SavedConversation, Quest, QuestAssessment } from '../types';
 import { useGeminiLive } from '../hooks/useGeminiLive';
 import { useAmbientAudio } from '../hooks/useAmbientAudio';
 import { ConnectionState } from '../types';
@@ -12,6 +12,7 @@ import ThinkingIcon from './icons/ThinkingIcon';
 import SendIcon from './icons/SendIcon';
 import MuteIcon from './icons/MuteIcon';
 import UnmuteIcon from './icons/UnmuteIcon';
+import QuestQuiz from './QuestQuiz';
 
 const HISTORY_KEY = 'school-of-the-ancients-history';
 
@@ -23,6 +24,8 @@ interface ConversationViewProps {
   activeQuest: Quest | null;
   isSaving: boolean;
   resumeConversationId?: string | null;
+  onQuestCurriculumComplete?: (payload: { questId: string; summary?: string; coveredPoints?: string[] }) => void;
+  onQuestQuizComplete?: (assessment: QuestAssessment) => void;
 }
 
 const loadConversations = (): SavedConversation[] => {
@@ -108,6 +111,8 @@ const ConversationView: React.FC<ConversationViewProps> = ({
   activeQuest,
   isSaving,
   resumeConversationId,
+  onQuestCurriculumComplete,
+  onQuestQuizComplete,
 }) => {
   const [transcript, setTranscript] = useState<ConversationTurn[]>([]);
   const [textInput, setTextInput] = useState('');
@@ -115,6 +120,12 @@ const ConversationView: React.FC<ConversationViewProps> = ({
   const [isFetchingSuggestions, setIsFetchingSuggestions] = useState(false);
   const [isGeneratingVisual, setIsGeneratingVisual] = useState(false);
   const [generationMessage, setGenerationMessage] = useState('');
+  const [isCurriculumComplete, setIsCurriculumComplete] = useState(false);
+  const [curriculumSummary, setCurriculumSummary] = useState<string | null>(null);
+  const [coveredFocusPoints, setCoveredFocusPoints] = useState<string[]>([]);
+  const [showQuizModal, setShowQuizModal] = useState(false);
+  const [latestQuizAssessment, setLatestQuizAssessment] = useState<QuestAssessment | null>(null);
+  const [shouldFinalizeAfterQuiz, setShouldFinalizeAfterQuiz] = useState(false);
 
   const initialAudioSrc = AMBIENCE_LIBRARY.find(a => a.tag === character.ambienceTag)?.audioSrc ?? null;
   const { isMuted: isAmbienceMuted, toggleMute: toggleAmbienceMute, changeTrack: changeAmbienceTrack } = useAmbientAudio(initialAudioSrc);
@@ -152,6 +163,109 @@ const ConversationView: React.FC<ConversationViewProps> = ({
 
   const sessionIdRef = useRef(`conv_${character.id}_${Date.now()}`);
   const sessionQuestRef = useRef<{ questId?: string; questTitle?: string }>({});
+
+  const handleQuestCurriculumCompleteSignal = useCallback(
+    (payload: { summary?: string; coveredFocusPoints?: string[]; nextStep?: string }) => {
+      if (!activeQuest || isCurriculumComplete) {
+        return;
+      }
+
+      const summaryText = payload.summary?.trim() || `All focus points for "${activeQuest.title}" are complete.`;
+      const cleanedFocusPoints = Array.isArray(payload.coveredFocusPoints)
+        ? payload.coveredFocusPoints.filter((item) => typeof item === 'string' && item.trim().length > 0)
+        : [];
+      const nextStep = payload.nextStep?.trim() || 'The mastery quiz is now ready when you are.';
+
+      const detailLines: string[] = [];
+      if (cleanedFocusPoints.length > 0) {
+        detailLines.push('Covered focus points:\n' + cleanedFocusPoints.map((point) => `• ${point}`).join('\n'));
+      }
+      detailLines.push(nextStep);
+
+      const operatorMessage = [summaryText, ...detailLines].join('\n\n');
+
+      setTranscript((prev) => [
+        ...prev,
+        {
+          speaker: 'model',
+          speakerName: 'Matrix Operator',
+          text: operatorMessage,
+        },
+      ]);
+
+      setIsCurriculumComplete(true);
+      setCurriculumSummary(summaryText);
+      setCoveredFocusPoints(cleanedFocusPoints);
+
+      if (onQuestCurriculumComplete) {
+        onQuestCurriculumComplete({ questId: activeQuest.id, summary: summaryText, coveredPoints: cleanedFocusPoints });
+      }
+
+      if (activeQuest.quiz && activeQuest.quiz.length > 0) {
+        setShowQuizModal(true);
+      }
+    },
+    [activeQuest, isCurriculumComplete, onQuestCurriculumComplete]
+  );
+
+  useEffect(() => {
+    setIsCurriculumComplete(false);
+    setCurriculumSummary(null);
+    setCoveredFocusPoints([]);
+    setShowQuizModal(false);
+    setLatestQuizAssessment(null);
+    setShouldFinalizeAfterQuiz(false);
+  }, [activeQuest?.id, character.id, resumeConversationId]);
+
+  const handleDismissQuiz = useCallback(() => {
+    setShowQuizModal(false);
+    setShouldFinalizeAfterQuiz(false);
+  }, []);
+
+  const handleQuizComplete = useCallback(
+    (assessment: QuestAssessment) => {
+      setLatestQuizAssessment(assessment);
+      setShowQuizModal(false);
+
+      const quizTurn: ConversationTurn = {
+        speaker: 'model',
+        speakerName: 'Matrix Operator',
+        text: assessment.summary,
+      };
+      const nextTranscript = [...transcript, quizTurn];
+      setTranscript(nextTranscript);
+
+      if (onQuestQuizComplete) {
+        onQuestQuizComplete(assessment);
+      }
+
+      if (shouldFinalizeAfterQuiz) {
+        setShouldFinalizeAfterQuiz(false);
+        onEndConversation(nextTranscript, sessionIdRef.current);
+      }
+    },
+    [onEndConversation, onQuestQuizComplete, shouldFinalizeAfterQuiz, transcript]
+  );
+
+  const openQuizManually = useCallback(() => {
+    if (activeQuest?.quiz && activeQuest.quiz.length > 0) {
+      setShowQuizModal(true);
+    }
+  }, [activeQuest?.quiz]);
+
+  const handleEndClick = useCallback(() => {
+    if (isSaving) {
+      return;
+    }
+
+    if (activeQuest && activeQuest.quiz && activeQuest.quiz.length > 0 && !latestQuizAssessment) {
+      setShowQuizModal(true);
+      setShouldFinalizeAfterQuiz(true);
+      return;
+    }
+
+    onEndConversation(transcript, sessionIdRef.current);
+  }, [activeQuest, isSaving, latestQuizAssessment, onEndConversation, transcript]);
 
   // Load existing conversation or start a new one with a greeting
   useEffect(() => {
@@ -425,6 +539,7 @@ const ConversationView: React.FC<ConversationViewProps> = ({
     handleTurnComplete,
     handleEnvironmentChange,
     handleArtifactDisplay,
+    handleQuestCurriculumCompleteSignal,
     activeQuest,
   );
 
@@ -594,6 +709,39 @@ ${contextTranscript}
                             ))}
                         </ul>
                     </div>
+                    {isCurriculumComplete && (
+                      <div className="border-t border-amber-700/50 pt-3 space-y-2">
+                        <div className="flex items-start gap-2">
+                          <span className="inline-flex items-center rounded-full bg-emerald-500/20 border border-emerald-400/70 px-2 py-0.5 text-xs font-semibold text-emerald-100">
+                            Curriculum complete
+                          </span>
+                        </div>
+                        {curriculumSummary && (
+                          <p className="text-amber-50/80 text-sm leading-relaxed">{curriculumSummary}</p>
+                        )}
+                        {coveredFocusPoints.length > 0 && (
+                          <ul className="list-disc list-inside text-amber-100/80 text-xs space-y-1">
+                            {coveredFocusPoints.map((point) => (
+                              <li key={point}>{point}</li>
+                            ))}
+                          </ul>
+                        )}
+                        {activeQuest.quiz && activeQuest.quiz.length > 0 && (
+                          <div className="flex flex-col gap-2">
+                            <button
+                              type="button"
+                              onClick={openQuizManually}
+                              className="w-full text-sm font-semibold bg-emerald-600/80 hover:bg-emerald-500 text-emerald-50 py-2 px-3 rounded-lg transition-colors duration-200 border border-emerald-500"
+                            >
+                              {latestQuizAssessment ? 'Review mastery quiz' : 'Open mastery quiz'}
+                            </button>
+                            {latestQuizAssessment && (
+                              <p className="text-xs text-emerald-200/80">Latest result: {latestQuizAssessment.summary}</p>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    )}
                 </div>
             )}
             
@@ -655,7 +803,7 @@ ${contextTranscript}
 
             <div className="flex items-center justify-center gap-4 mt-auto pt-6 flex-wrap">
               <button
-                  onClick={() => onEndConversation(transcript, sessionIdRef.current)}
+                  onClick={handleEndClick}
                   disabled={isSaving}
                   className="bg-red-800/70 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg transition-colors duration-300 border border-red-700 disabled:opacity-50 disabled:cursor-wait"
               >
@@ -750,6 +898,15 @@ ${contextTranscript}
             </form>
         </div>
       </div>
+      {showQuizModal && activeQuest?.quiz && (
+        <QuestQuiz
+          questId={activeQuest.id}
+          questTitle={activeQuest.title}
+          questions={activeQuest.quiz}
+          onDismiss={handleDismissQuiz}
+          onComplete={handleQuizComplete}
+        />
+      )}
     </div>
   );
 };

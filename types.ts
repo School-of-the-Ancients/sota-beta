@@ -70,6 +70,15 @@ export interface Summary {
   takeaways: string[];
 }
 
+export interface QuizQuestion {
+  id: string;
+  prompt: string;
+  choices: string[];
+  answerIndex: number;
+  focusPoint: string;
+  explanation: string;
+}
+
 export interface QuestAssessment {
   questId: string;
   questTitle: string;
@@ -101,4 +110,5 @@ export interface Quest {
   characterId: string;
   duration: string;
   focusPoints: string[];
+  quiz?: QuizQuestion[];
 }
