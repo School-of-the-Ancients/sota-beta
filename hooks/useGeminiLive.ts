@@ -199,7 +199,23 @@ export const useGeminiLive = (
 
             let finalSystemInstruction = baseInstruction;
             if (activeQuest) {
-                finalSystemInstruction = `YOUR CURRENT MISSION: As a mentor, your primary goal is to guide the student to understand the following: "${activeQuest.objective}". Tailor your questions and explanations to lead them towards this goal.\n\n---\n\n${baseInstruction}`;
+                const focusChecklist = (activeQuest.focusPoints?.length ? activeQuest.focusPoints : [`Re-state the quest objective: ${activeQuest.objective}`])
+                    .map((point, index) => `${index + 1}. ${point}`)
+                    .join('\n');
+
+                const questCompletionDirectives = [`YOUR CURRENT MISSION: As a mentor, your primary goal is to guide the student to understand the following: "${activeQuest.objective}". Tailor your questions and explanations to lead them towards this goal.`,
+                    'QUEST CURRICULUM CHECKLIST:',
+                    focusChecklist,
+                    'PROGRESSION & COMPLETION BEHAVIOR:',
+                    '- Track which checklist items the learner has demonstrated with their own words. After covering an item, acknowledge it and remind the learner which items remain.',
+                    '- When all checklist items are satisfied, pause before introducing new content. Announce that the quest curriculum has been completed, then deliver a short mastery check: ask 2-3 rapid-fire verbal quiz questions that confirm understanding of the objective.',
+                    '- Evaluate the learner\'s responses to the quiz, tell them whether they passed, and summarize what evidence proved it. If gaps remain, clearly state which checklist items are still incomplete and continue coaching toward them.',
+                    '- If the learner has already mastered everything, offer next steps or invite them to conclude the session instead of reopening completed topics.'
+                ]
+                    .filter(Boolean)
+                    .join('\n\n');
+
+                finalSystemInstruction = `${questCompletionDirectives}\n\n---\n\n${baseInstruction}`;
             }
 
             const sessionPromise = ai.live.connect({
