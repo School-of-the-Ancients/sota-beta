@@ -127,6 +127,9 @@ If you are not at least 80% confident in their historicity, set verified to fals
       setMsg('Researching historical figure…');
 
       const availableAmbienceTags = AMBIENCE_LIBRARY.map(a => a.tag).join(', ');
+      const voiceOptions = AVAILABLE_VOICES.map(
+        voice => `${voice.name} (${voice.gender}; ${voice.description})`
+      ).join('; ');
       const personaPrompt = `Based on the historical figure "${clean}", return JSON with:
 
         - title: A concise, descriptive title (e.g., The Father of Modern Physics).
@@ -137,7 +140,7 @@ If you are not at least 80% confident in their historicity, set verified to fals
         - passion: A short phrase describing their core motivation or passion.
         - systemInstruction: act as mentor; emphasize Socratic prompts; may call changeEnvironment() or displayArtifact() as function-only lines. The prompt must also specify a distinct, authentic-sounding accent based on their origin. The tone should match their personality.
         - suggestedPrompts: Three engaging, open-ended questions a user could ask this character. At least one should suggest using a visual ability (e.g., "Take me to...", "Show me...").
-        - voiceName: Based on their personality and historical context, suggest the most suitable voice from this list: ${AVAILABLE_VOICES.join(', ')}. Return only the name of the voice.
+        - voiceName: Based on their personality and historical context, suggest the most suitable voice from this list: ${voiceOptions}. Return only the name of the voice.
         - ambienceTag: Based on the character's typical environment, select the most fitting keyword from this list: ${availableAmbienceTags}.`;
 
       const personaResp = await ai.models.generateContent({

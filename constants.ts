@@ -1,6 +1,32 @@
-import type { Character, Ambience, Quest } from './types';
+import type { Character, Ambience, Quest, VoiceProfile } from './types';
 
-export const AVAILABLE_VOICES = ['Zephyr', 'Puck', 'Charon', 'Kore', 'Fenrir'];
+export const AVAILABLE_VOICES: VoiceProfile[] = [
+  {
+    name: 'Zephyr',
+    gender: 'female',
+    description: 'an airy, expressive contralto suited to Hellenistic heroines',
+  },
+  {
+    name: 'Puck',
+    gender: 'male',
+    description: 'a warm, charismatic baritone with Renaissance Italian energy',
+  },
+  {
+    name: 'Charon',
+    gender: 'male',
+    description: 'a measured, resonant bass evoking classical Greek philosophers',
+  },
+  {
+    name: 'Kore',
+    gender: 'female',
+    description: 'a poised, upper-class English mezzo ideal for 19th-century scholars',
+  },
+  {
+    name: 'Fenrir',
+    gender: 'male',
+    description: 'a steady, authoritative tenor with continental European gravitas',
+  },
+];
 
 export const AMBIENCE_LIBRARY: Ambience[] = [
   {

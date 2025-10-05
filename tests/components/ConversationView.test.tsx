@@ -10,7 +10,9 @@ vi.mock('../../constants', () => ({
         { tag: 'agora', audioSrc: 'agora.mp3' },
         { tag: 'forest', audioSrc: 'forest.mp3' },
     ],
-    AVAILABLE_VOICES: ['socrates-voice'],
+    AVAILABLE_VOICES: [
+        { name: 'socrates-voice', gender: 'male', description: 'a thoughtful male timbre' },
+    ],
 }));
 
 const mockGenerateContent = vi.fn();
