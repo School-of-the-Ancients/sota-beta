@@ -42,15 +42,61 @@ async function decodeAudioData(
     return buffer;
 }
 
-function createBlob(data: Float32Array): Blob {
-    const l = data.length;
-    const int16 = new Int16Array(l);
-    for (let i = 0; i < l; i++) {
-        int16[i] = data[i] * 32768;
+const TARGET_SAMPLE_RATE = 16000;
+
+function sanitizeSample(value: number): number {
+    const clamped = Math.max(-1, Math.min(1, value));
+    return clamped < 0 ? clamped * 32768 : clamped * 32767;
+}
+
+function sanitizeSampleRate(sampleRate: number): number {
+    if (!Number.isFinite(sampleRate) || sampleRate <= 0) {
+        return TARGET_SAMPLE_RATE;
     }
+    return sampleRate;
+}
+
+function resampleToRate(data: Float32Array, sourceRate: number, targetRate: number): Float32Array {
+    if (sourceRate === targetRate || data.length === 0) {
+        return data.slice();
+    }
+
+    const ratio = sourceRate / targetRate;
+    const newLength = Math.max(1, Math.round(data.length / ratio));
+    const resampled = new Float32Array(newLength);
+
+    for (let i = 0; i < newLength; i++) {
+        const sourceIndex = i * ratio;
+        const indexLower = Math.floor(sourceIndex);
+        const indexUpper = Math.min(indexLower + 1, data.length - 1);
+        const interpolation = sourceIndex - indexLower;
+        const lowerValue = data[indexLower];
+        const upperValue = data[indexUpper];
+        resampled[i] = lowerValue + (upperValue - lowerValue) * interpolation;
+    }
+
+    return resampled;
+}
+
+function createBlob(data: Float32Array, sampleRate: number): Blob {
+    const sanitizedRate = sanitizeSampleRate(sampleRate);
+    let workingData = data;
+    let effectiveSampleRate = sanitizedRate;
+
+    if (sanitizedRate !== TARGET_SAMPLE_RATE) {
+        workingData = resampleToRate(data, sanitizedRate, TARGET_SAMPLE_RATE);
+        effectiveSampleRate = TARGET_SAMPLE_RATE;
+    }
+
+    const length = workingData.length;
+    const int16 = new Int16Array(length);
+    for (let i = 0; i < length; i++) {
+        int16[i] = Math.round(sanitizeSample(workingData[i]));
+    }
+
     return {
         data: encode(new Uint8Array(int16.buffer)),
-        mimeType: 'audio/pcm;rate=16000',
+        mimeType: `audio/pcm;bits=16;rate=${effectiveSampleRate}`,
     };
 }
 
@@ -208,10 +254,19 @@ export const useGeminiLive = (
                     onopen: async () => {
                         setConnectionState(ConnectionState.CONNECTED);
 
-                        inputAudioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 16000 });
+                        inputAudioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: TARGET_SAMPLE_RATE });
                         outputAudioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
 
-                        mediaStreamRef.current = await navigator.mediaDevices.getUserMedia({ audio: true });
+                        mediaStreamRef.current = await navigator.mediaDevices.getUserMedia({
+                            audio: {
+                                channelCount: 1,
+                                sampleRate: TARGET_SAMPLE_RATE,
+                                sampleSize: 16,
+                                echoCancellation: true,
+                                noiseSuppression: true,
+                                autoGainControl: true,
+                            },
+                        });
 
                         const source = inputAudioContextRef.current.createMediaStreamSource(mediaStreamRef.current);
                         mediaStreamSourceRef.current = source;
@@ -220,8 +275,27 @@ export const useGeminiLive = (
                         scriptProcessorRef.current = scriptProcessor;
 
                         scriptProcessor.onaudioprocess = (audioProcessingEvent) => {
-                            const inputData = audioProcessingEvent.inputBuffer.getChannelData(0);
-                            const pcmBlob = createBlob(inputData);
+                            const inputBuffer = audioProcessingEvent.inputBuffer;
+                            const { numberOfChannels, length } = inputBuffer;
+                            let monoData: Float32Array;
+
+                            if (numberOfChannels === 1) {
+                                monoData = new Float32Array(inputBuffer.getChannelData(0));
+                            } else {
+                                monoData = new Float32Array(length);
+                                for (let channel = 0; channel < numberOfChannels; channel++) {
+                                    const channelData = inputBuffer.getChannelData(channel);
+                                    for (let i = 0; i < length; i++) {
+                                        monoData[i] += channelData[i];
+                                    }
+                                }
+                                for (let i = 0; i < length; i++) {
+                                    monoData[i] /= numberOfChannels;
+                                }
+                            }
+
+                            const contextSampleRate = inputAudioContextRef.current?.sampleRate ?? TARGET_SAMPLE_RATE;
+                            const pcmBlob = createBlob(monoData, contextSampleRate);
                             sessionPromiseRef.current?.then((session) => {
                                 session.sendRealtimeInput({ media: pcmBlob });
                             }).catch(err => {
