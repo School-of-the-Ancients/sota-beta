@@ -1,15 +1,17 @@
 import type { Character, Ambience, Quest, VoiceProfile } from './types';
 
+// Voice metadata mirrors the Chirp 3: HD voice catalog genders published by Google.
+// https://cloud.google.com/text-to-speech/docs/chirp3-hd#voice_options
 export const AVAILABLE_VOICES: VoiceProfile[] = [
   {
     name: 'Zephyr',
     gender: 'female',
-    description: 'an airy, expressive contralto suited to Hellenistic heroines',
+    description: 'an airy, expressive contralto with a gentle coastal British lilt',
   },
   {
     name: 'Puck',
     gender: 'male',
-    description: 'a warm, charismatic baritone with Renaissance Italian energy',
+    description: 'a warm, charismatic baritone carrying Renaissance Italian energy',
   },
   {
     name: 'Charon',
@@ -25,6 +27,131 @@ export const AVAILABLE_VOICES: VoiceProfile[] = [
     name: 'Fenrir',
     gender: 'male',
     description: 'a steady, authoritative tenor with continental European gravitas',
+  },
+  {
+    name: 'Leda',
+    gender: 'female',
+    description: 'a luminous modern soprano with crisp diction and a neutral accent',
+  },
+  {
+    name: 'Orus',
+    gender: 'male',
+    description: 'a relaxed tenor colored by Mediterranean warmth and approachable pacing',
+  },
+  {
+    name: 'Aoede',
+    gender: 'female',
+    description: 'a lyrical mezzo with musical phrasing and a soft Hellenic inflection',
+  },
+  {
+    name: 'Callirrhoe',
+    gender: 'female',
+    description: 'a lush contralto with smoky jazz color and measured delivery',
+  },
+  {
+    name: 'Autonoe',
+    gender: 'female',
+    description: 'a precise, airy soprano anchored by a neutral European accent',
+  },
+  {
+    name: 'Enceladus',
+    gender: 'male',
+    description: 'a cavernous bass with Nordic overtones and deliberate articulation',
+  },
+  {
+    name: 'Iapetus',
+    gender: 'male',
+    description: 'a smooth, radio-style baritone with calm, reassuring pacing',
+  },
+  {
+    name: 'Umbriel',
+    gender: 'male',
+    description: 'a cool, composed baritone threaded with a subtle transatlantic cadence',
+  },
+  {
+    name: 'Algieba',
+    gender: 'male',
+    description: 'a bright, theatrical baritone whose playful emphasis keeps conversations lively',
+  },
+  {
+    name: 'Despina',
+    gender: 'female',
+    description: 'a sprightly soprano with a youthful Mediterranean lilt',
+  },
+  {
+    name: 'Erinome',
+    gender: 'female',
+    description: 'a gentle mezzo whose velvety timbre encourages reflective dialogue',
+  },
+  {
+    name: 'Algenib',
+    gender: 'male',
+    description: 'a crisp tenor with newsreader clarity and Standard American delivery',
+  },
+  {
+    name: 'Rasalgethi',
+    gender: 'male',
+    description: 'a gravelly baritone carrying weathered gravitas and patient pacing',
+  },
+  {
+    name: 'Laomedeia',
+    gender: 'female',
+    description: 'a stately mezzo with formal diction and a soft Greek accent',
+  },
+  {
+    name: 'Achernar',
+    gender: 'female',
+    description: 'a brisk mezzo-soprano with a confident Australasian edge',
+  },
+  {
+    name: 'Alnilam',
+    gender: 'male',
+    description: 'a shimmering tenor touched by Middle Eastern-inspired lyricism',
+  },
+  {
+    name: 'Schedar',
+    gender: 'male',
+    description: 'a balanced baritone whose composed tone suits academic explanations',
+  },
+  {
+    name: 'Gacrux',
+    gender: 'female',
+    description: 'a grounded alto with Antipodean warmth and easy authority',
+  },
+  {
+    name: 'Pulcherrima',
+    gender: 'female',
+    description: 'an elegant mezzo-soprano with classic stage presence and polish',
+  },
+  {
+    name: 'Achird',
+    gender: 'male',
+    description: 'a tender lyric baritone with a nurturing cadence ideal for coaching moments',
+  },
+  {
+    name: 'Zubenelgenubi',
+    gender: 'male',
+    description: 'a stately bass imbued with regal North African undertones',
+  },
+  {
+    name: 'Vindemiatrix',
+    gender: 'female',
+    description: 'a precise mezzo featuring continental European articulation',
+  },
+  {
+    name: 'Sadachbia',
+    gender: 'male',
+    description: 'a soothing baritone that favors calm, meditative pacing',
+  },
+  {
+    name: 'Sadaltager',
+    gender: 'male',
+    description: 'a rich baritone with storyteller pacing and a Levantine hue',
+  },
+  {
+    name: 'Sulafat',
+    gender: 'female',
+    description: 'a sparkling soprano radiating vibrant Levantine brightness',
   },
 ];
 
