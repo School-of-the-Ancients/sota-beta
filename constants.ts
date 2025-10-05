@@ -1,5 +1,27 @@
 import type { Character, Ambience, Quest, VoiceProfile } from './types';
 
+// Default spoken language matches the transcription and synthesis defaults for Gemini Live.
+export const DEFAULT_LANGUAGE_CODE = 'en-US';
+
+// Supported language codes follow the Gemini Live and Chirp 3 HD language availability docs.
+// https://cloud.google.com/text-to-speech/docs/chirp3-hd#language_availability
+// https://cloud.google.com/vertex-ai/generative-ai/docs/models/gemini/2-5-flash#live-api-native-audio
+export const SUPPORTED_LANGUAGES = [
+  { code: 'en-US', label: 'English (United States)' },
+  { code: 'en-GB', label: 'English (United Kingdom)' },
+  { code: 'en-AU', label: 'English (Australia)' },
+  { code: 'es-ES', label: 'Spanish (Spain)' },
+  { code: 'es-US', label: 'Spanish (United States)' },
+  { code: 'fr-FR', label: 'French (France)' },
+  { code: 'de-DE', label: 'German (Germany)' },
+  { code: 'it-IT', label: 'Italian (Italy)' },
+  { code: 'pt-BR', label: 'Portuguese (Brazil)' },
+  { code: 'pt-PT', label: 'Portuguese (Portugal)' },
+  { code: 'hi-IN', label: 'Hindi (India)' },
+  { code: 'ja-JP', label: 'Japanese (Japan)' },
+  { code: 'ko-KR', label: 'Korean (South Korea)' },
+];
+
 // Voice metadata mirrors the Chirp 3: HD voice catalog genders published by Google.
 // https://cloud.google.com/text-to-speech/docs/chirp3-hd#voice_options
 export const AVAILABLE_VOICES: VoiceProfile[] = [

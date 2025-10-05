@@ -21,7 +21,7 @@ import QuestIcon from './components/icons/QuestIcon';
 import QuestCreator from './components/QuestCreator'; // NEW
 import QuestQuiz from './components/QuestQuiz';
 
-import { CHARACTERS, QUESTS } from './constants';
+import { CHARACTERS, QUESTS, DEFAULT_LANGUAGE_CODE } from './constants';
 
 const CUSTOM_CHARACTERS_KEY = 'school-of-the-ancients-custom-characters';
 const HISTORY_KEY = 'school-of-the-ancients-history';
@@ -29,6 +29,7 @@ const COMPLETED_QUESTS_KEY = 'school-of-the-ancients-completed-quests';
 const CUSTOM_QUESTS_KEY = 'school-of-the-ancients-custom-quests';
 const ACTIVE_QUEST_KEY = 'school-of-the-ancients-active-quest-id';
 const LAST_QUIZ_RESULT_KEY = 'school-of-the-ancients-last-quiz-result';
+const PREFERRED_LANGUAGE_KEY = 'school-of-the-ancients-preferred-language';
 
 // ---- Local storage helpers -------------------------------------------------
 
@@ -136,6 +137,24 @@ const saveActiveQuestId = (questId: string | null) => {
   }
 };
 
+const loadPreferredLanguageCode = (): string => {
+  try {
+    const stored = localStorage.getItem(PREFERRED_LANGUAGE_KEY);
+    return stored || DEFAULT_LANGUAGE_CODE;
+  } catch (error) {
+    console.error('Failed to load preferred language:', error);
+    return DEFAULT_LANGUAGE_CODE;
+  }
+};
+
+const savePreferredLanguageCode = (code: string) => {
+  try {
+    localStorage.setItem(PREFERRED_LANGUAGE_KEY, code);
+  } catch (error) {
+    console.error('Failed to persist preferred language:', error);
+  }
+};
+
 const updateCharacterQueryParam = (characterId: string, mode: 'push' | 'replace') => {
   try {
     const params = new URLSearchParams(window.location.search);
@@ -168,6 +187,12 @@ const App: React.FC = () => {
   const [environmentImageUrl, setEnvironmentImageUrl] = useState<string | null>(null);
   const [activeQuest, setActiveQuest] = useState<Quest | null>(null);
   const [resumeConversationId, setResumeConversationId] = useState<string | null>(null);
+  const [preferredLanguageCode, setPreferredLanguageCode] = useState<string>(() => {
+    if (typeof window === 'undefined') {
+      return DEFAULT_LANGUAGE_CODE;
+    }
+    return loadPreferredLanguageCode();
+  });
 
   // end-conversation save/AI-eval flag
   const [isSaving, setIsSaving] = useState(false);
@@ -233,6 +258,10 @@ const App: React.FC = () => {
       return current;
     });
   }, [customQuests, customCharacters]);
+
+  useEffect(() => {
+    savePreferredLanguageCode(preferredLanguageCode);
+  }, [preferredLanguageCode]);
 
   const syncQuestProgress = useCallback(() => {
     const history = loadConversations();
@@ -752,6 +781,8 @@ Focus only on the student's contributions. Mark passed=true only if the learner 
             activeQuest={activeQuest}
             isSaving={isSaving} // pass saving state
             resumeConversationId={resumeConversationId}
+            preferredLanguageCode={preferredLanguageCode}
+            onPreferredLanguageChange={setPreferredLanguageCode}
           />
         ) : null;
       case 'history':

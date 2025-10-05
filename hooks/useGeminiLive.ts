@@ -123,6 +123,8 @@ export const useGeminiLive = (
     systemInstruction: string,
     voiceName: string,
     voiceAccent?: string,
+    languageCode?: string,
+    languageLabel?: string,
     onTurnComplete: (turn: { user: string; model: string }) => void,
     onEnvironmentChangeRequest: (description: string) => void,
     onArtifactDisplayRequest: (name: string, description: string) => void,
@@ -161,6 +163,8 @@ export const useGeminiLive = (
     onEnvironmentChangeRequestRef.current = onEnvironmentChangeRequest;
     const onArtifactDisplayRequestRef = useRef(onArtifactDisplayRequest);
     onArtifactDisplayRequestRef.current = onArtifactDisplayRequest;
+    const sanitizedLanguageCode = (languageCode && languageCode.trim()) || 'en-US';
+    const sanitizedLanguageLabel = (languageLabel && languageLabel.trim()) || 'English (United States)';
 
     const toggleMicrophone = useCallback(() => {
         setIsMicActive(prevIsActive => {
@@ -269,6 +273,11 @@ export const useGeminiLive = (
                 if (!normalizedInstruction.includes(sanitizedAccent.toLowerCase())) {
                     baseInstruction = `${baseInstruction}\n\nVOICE ACCENT REQUIREMENT: ${accentDirective}`;
                 }
+            }
+
+            const languageDirective = `PRIMARY LANGUAGE REQUIREMENT: Speak and write exclusively in ${sanitizedLanguageLabel} unless the user explicitly requests another language. Confirm the switch with the user before changing languages, and transcribe user speech in ${sanitizedLanguageLabel}.`;
+            if (!baseInstruction.toLowerCase().includes('primary language requirement')) {
+                baseInstruction = `${baseInstruction}\n\n${languageDirective}`;
             }
 
             let finalSystemInstruction = baseInstruction;
@@ -455,10 +464,11 @@ export const useGeminiLive = (
                 },
                 config: {
                     responseModalities: [Modality.AUDIO],
-                    inputAudioTranscription: {},
-                    outputAudioTranscription: {},
+                    inputAudioTranscription: { languageCode: sanitizedLanguageCode } as Record<string, unknown>,
+                    outputAudioTranscription: { languageCode: sanitizedLanguageCode } as Record<string, unknown>,
                     speechConfig: {
                         voiceConfig: { prebuiltVoiceConfig: { voiceName: voiceName } },
+                        languageCode: sanitizedLanguageCode,
                     },
                     systemInstruction: finalSystemInstruction,
                     tools: [{functionDeclarations: [changeEnvironmentFunctionDeclaration, displayArtifactFunctionDeclaration]}],
@@ -479,7 +489,7 @@ export const useGeminiLive = (
             console.error('Failed to connect to Gemini Live:', error);
             setConnectionState(ConnectionState.ERROR);
         }
-    }, [systemInstruction, voiceName, voiceAccent, activeQuest, disconnect]);
+    }, [systemInstruction, voiceName, voiceAccent, activeQuest, disconnect, sanitizedLanguageCode, sanitizedLanguageLabel]);
 
     useEffect(() => {
         connect();

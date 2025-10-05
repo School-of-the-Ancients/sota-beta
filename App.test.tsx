@@ -107,6 +107,10 @@ describe('App', () => {
       portraitUrl: 'http://example.com/portrait.png',
       ambienceTag: 'none',
       suggestedPrompts: [],
+      bio: 'A test persona for unit tests.',
+      timeframe: 'timeless',
+      expertise: 'testing',
+      passion: 'ensuring quality',
     };
 
     // Set up localStorage with the custom character

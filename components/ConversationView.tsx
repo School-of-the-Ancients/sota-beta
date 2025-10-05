@@ -4,7 +4,7 @@ import type { Character, ConversationTurn, SavedConversation, Quest } from '../t
 import { useGeminiLive } from '../hooks/useGeminiLive';
 import { useAmbientAudio } from '../hooks/useAmbientAudio';
 import { ConnectionState } from '../types';
-import { AMBIENCE_LIBRARY } from '../constants';
+import { AMBIENCE_LIBRARY, SUPPORTED_LANGUAGES } from '../constants';
 import MicrophoneIcon from './icons/MicrophoneIcon';
 import MicrophoneOffIcon from './icons/MicrophoneOffIcon';
 import WaveformIcon from './icons/WaveformIcon';
@@ -23,6 +23,8 @@ interface ConversationViewProps {
   activeQuest: Quest | null;
   isSaving: boolean;
   resumeConversationId?: string | null;
+  preferredLanguageCode: string;
+  onPreferredLanguageChange: (code: string) => void;
 }
 
 const loadConversations = (): SavedConversation[] => {
@@ -108,6 +110,8 @@ const ConversationView: React.FC<ConversationViewProps> = ({
   activeQuest,
   isSaving,
   resumeConversationId,
+  preferredLanguageCode,
+  onPreferredLanguageChange,
 }) => {
   const [transcript, setTranscript] = useState<ConversationTurn[]>([]);
   const [textInput, setTextInput] = useState('');
@@ -115,6 +119,17 @@ const ConversationView: React.FC<ConversationViewProps> = ({
   const [isFetchingSuggestions, setIsFetchingSuggestions] = useState(false);
   const [isGeneratingVisual, setIsGeneratingVisual] = useState(false);
   const [generationMessage, setGenerationMessage] = useState('');
+  const selectedLanguage = useMemo(
+    () => SUPPORTED_LANGUAGES.find((option) => option.code === preferredLanguageCode),
+    [preferredLanguageCode],
+  );
+  const selectedLanguageLabel = selectedLanguage?.label ?? 'English (United States)';
+  const handleLanguageChange = useCallback(
+    (event: React.ChangeEvent<HTMLSelectElement>) => {
+      onPreferredLanguageChange(event.target.value);
+    },
+    [onPreferredLanguageChange],
+  );
 
   const initialAudioSrc = AMBIENCE_LIBRARY.find(a => a.tag === character.ambienceTag)?.audioSrc ?? null;
   const { isMuted: isAmbienceMuted, toggleMute: toggleAmbienceMute, changeTrack: changeAmbienceTrack } = useAmbientAudio(initialAudioSrc);
@@ -422,6 +437,8 @@ const ConversationView: React.FC<ConversationViewProps> = ({
     character.systemInstruction,
     character.voiceName,
     character.voiceAccent,
+    preferredLanguageCode,
+    selectedLanguageLabel,
     handleTurnComplete,
     handleEnvironmentChange,
     handleArtifactDisplay,
@@ -574,7 +591,28 @@ ${contextTranscript}
             </div>
             <h2 className="text-2xl sm:text-3xl font-bold text-amber-200 mt-8">{character.name}</h2>
             <p className="text-gray-400 italic">{character.title}</p>
-            
+
+            <div className="mt-6 w-full max-w-xs text-left">
+              <label htmlFor="language-select" className="block text-sm font-semibold text-amber-200 mb-2">
+                Preferred language
+              </label>
+              <select
+                id="language-select"
+                value={preferredLanguageCode}
+                onChange={handleLanguageChange}
+                className="w-full bg-gray-800/70 border border-gray-600 rounded-lg px-3 py-2 text-sm text-gray-100 focus:outline-none focus:ring-2 focus:ring-amber-400"
+              >
+                {SUPPORTED_LANGUAGES.map((option) => (
+                  <option key={option.code} value={option.code}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+              <p className="mt-2 text-xs text-gray-400">
+                Responses and transcripts stay in {selectedLanguageLabel} unless you ask otherwise.
+              </p>
+            </div>
+
             {activeQuest && (
                 <div className="mt-4 p-4 w-full max-w-xs bg-amber-900/40 border border-amber-800/80 rounded-lg text-left animate-fade-in space-y-3">
                     <div>

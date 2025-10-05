@@ -13,6 +13,10 @@ vi.mock('../../constants', () => ({
     AVAILABLE_VOICES: [
         { name: 'socrates-voice', gender: 'male', description: 'a thoughtful male timbre' },
     ],
+    SUPPORTED_LANGUAGES: [
+        { code: 'en-US', label: 'English (United States)' },
+        { code: 'el-GR', label: 'Greek' },
+    ],
 }));
 
 const mockGenerateContent = vi.fn();
@@ -37,7 +41,7 @@ const useGeminiLiveMock = vi.fn();
 
 vi.mock('../../hooks/useGeminiLive', () => ({
   useGeminiLive: vi.fn((
-    sysInstruction, voice, accent,
+    sysInstruction, voice, accent, languageCode, languageLabel,
     onTurnComplete, onEnvironmentChange, onArtifactDisplay
   ) => {
     onTurnCompleteCallback = onTurnComplete;
@@ -62,16 +66,30 @@ const mockCharacter: Character = {
     greeting: 'What is it you seek to understand?', systemInstruction: 'You are Socrates.',
     voiceName: 'socrates-voice', portraitUrl: 'socrates.png',
     suggestedPrompts: ['What is justice?', 'What is courage?'], ambienceTag: 'agora',
+    voiceAccent: 'a thoughtful tone',
+    bio: 'A philosopher from Athens.',
+    timeframe: '5th century BC',
+    expertise: 'Ethics',
+    passion: 'Questioning',
 };
 
 const mockOnEndConversation = vi.fn();
 const mockOnEnvironmentUpdate = vi.fn();
 
 const renderComponent = (props = {}) => {
+    const defaultProps = {
+        preferredLanguageCode: 'en-US',
+        onPreferredLanguageChange: vi.fn(),
+    };
     return render(
         <ConversationView
-            character={mockCharacter} onEndConversation={mockOnEndConversation}
-            onEnvironmentUpdate={mockOnEnvironmentUpdate} activeQuest={null} isSaving={false} {...props}
+            character={mockCharacter}
+            onEndConversation={mockOnEndConversation}
+            onEnvironmentUpdate={mockOnEnvironmentUpdate}
+            activeQuest={null}
+            isSaving={false}
+            {...defaultProps}
+            {...props}
         />
     );
 };
@@ -171,6 +189,18 @@ describe('ConversationView', () => {
             expect(artifactImage).toBeInTheDocument();
             expect(artifactImage).toHaveAttribute('src', expect.stringContaining('data:image/jpeg;base64,'));
         });
+    });
+
+    it('updates the preferred language when the user selects a new option', async () => {
+        const user = userEvent.setup();
+        const onPreferredLanguageChange = vi.fn();
+
+        renderComponent({ onPreferredLanguageChange });
+
+        const select = await screen.findByLabelText(/preferred language/i);
+        await user.selectOptions(select, 'el-GR');
+
+        expect(onPreferredLanguageChange).toHaveBeenCalledWith('el-GR');
     });
 
     it('should fetch and display dynamic suggestions when requested', async () => {
