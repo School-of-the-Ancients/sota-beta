@@ -138,6 +138,7 @@ export const useGeminiLive = (
     const inputAudioContextRef = useRef<AudioContext | null>(null);
     const outputAudioContextRef = useRef<AudioContext | null>(null);
     const mediaStreamRef = useRef<MediaStream | null>(null);
+    const audioWorkletNodeRef = useRef<AudioWorkletNode | null>(null);
     const scriptProcessorRef = useRef<ScriptProcessorNode | null>(null);
     const mediaStreamSourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
 
@@ -166,7 +167,7 @@ export const useGeminiLive = (
         setIsMicActive(prevIsActive => {
             const nextIsActive = !prevIsActive;
             const source = mediaStreamSourceRef.current;
-            const processor = scriptProcessorRef.current;
+            const processor = (audioWorkletNodeRef.current || scriptProcessorRef.current) ?? null;
             const context = inputAudioContextRef.current;
 
             if (!source || !processor || !context) {
@@ -180,6 +181,11 @@ export const useGeminiLive = (
                     setConnectionState(ConnectionState.LISTENING);
                 } else {
                     source.disconnect(processor);
+                    try {
+                        processor.disconnect();
+                    } catch (e) {
+                        // Ignore errors, e.g., if already disconnected.
+                    }
                     setConnectionState(ConnectionState.CONNECTED);
                 }
             } catch (e) {
@@ -207,6 +213,14 @@ export const useGeminiLive = (
 
         mediaStreamRef.current?.getTracks().forEach(track => track.stop());
 
+        if (audioWorkletNodeRef.current && mediaStreamSourceRef.current) {
+            try {
+                mediaStreamSourceRef.current.disconnect(audioWorkletNodeRef.current);
+                audioWorkletNodeRef.current.disconnect();
+            } catch (e) {
+                // Ignore errors
+            }
+        }
         if (scriptProcessorRef.current && mediaStreamSourceRef.current) {
             try {
                 mediaStreamSourceRef.current.disconnect(scriptProcessorRef.current);
@@ -214,6 +228,17 @@ export const useGeminiLive = (
             } catch (e) {
                 // Ignore errors
             }
+        }
+        if (audioWorkletNodeRef.current) {
+            try {
+                audioWorkletNodeRef.current.port.close();
+            } catch (e) {
+                // Ignore errors when closing the port
+            }
+        }
+        audioWorkletNodeRef.current = null;
+        if (scriptProcessorRef.current) {
+            scriptProcessorRef.current.onaudioprocess = null;
         }
         scriptProcessorRef.current = null;
         mediaStreamSourceRef.current = null;
@@ -295,22 +320,67 @@ export const useGeminiLive = (
                         const source = inputAudioContextRef.current.createMediaStreamSource(mediaStreamRef.current);
                         mediaStreamSourceRef.current = source;
 
-                        const scriptProcessor = inputAudioContextRef.current.createScriptProcessor(4096, 1, 1);
-                        scriptProcessorRef.current = scriptProcessor;
+                        audioWorkletNodeRef.current = null;
+                        scriptProcessorRef.current = null;
 
-                        scriptProcessor.onaudioprocess = (audioProcessingEvent) => {
-                            const inputData = audioProcessingEvent.inputBuffer.getChannelData(0);
-                            const pcmBlob = createBlob(inputData);
-                            sessionPromiseRef.current?.then((session) => {
-                                session.sendRealtimeInput({ media: pcmBlob });
-                            }).catch(err => {
-                                console.warn('Error sending audio data; session may be closing.', err);
-                            });
-                        };
+                        let processorNode: AudioWorkletNode | ScriptProcessorNode | null = null;
 
-                        if (isMicActiveRef.current) {
-                            source.connect(scriptProcessor);
-                            scriptProcessor.connect(inputAudioContextRef.current.destination);
+                        const audioWorkletAvailable =
+                            !!inputAudioContextRef.current.audioWorklet && typeof AudioWorkletNode !== 'undefined';
+
+                        if (audioWorkletAvailable) {
+                            try {
+                                await inputAudioContextRef.current.audioWorklet.addModule(
+                                    new URL('../audio/worklets/microphone-processor.ts', import.meta.url),
+                                );
+
+                                const audioWorkletNode = new AudioWorkletNode(
+                                    inputAudioContextRef.current,
+                                    'microphone-processor',
+                                    {
+                                        numberOfInputs: 1,
+                                        numberOfOutputs: 1,
+                                        outputChannelCount: [1],
+                                    },
+                                );
+                                audioWorkletNodeRef.current = audioWorkletNode;
+                                processorNode = audioWorkletNode;
+
+                                audioWorkletNode.port.onmessage = (event) => {
+                                    const inputData = event.data as Float32Array;
+                                    const pcmBlob = createBlob(inputData);
+                                    sessionPromiseRef.current?.then((session) => {
+                                        session.sendRealtimeInput({ media: pcmBlob });
+                                    }).catch(err => {
+                                        console.warn('Error sending audio data; session may be closing.', err);
+                                    });
+                                };
+                            } catch (error) {
+                                console.warn('Falling back to ScriptProcessorNode for microphone capture:', error);
+                                audioWorkletNodeRef.current = null;
+                                processorNode = null;
+                            }
+                        }
+
+                        if (!processorNode) {
+                            const scriptProcessor = inputAudioContextRef.current.createScriptProcessor(4096, 1, 1);
+                            scriptProcessorRef.current = scriptProcessor;
+                            processorNode = scriptProcessor;
+
+                            scriptProcessor.onaudioprocess = (audioProcessingEvent) => {
+                                const inputData = audioProcessingEvent.inputBuffer.getChannelData(0);
+                                const pcmBlob = createBlob(inputData);
+                                sessionPromiseRef.current?.then((session) => {
+                                    session.sendRealtimeInput({ media: pcmBlob });
+                                }).catch(err => {
+                                    console.warn('Error sending audio data; session may be closing.', err);
+                                });
+                            };
+                        }
+
+                        if (processorNode && isMicActiveRef.current) {
+                            source.connect(processorNode);
+                            processorNode.connect(inputAudioContextRef.current.destination);
                             setConnectionState(ConnectionState.LISTENING);
                         }
                     },
