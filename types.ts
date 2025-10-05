@@ -1,4 +1,10 @@
 
+export interface VoiceProfile {
+  name: string;
+  gender: 'male' | 'female';
+  description: string;
+}
+
 export interface Ambience {
   tag: string;
   description: string;
