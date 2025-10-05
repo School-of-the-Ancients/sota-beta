@@ -21,13 +21,14 @@ import QuestIcon from './components/icons/QuestIcon';
 import QuestCreator from './components/QuestCreator'; // NEW
 import QuestQuiz from './components/QuestQuiz';
 
-import { CHARACTERS, QUESTS } from './constants';
+import { CHARACTERS, QUESTS, DEFAULT_LANGUAGE_CODE, SUPPORTED_LANGUAGES } from './constants';
 
 const CUSTOM_CHARACTERS_KEY = 'school-of-the-ancients-custom-characters';
 const HISTORY_KEY = 'school-of-the-ancients-history';
 const COMPLETED_QUESTS_KEY = 'school-of-the-ancients-completed-quests';
 const CUSTOM_QUESTS_KEY = 'school-of-the-ancients-custom-quests';
 const ACTIVE_QUEST_KEY = 'school-of-the-ancients-active-quest-id';
+const PREFERRED_LANGUAGE_KEY = 'school-of-the-ancients-language-code';
 const LAST_QUIZ_RESULT_KEY = 'school-of-the-ancients-last-quiz-result';
 
 // ---- Local storage helpers -------------------------------------------------
@@ -136,6 +137,38 @@ const saveActiveQuestId = (questId: string | null) => {
   }
 };
 
+const isSupportedLanguageCode = (code: string) =>
+  SUPPORTED_LANGUAGES.some((language) => language.code === code);
+
+const loadPreferredLanguage = (): string => {
+  if (typeof window === 'undefined') {
+    return DEFAULT_LANGUAGE_CODE;
+  }
+
+  try {
+    const stored = localStorage.getItem(PREFERRED_LANGUAGE_KEY);
+    if (stored && isSupportedLanguageCode(stored)) {
+      return stored;
+    }
+  } catch (error) {
+    console.warn('Failed to load preferred language:', error);
+  }
+
+  return DEFAULT_LANGUAGE_CODE;
+};
+
+const savePreferredLanguage = (code: string) => {
+  if (typeof window === 'undefined' || !isSupportedLanguageCode(code)) {
+    return;
+  }
+
+  try {
+    localStorage.setItem(PREFERRED_LANGUAGE_KEY, code);
+  } catch (error) {
+    console.warn('Failed to persist preferred language:', error);
+  }
+};
+
 const updateCharacterQueryParam = (characterId: string, mode: 'push' | 'replace') => {
   try {
     const params = new URLSearchParams(window.location.search);
@@ -168,6 +201,7 @@ const App: React.FC = () => {
   const [environmentImageUrl, setEnvironmentImageUrl] = useState<string | null>(null);
   const [activeQuest, setActiveQuest] = useState<Quest | null>(null);
   const [resumeConversationId, setResumeConversationId] = useState<string | null>(null);
+  const [preferredLanguageCode, setPreferredLanguageCode] = useState<string>(() => loadPreferredLanguage());
 
   // end-conversation save/AI-eval flag
   const [isSaving, setIsSaving] = useState(false);
@@ -179,6 +213,17 @@ const App: React.FC = () => {
   const [quizQuest, setQuizQuest] = useState<Quest | null>(null);
   const [quizAssessment, setQuizAssessment] = useState<QuestAssessment | null>(null);
   const [lastQuizResult, setLastQuizResult] = useState<QuizResult | null>(null);
+
+  useEffect(() => {
+    savePreferredLanguage(preferredLanguageCode);
+  }, [preferredLanguageCode]);
+
+  const handlePreferredLanguageChange = useCallback((code: string) => {
+    if (!isSupportedLanguageCode(code)) {
+      return;
+    }
+    setPreferredLanguageCode(code);
+  }, []);
 
   const allQuests = useMemo(() => [...customQuests, ...QUESTS], [customQuests]);
   const lastQuizQuest = useMemo(() => {
@@ -752,6 +797,8 @@ Focus only on the student's contributions. Mark passed=true only if the learner 
             activeQuest={activeQuest}
             isSaving={isSaving} // pass saving state
             resumeConversationId={resumeConversationId}
+            languageCode={preferredLanguageCode}
+            onLanguageChange={handlePreferredLanguageChange}
           />
         ) : null;
       case 'history':

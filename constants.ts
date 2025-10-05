@@ -1,4 +1,4 @@
-import type { Character, Ambience, Quest, VoiceProfile } from './types';
+import type { Character, Ambience, Quest, VoiceProfile, LanguageOption } from './types';
 
 // Voice metadata mirrors the Chirp 3: HD voice catalog genders published by Google.
 // https://cloud.google.com/text-to-speech/docs/chirp3-hd#voice_options
@@ -153,6 +153,16 @@ export const AVAILABLE_VOICES: VoiceProfile[] = [
     gender: 'female',
     description: 'a sparkling soprano radiating vibrant Levantine brightness',
   },
+];
+
+export const DEFAULT_LANGUAGE_CODE = 'en-US';
+
+export const SUPPORTED_LANGUAGES: LanguageOption[] = [
+  { code: 'en-US', label: 'English (United States)' },
+  { code: 'en-GB', label: 'English (United Kingdom)' },
+  { code: 'es-ES', label: 'Spanish (Spain)' },
+  { code: 'fr-FR', label: 'French (France)' },
+  { code: 'de-DE', label: 'German (Germany)' },
 ];
 
 export const AMBIENCE_LIBRARY: Ambience[] = [
