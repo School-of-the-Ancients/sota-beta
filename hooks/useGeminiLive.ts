@@ -54,6 +54,38 @@ function createBlob(data: Float32Array): Blob {
     };
 }
 
+async function createPcmAudioWorkletNode(context: AudioContext): Promise<AudioWorkletNode> {
+    if (!context.audioWorklet) {
+        throw new Error('AudioWorklet is not supported in this browser.');
+    }
+
+    const processorSource = `class PCMProcessor extends AudioWorkletProcessor {
+  process(inputs) {
+    const input = inputs[0];
+    if (input && input[0] && input[0].length) {
+      this.port.postMessage(input[0].slice());
+    }
+    return true;
+  }
+}
+
+registerProcessor('pcm-processor', PCMProcessor);
+`;
+
+    const moduleUrl = URL.createObjectURL(new Blob([processorSource], { type: 'application/javascript' }));
+    try {
+        await context.audioWorklet.addModule(moduleUrl);
+    } finally {
+        URL.revokeObjectURL(moduleUrl);
+    }
+
+    return new AudioWorkletNode(context, 'pcm-processor', {
+        numberOfInputs: 1,
+        numberOfOutputs: 1,
+        outputChannelCount: [1],
+    });
+}
+
 function parseDurationToMs(duration?: string | null): number | null {
     if (!duration) {
         return null;
@@ -138,6 +170,7 @@ export const useGeminiLive = (
     const inputAudioContextRef = useRef<AudioContext | null>(null);
     const outputAudioContextRef = useRef<AudioContext | null>(null);
     const mediaStreamRef = useRef<MediaStream | null>(null);
+    const audioWorkletNodeRef = useRef<AudioWorkletNode | null>(null);
     const scriptProcessorRef = useRef<ScriptProcessorNode | null>(null);
     const mediaStreamSourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
 
@@ -166,20 +199,21 @@ export const useGeminiLive = (
         setIsMicActive(prevIsActive => {
             const nextIsActive = !prevIsActive;
             const source = mediaStreamSourceRef.current;
-            const processor = scriptProcessorRef.current;
+            const processorNode = (audioWorkletNodeRef.current ?? scriptProcessorRef.current) as (AudioNode | null);
             const context = inputAudioContextRef.current;
 
-            if (!source || !processor || !context) {
+            if (!source || !processorNode || !context) {
                 return nextIsActive;
             }
 
             try {
                 if (nextIsActive) {
-                    source.connect(processor);
-                    processor.connect(context.destination);
+                    source.connect(processorNode);
+                    processorNode.connect(context.destination);
                     setConnectionState(ConnectionState.LISTENING);
                 } else {
-                    source.disconnect(processor);
+                    source.disconnect(processorNode);
+                    processorNode.disconnect();
                     setConnectionState(ConnectionState.CONNECTED);
                 }
             } catch (e) {
@@ -207,14 +241,27 @@ export const useGeminiLive = (
 
         mediaStreamRef.current?.getTracks().forEach(track => track.stop());
 
-        if (scriptProcessorRef.current && mediaStreamSourceRef.current) {
+        if (mediaStreamSourceRef.current) {
             try {
-                mediaStreamSourceRef.current.disconnect(scriptProcessorRef.current);
-                scriptProcessorRef.current.disconnect();
+                if (audioWorkletNodeRef.current) {
+                    mediaStreamSourceRef.current.disconnect(audioWorkletNodeRef.current);
+                    audioWorkletNodeRef.current.disconnect();
+                }
+                if (scriptProcessorRef.current) {
+                    mediaStreamSourceRef.current.disconnect(scriptProcessorRef.current);
+                    scriptProcessorRef.current.disconnect();
+                }
             } catch (e) {
                 // Ignore errors
             }
         }
+        if (audioWorkletNodeRef.current) {
+            audioWorkletNodeRef.current.port.onmessage = null;
+        }
+        if (scriptProcessorRef.current) {
+            scriptProcessorRef.current.onaudioprocess = null;
+        }
+        audioWorkletNodeRef.current = null;
         scriptProcessorRef.current = null;
         mediaStreamSourceRef.current = null;
 
@@ -295,11 +342,7 @@ export const useGeminiLive = (
                         const source = inputAudioContextRef.current.createMediaStreamSource(mediaStreamRef.current);
                         mediaStreamSourceRef.current = source;
 
-                        const scriptProcessor = inputAudioContextRef.current.createScriptProcessor(4096, 1, 1);
-                        scriptProcessorRef.current = scriptProcessor;
-
-                        scriptProcessor.onaudioprocess = (audioProcessingEvent) => {
-                            const inputData = audioProcessingEvent.inputBuffer.getChannelData(0);
+                        const transmitAudioFrame = (inputData: Float32Array) => {
                             const pcmBlob = createBlob(inputData);
                             sessionPromiseRef.current?.then((session) => {
                                 session.sendRealtimeInput({ media: pcmBlob });
@@ -308,9 +351,36 @@ export const useGeminiLive = (
                             });
                         };
 
+                        let processorNode: AudioNode | null = null;
+                        try {
+                            const audioWorkletNode = await createPcmAudioWorkletNode(inputAudioContextRef.current);
+                            audioWorkletNodeRef.current = audioWorkletNode;
+                            audioWorkletNode.port.onmessage = (event: MessageEvent<Float32Array | ArrayBuffer>) => {
+                                const data = event.data;
+                                const inputData = data instanceof Float32Array ? data : new Float32Array(data);
+                                transmitAudioFrame(inputData);
+                            };
+                            processorNode = audioWorkletNode;
+                        } catch (error) {
+                            console.warn('Falling back to ScriptProcessorNode due to AudioWorklet initialization failure:', error);
+                            const scriptProcessor = inputAudioContextRef.current.createScriptProcessor(4096, 1, 1);
+                            scriptProcessorRef.current = scriptProcessor;
+                            scriptProcessor.onaudioprocess = (audioProcessingEvent) => {
+                                const inputData = audioProcessingEvent.inputBuffer.getChannelData(0);
+                                transmitAudioFrame(inputData.slice());
+                            };
+                            processorNode = scriptProcessor;
+                        }
+
+                        if (!processorNode) {
+                            console.error('Unable to initialize microphone processing node.');
+                            setConnectionState(ConnectionState.ERROR);
+                            return;
+                        }
+
                         if (isMicActiveRef.current) {
-                            source.connect(scriptProcessor);
-                            scriptProcessor.connect(inputAudioContextRef.current.destination);
+                            source.connect(processorNode);
+                            processorNode.connect(inputAudioContextRef.current.destination);
                             setConnectionState(ConnectionState.LISTENING);
                         }
                     },
