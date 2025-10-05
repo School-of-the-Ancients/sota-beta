@@ -138,7 +138,8 @@ export const useGeminiLive = (
     const inputAudioContextRef = useRef<AudioContext | null>(null);
     const outputAudioContextRef = useRef<AudioContext | null>(null);
     const mediaStreamRef = useRef<MediaStream | null>(null);
-    const scriptProcessorRef = useRef<ScriptProcessorNode | null>(null);
+    const audioWorkletNodeRef = useRef<AudioWorkletNode | null>(null);
+    const silentGainNodeRef = useRef<GainNode | null>(null);
     const mediaStreamSourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
 
     const userTranscriptionRef = useRef('');
@@ -166,17 +167,15 @@ export const useGeminiLive = (
         setIsMicActive(prevIsActive => {
             const nextIsActive = !prevIsActive;
             const source = mediaStreamSourceRef.current;
-            const processor = scriptProcessorRef.current;
-            const context = inputAudioContextRef.current;
+            const processor = audioWorkletNodeRef.current;
 
-            if (!source || !processor || !context) {
+            if (!source || !processor) {
                 return nextIsActive;
             }
 
             try {
                 if (nextIsActive) {
                     source.connect(processor);
-                    processor.connect(context.destination);
                     setConnectionState(ConnectionState.LISTENING);
                 } else {
                     source.disconnect(processor);
@@ -207,15 +206,17 @@ export const useGeminiLive = (
 
         mediaStreamRef.current?.getTracks().forEach(track => track.stop());
 
-        if (scriptProcessorRef.current && mediaStreamSourceRef.current) {
+        if (audioWorkletNodeRef.current && mediaStreamSourceRef.current) {
             try {
-                mediaStreamSourceRef.current.disconnect(scriptProcessorRef.current);
-                scriptProcessorRef.current.disconnect();
+                mediaStreamSourceRef.current.disconnect(audioWorkletNodeRef.current);
             } catch (e) {
                 // Ignore errors
             }
         }
-        scriptProcessorRef.current = null;
+        audioWorkletNodeRef.current?.disconnect();
+        audioWorkletNodeRef.current = null;
+        silentGainNodeRef.current?.disconnect();
+        silentGainNodeRef.current = null;
         mediaStreamSourceRef.current = null;
 
         inputAudioContextRef.current?.close().catch(console.error);
@@ -295,11 +296,21 @@ export const useGeminiLive = (
                         const source = inputAudioContextRef.current.createMediaStreamSource(mediaStreamRef.current);
                         mediaStreamSourceRef.current = source;
 
-                        const scriptProcessor = inputAudioContextRef.current.createScriptProcessor(4096, 1, 1);
-                        scriptProcessorRef.current = scriptProcessor;
+                        await inputAudioContextRef.current.audioWorklet.addModule(new URL('../audio/pcm-processor.worklet.js', import.meta.url));
 
-                        scriptProcessor.onaudioprocess = (audioProcessingEvent) => {
-                            const inputData = audioProcessingEvent.inputBuffer.getChannelData(0);
+                        const workletNode = new AudioWorkletNode(inputAudioContextRef.current, 'pcm-processor', {
+                            numberOfInputs: 1,
+                            numberOfOutputs: 1,
+                            channelCount: 1,
+                        });
+                        audioWorkletNodeRef.current = workletNode;
+
+                        const silentGainNode = inputAudioContextRef.current.createGain();
+                        silentGainNode.gain.value = 0;
+                        silentGainNodeRef.current = silentGainNode;
+
+                        workletNode.port.onmessage = (event: MessageEvent<Float32Array>) => {
+                            const inputData = event.data;
                             const pcmBlob = createBlob(inputData);
                             sessionPromiseRef.current?.then((session) => {
                                 session.sendRealtimeInput({ media: pcmBlob });
@@ -308,9 +319,11 @@ export const useGeminiLive = (
                             });
                         };
 
+                        workletNode.connect(silentGainNode);
+                        silentGainNode.connect(inputAudioContextRef.current.destination);
+
                         if (isMicActiveRef.current) {
-                            source.connect(scriptProcessor);
-                            scriptProcessor.connect(inputAudioContextRef.current.destination);
+                            source.connect(workletNode);
                             setConnectionState(ConnectionState.LISTENING);
                         }
                     },

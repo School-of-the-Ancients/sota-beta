@@ -41,27 +41,39 @@ Object.defineProperty(navigator, 'mediaDevices', {
   writable: true,
 });
 
-const mockScriptProcessor = {
-  connect: vi.fn(),
-  disconnect: vi.fn(),
-  onaudioprocess: null,
-};
-
 const mockAudioContext = {
   createMediaStreamSource: vi.fn(() => ({
     connect: vi.fn(),
     disconnect: vi.fn(),
   })),
-  createScriptProcessor: vi.fn(() => mockScriptProcessor),
+  createGain: vi.fn(() => ({
+    gain: { value: 1 },
+    connect: vi.fn(),
+    disconnect: vi.fn(),
+  })),
   destination: {},
   close: vi.fn(() => Promise.resolve()),
   resume: vi.fn(),
   suspend: vi.fn(),
   sampleRate: 16000,
+  audioWorklet: {
+    addModule: vi.fn(() => Promise.resolve()),
+  },
 };
 
 // @ts-expect-error - Mocking AudioContext
 window.AudioContext = vi.fn(() => mockAudioContext);
+
+class MockAudioWorkletNode {
+  port = {
+    onmessage: null as ((event: MessageEvent<Float32Array>) => void) | null,
+  };
+  connect = vi.fn();
+  disconnect = vi.fn();
+}
+
+// @ts-expect-error - Mocking AudioWorkletNode
+window.AudioWorkletNode = MockAudioWorkletNode;
 
 const mockOnTurnComplete = vi.fn();
 const mockOnEnvironmentChangeRequest = vi.fn();
