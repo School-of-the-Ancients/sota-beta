@@ -8,6 +8,7 @@ import type {
   SavedConversation,
   Summary,
   QuestAssessment,
+  QuizResult,
 } from './types';
 
 import CharacterSelector from './components/CharacterSelector';
@@ -18,6 +19,7 @@ import QuestsView from './components/QuestsView';
 import Instructions from './components/Instructions';
 import QuestIcon from './components/icons/QuestIcon';
 import QuestCreator from './components/QuestCreator'; // NEW
+import QuestQuiz from './components/QuestQuiz';
 
 import { CHARACTERS, QUESTS } from './constants';
 
@@ -26,6 +28,7 @@ const HISTORY_KEY = 'school-of-the-ancients-history';
 const COMPLETED_QUESTS_KEY = 'school-of-the-ancients-completed-quests';
 const CUSTOM_QUESTS_KEY = 'school-of-the-ancients-custom-quests';
 const ACTIVE_QUEST_KEY = 'school-of-the-ancients-active-quest-id';
+const LAST_QUIZ_RESULT_KEY = 'school-of-the-ancients-last-quiz-result';
 
 // ---- Local storage helpers -------------------------------------------------
 
@@ -90,6 +93,28 @@ const saveCustomQuests = (quests: Quest[]) => {
   }
 };
 
+const loadLastQuizResult = (): QuizResult | null => {
+  try {
+    const stored = localStorage.getItem(LAST_QUIZ_RESULT_KEY);
+    return stored ? JSON.parse(stored) : null;
+  } catch (error) {
+    console.error('Failed to load last quiz result:', error);
+    return null;
+  }
+};
+
+const saveLastQuizResult = (result: QuizResult | null) => {
+  try {
+    if (result) {
+      localStorage.setItem(LAST_QUIZ_RESULT_KEY, JSON.stringify(result));
+    } else {
+      localStorage.removeItem(LAST_QUIZ_RESULT_KEY);
+    }
+  } catch (error) {
+    console.error('Failed to persist last quiz result:', error);
+  }
+};
+
 const loadActiveQuestId = (): string | null => {
   try {
     return localStorage.getItem(ACTIVE_QUEST_KEY);
@@ -135,7 +160,7 @@ const updateCharacterQueryParam = (characterId: string, mode: 'push' | 'replace'
 const App: React.FC = () => {
   const [selectedCharacter, setSelectedCharacter] = useState<Character | null>(null);
   const [view, setView] = useState<
-    'selector' | 'conversation' | 'history' | 'creator' | 'quests' | 'questCreator'
+    'selector' | 'conversation' | 'history' | 'creator' | 'quests' | 'questCreator' | 'quiz'
   >('selector');
 
   const [customCharacters, setCustomCharacters] = useState<Character[]>([]);
@@ -151,8 +176,17 @@ const App: React.FC = () => {
   const [lastQuestOutcome, setLastQuestOutcome] = useState<QuestAssessment | null>(null);
   const [inProgressQuestIds, setInProgressQuestIds] = useState<string[]>([]);
   const [questCreatorPrefill, setQuestCreatorPrefill] = useState<string | null>(null);
+  const [quizQuest, setQuizQuest] = useState<Quest | null>(null);
+  const [quizAssessment, setQuizAssessment] = useState<QuestAssessment | null>(null);
+  const [lastQuizResult, setLastQuizResult] = useState<QuizResult | null>(null);
 
   const allQuests = useMemo(() => [...customQuests, ...QUESTS], [customQuests]);
+  const lastQuizQuest = useMemo(() => {
+    if (!lastQuizResult) {
+      return null;
+    }
+    return allQuests.find((quest) => quest.id === lastQuizResult.questId) ?? null;
+  }, [allQuests, lastQuizResult]);
 
   useEffect(() => {
     if (customQuests.length === 0) {
@@ -270,6 +304,10 @@ const App: React.FC = () => {
     }
 
     setCompletedQuests(loadCompletedQuests());
+    const storedQuizResult = loadLastQuizResult();
+    if (storedQuizResult) {
+      setLastQuizResult(storedQuizResult);
+    }
     syncQuestProgress();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [syncQuestProgress]);
@@ -449,11 +487,73 @@ const App: React.FC = () => {
     updateCharacterQueryParam(mentor.id, 'push');
   };
 
+  const handleQuizExit = () => {
+    setQuizQuest(null);
+    setQuizAssessment(null);
+    setView('selector');
+  };
+
+  const handleQuizComplete = (result: QuizResult) => {
+    const quest = quizQuest;
+    if (quest) {
+      if (result.passed) {
+        setCompletedQuests((prev) => {
+          if (prev.includes(quest.id)) {
+            saveCompletedQuests(prev);
+            return prev;
+          }
+          const updated = [...prev, quest.id];
+          saveCompletedQuests(updated);
+          return updated;
+        });
+      } else {
+        setCompletedQuests((prev) => {
+          if (!prev.includes(quest.id)) {
+            saveCompletedQuests(prev);
+            return prev;
+          }
+          const updated = prev.filter((id) => id !== quest.id);
+          saveCompletedQuests(updated);
+          return updated;
+        });
+      }
+    }
+
+    setLastQuizResult(result);
+    saveLastQuizResult(result);
+    setQuizQuest(null);
+    setQuizAssessment(null);
+    setView('selector');
+  };
+
+  const launchQuizForQuest = (questId: string) => {
+    const quest = allQuests.find((q) => q.id === questId);
+    if (!quest) {
+      console.warn(`Unable to launch quiz: quest with ID ${questId} not found.`);
+      setView('selector');
+      return;
+    }
+
+    setQuizQuest(quest);
+    if (lastQuestOutcome?.questId === questId) {
+      setQuizAssessment(lastQuestOutcome);
+    } else {
+      setQuizAssessment(null);
+    }
+    setView('quiz');
+  };
+
   // ---- End conversation: summarize & (if quest) evaluate mastery ----
   const handleEndConversation = async (transcript: ConversationTurn[], sessionId: string) => {
     if (!selectedCharacter) return;
     setIsSaving(true);
     let questAssessment: QuestAssessment | null = null;
+    const questForSession = activeQuest;
+
+    if (questForSession) {
+      setQuizQuest(null);
+      setQuizAssessment(null);
+    }
 
     try {
       const conversationHistory = loadConversations();
@@ -478,11 +578,11 @@ const App: React.FC = () => {
         timestamp: Date.now(),
       };
 
-      if (activeQuest) {
+      if (questForSession) {
         updatedConversation = {
           ...updatedConversation,
-          questId: activeQuest.id,
-          questTitle: activeQuest.title,
+          questId: questForSession.id,
+          questTitle: questForSession.title,
         };
       }
 
@@ -536,11 +636,11 @@ ${transcriptText}`;
       }
 
       // If this was a quest session, evaluate mastery
-      if (ai && activeQuest) {
+      if (ai && questForSession) {
         const questTranscriptText = transcript.map((turn) => `${turn.speakerName}: ${turn.text}`).join('\n\n');
 
         if (questTranscriptText.trim()) {
-          const evaluationPrompt = `You are a meticulous mentor evaluating whether a student has mastered the quest "${activeQuest.title}". Review the conversation transcript between the mentor and student. Determine if the student demonstrates a working understanding of the quest objective: "${activeQuest.objective}".
+          const evaluationPrompt = `You are a meticulous mentor evaluating whether a student has mastered the quest "${questForSession.title}". Review the conversation transcript between the mentor and student. Determine if the student demonstrates a working understanding of the quest objective: "${questForSession.objective}".
 
 Return a JSON object with this structure:
 {
@@ -572,8 +672,8 @@ Focus only on the student's contributions. Mark passed=true only if the learner 
 
           const evaluation = JSON.parse(evaluationResponse.text);
           questAssessment = {
-            questId: activeQuest.id,
-            questTitle: activeQuest.title,
+            questId: questForSession.id,
+            questTitle: questForSession.title,
             passed: Boolean(evaluation.passed),
             summary: evaluation.summary || '',
             evidence: Array.isArray(evaluation.evidence) ? evaluation.evidence : [],
@@ -586,33 +686,25 @@ Focus only on the student's contributions. Mark passed=true only if the learner 
           };
 
           if (questAssessment.passed) {
-            setCompletedQuests((prev) => {
-              if (prev.includes(activeQuest.id)) {
-                saveCompletedQuests(prev);
-                return prev;
-              }
-              const updated = [...prev, activeQuest.id]; // FIX
-              saveCompletedQuests(updated);
-              return updated;
-            });
+            // Quiz will finalize completion status.
           } else {
             setCompletedQuests((prev) => {
-              if (!prev.includes(activeQuest.id)) {
+              if (!prev.includes(questForSession.id)) {
                 saveCompletedQuests(prev);
                 return prev;
               }
-              const updated = prev.filter((id) => id !== activeQuest.id);
+              const updated = prev.filter((id) => id !== questForSession.id);
               saveCompletedQuests(updated);
               return updated;
             });
           }
         }
-      } else if (activeQuest) {
+      } else if (questForSession) {
         // Ensure quest metadata is retained even without AI assistance.
         updatedConversation = {
           ...updatedConversation,
-          questId: activeQuest.id,
-          questTitle: activeQuest.title,
+          questId: questForSession.id,
+          questTitle: questForSession.title,
         };
       }
 
@@ -624,17 +716,26 @@ Focus only on the student's contributions. Mark passed=true only if the learner 
       setIsSaving(false);
       if (questAssessment) {
         setLastQuestOutcome(questAssessment);
-      } else if (activeQuest) {
-      setLastQuestOutcome(null);
+        if (questAssessment.passed && questForSession) {
+          setQuizQuest(questForSession);
+          setQuizAssessment(questAssessment);
+          setView('quiz');
+        } else {
+          setView('selector');
+        }
+      } else if (questForSession) {
+        setLastQuestOutcome(null);
+        setView('selector');
+      } else {
+        setView('selector');
+      }
+      setSelectedCharacter(null);
+      setEnvironmentImageUrl(null);
+      setActiveQuest(null);
+      saveActiveQuestId(null);
+      setResumeConversationId(null);
+      window.history.pushState({}, '', window.location.pathname);
     }
-    setSelectedCharacter(null);
-    setView('selector');
-    setEnvironmentImageUrl(null);
-    setActiveQuest(null);
-    saveActiveQuestId(null);
-    setResumeConversationId(null);
-    window.history.pushState({}, '', window.location.pathname);
-  }
   };
 
   // ---- View switcher ----
@@ -705,6 +806,26 @@ Focus only on the student's contributions. Mark passed=true only if the learner 
           />
         );
       }
+      case 'quiz':
+        return quizQuest ? (
+          <QuestQuiz
+            quest={quizQuest}
+            assessment={quizAssessment}
+            onExit={handleQuizExit}
+            onComplete={handleQuizComplete}
+          />
+        ) : (
+          <div className="text-center text-gray-300">
+            <p className="text-lg">Quiz unavailable. Returning to the hub…</p>
+            <button
+              type="button"
+              onClick={() => setView('selector')}
+              className="mt-4 inline-flex items-center rounded-md bg-amber-600 px-4 py-2 text-sm font-semibold text-black hover:bg-amber-500"
+            >
+              Go back
+            </button>
+          </div>
+        );
       case 'selector':
       default:
         return (
@@ -799,6 +920,63 @@ Focus only on the student's contributions. Mark passed=true only if the learner 
                     Continue quest?
                   </button>
                 )}
+              </div>
+            )}
+
+            {lastQuizResult && (
+              <div
+                className={`max-w-3xl mx-auto mb-8 rounded-lg border p-5 text-left shadow-lg ${
+                  lastQuizResult.passed ? 'bg-emerald-900/30 border-emerald-700/80' : 'bg-amber-900/30 border-amber-700/80'
+                }`}
+              >
+                <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+                  <div>
+                    <p className="text-xs uppercase tracking-wide text-gray-300 font-semibold">Latest Quiz Result</p>
+                    <h3 className="text-2xl font-bold text-amber-200 mt-1">
+                      {lastQuizQuest?.title ?? 'Quest Mastery Quiz'}
+                    </h3>
+                  </div>
+                  <span
+                    className={`text-sm font-semibold px-3 py-1 rounded-full ${
+                      lastQuizResult.passed ? 'bg-emerald-600 text-emerald-50' : 'bg-amber-600 text-amber-50'
+                    }`}
+                  >
+                    {lastQuizResult.passed ? 'Mastery Confirmed' : 'Needs Review'}
+                  </span>
+                </div>
+
+                <p className="text-gray-200 mt-4 text-lg font-semibold">
+                  Score: {lastQuizResult.correct} / {lastQuizResult.total} correct ({
+                    Math.round(lastQuizResult.scoreRatio * 100)
+                  }
+                  %)
+                </p>
+
+                {lastQuizResult.missedObjectiveTags.length > 0 && (
+                  <div className="mt-4">
+                    <p className="text-xs uppercase tracking-wide text-amber-200 mb-2">Review focus areas</p>
+                    <div className="flex flex-wrap justify-center gap-2">
+                      {lastQuizResult.missedObjectiveTags.map((tag) => (
+                        <span
+                          key={tag}
+                          className="inline-flex items-center rounded-full border border-amber-500/70 bg-amber-900/30 px-3 py-1 text-xs text-amber-100"
+                        >
+                          {tag}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <div className="mt-6 flex flex-col sm:flex-row sm:items-center sm:justify-end gap-3">
+                  <button
+                    type="button"
+                    onClick={() => launchQuizForQuest(lastQuizResult.questId)}
+                    className="rounded-lg border border-amber-500/70 px-4 py-2 text-sm font-semibold text-amber-200 hover:bg-amber-500/10"
+                  >
+                    {lastQuizResult.passed ? 'Retake for practice' : 'Retry quiz'}
+                  </button>
+                </div>
               </div>
             )}
 
