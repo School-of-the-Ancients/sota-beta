@@ -3,6 +3,8 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { GoogleGenAI, LiveServerMessage, Modality, Blob, FunctionDeclaration, Type } from '@google/genai';
 import { ConnectionState, Quest } from '../types';
 
+const PCM_SAMPLE_RATE = 16000;
+
 // Audio Encoding & Decoding functions
 function encode(bytes: Uint8Array): string {
     let binary = '';
@@ -42,15 +44,54 @@ async function decodeAudioData(
     return buffer;
 }
 
-function createBlob(data: Float32Array): Blob {
-    const l = data.length;
-    const int16 = new Int16Array(l);
-    for (let i = 0; i < l; i++) {
-        int16[i] = data[i] * 32768;
+function downsampleBuffer(buffer: Float32Array, inputSampleRate: number, targetSampleRate: number): Float32Array {
+    if (inputSampleRate === targetSampleRate) {
+        return Float32Array.from(buffer);
     }
+
+    if (inputSampleRate < targetSampleRate) {
+        // Browser provided a lower sample rate than the requested target. Avoid upsampling noise
+        // and just reuse the existing samples.
+        return Float32Array.from(buffer);
+    }
+
+    const sampleRateRatio = inputSampleRate / targetSampleRate;
+    const newLength = Math.floor(buffer.length / sampleRateRatio);
+    const result = new Float32Array(newLength);
+
+    let offsetResult = 0;
+    let offsetBuffer = 0;
+
+    while (offsetResult < result.length) {
+        const nextOffsetBuffer = Math.round((offsetResult + 1) * sampleRateRatio);
+        let accumulator = 0;
+        let count = 0;
+
+        for (let i = offsetBuffer; i < nextOffsetBuffer && i < buffer.length; i++) {
+            accumulator += buffer[i];
+            count++;
+        }
+
+        result[offsetResult] = count > 0 ? accumulator / count : 0;
+        offsetResult++;
+        offsetBuffer = nextOffsetBuffer;
+    }
+
+    return result;
+}
+
+function createPcmBlob(data: Float32Array, sampleRate: number): Blob {
+    const length = data.length;
+    const int16 = new Int16Array(length);
+
+    for (let i = 0; i < length; i++) {
+        const clamped = Math.max(-1, Math.min(1, data[i]));
+        int16[i] = clamped < 0 ? clamped * 0x8000 : clamped * 0x7fff;
+    }
+
     return {
         data: encode(new Uint8Array(int16.buffer)),
-        mimeType: 'audio/pcm;rate=16000',
+        mimeType: `audio/pcm;rate=${sampleRate}`,
     };
 }
 
@@ -208,10 +249,21 @@ export const useGeminiLive = (
                     onopen: async () => {
                         setConnectionState(ConnectionState.CONNECTED);
 
-                        inputAudioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 16000 });
+                        inputAudioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: PCM_SAMPLE_RATE });
                         outputAudioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
 
-                        mediaStreamRef.current = await navigator.mediaDevices.getUserMedia({ audio: true });
+                        const mediaConstraints: MediaStreamConstraints = {
+                            audio: {
+                                channelCount: 1,
+                                sampleRate: PCM_SAMPLE_RATE,
+                                sampleSize: 16,
+                                noiseSuppression: true,
+                                echoCancellation: true,
+                                autoGainControl: true,
+                            },
+                        };
+
+                        mediaStreamRef.current = await navigator.mediaDevices.getUserMedia(mediaConstraints);
 
                         const source = inputAudioContextRef.current.createMediaStreamSource(mediaStreamRef.current);
                         mediaStreamSourceRef.current = source;
@@ -220,8 +272,19 @@ export const useGeminiLive = (
                         scriptProcessorRef.current = scriptProcessor;
 
                         scriptProcessor.onaudioprocess = (audioProcessingEvent) => {
+                            const inputContext = inputAudioContextRef.current;
+                            if (!inputContext) {
+                                return;
+                            }
+
                             const inputData = audioProcessingEvent.inputBuffer.getChannelData(0);
-                            const pcmBlob = createBlob(inputData);
+                            const resampled = downsampleBuffer(inputData, inputContext.sampleRate ?? PCM_SAMPLE_RATE, PCM_SAMPLE_RATE);
+
+                            if (!resampled.length) {
+                                return;
+                            }
+
+                            const pcmBlob = createPcmBlob(resampled, PCM_SAMPLE_RATE);
                             sessionPromiseRef.current?.then((session) => {
                                 session.sendRealtimeInput({ media: pcmBlob });
                             }).catch(err => {
