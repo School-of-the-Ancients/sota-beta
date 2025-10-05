@@ -157,10 +157,10 @@ export const useGeminiLive = (
 
     const sendTextMessage = useCallback((text: string) => {
         if (!text.trim()) return;
-        
+
         onTurnCompleteRef.current({ user: text, model: '' });
         userTranscriptionRef.current = ''; // Clear after adding to transcript
-        
+
         setConnectionState(ConnectionState.THINKING);
         sessionPromiseRef.current?.then((session) => {
             try {
@@ -172,6 +172,21 @@ export const useGeminiLive = (
         }).catch(e => {
             console.error("Error sending text message (async):", e);
             setConnectionState(ConnectionState.ERROR);
+        });
+    }, []);
+
+    const sendOperatorMessage = useCallback((text: string) => {
+        const trimmed = text.trim();
+        if (!trimmed) return;
+
+        sessionPromiseRef.current?.then((session) => {
+            try {
+                session.sendRealtimeInput({ text: trimmed });
+            } catch (e) {
+                console.error('Error sending operator message (sync):', e);
+            }
+        }).catch((e) => {
+            console.error('Error sending operator message (async):', e);
         });
     }, []);
 
@@ -395,5 +410,13 @@ export const useGeminiLive = (
         };
     }, [connect, disconnect]);
 
-    return { connectionState, userTranscription, modelTranscription, isMicActive, toggleMicrophone, sendTextMessage };
+    return {
+        connectionState,
+        userTranscription,
+        modelTranscription,
+        isMicActive,
+        toggleMicrophone,
+        sendTextMessage,
+        sendOperatorMessage,
+    };
 };

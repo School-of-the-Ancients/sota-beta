@@ -115,6 +115,8 @@ const ConversationView: React.FC<ConversationViewProps> = ({
   const [isFetchingSuggestions, setIsFetchingSuggestions] = useState(false);
   const [isGeneratingVisual, setIsGeneratingVisual] = useState(false);
   const [generationMessage, setGenerationMessage] = useState('');
+  const questProgressRef = useRef<{ statusKey: string; quizIssued: boolean }>({ statusKey: '', quizIssued: false });
+  const isEvaluatingQuestRef = useRef(false);
 
   const initialAudioSrc = AMBIENCE_LIBRARY.find(a => a.tag === character.ambienceTag)?.audioSrc ?? null;
   const { isMuted: isAmbienceMuted, toggleMute: toggleAmbienceMute, changeTrack: changeAmbienceTrack } = useAmbientAudio(initialAudioSrc);
@@ -218,6 +220,10 @@ const ConversationView: React.FC<ConversationViewProps> = ({
         }
       : {};
   }, [character, onEnvironmentUpdate, activeQuest, resumeConversationId]);
+
+  useEffect(() => {
+    questProgressRef.current = { statusKey: '', quizIssued: false };
+  }, [activeQuest?.id]);
 
     // Cycle through placeholders for text input
     useEffect(() => {
@@ -417,7 +423,8 @@ const ConversationView: React.FC<ConversationViewProps> = ({
     modelTranscription,
     isMicActive,
     toggleMicrophone,
-    sendTextMessage
+    sendTextMessage,
+    sendOperatorMessage,
   } = useGeminiLive(
     character.systemInstruction,
     character.voiceName,
@@ -481,6 +488,147 @@ ${contextTranscript}
     updateDynamicSuggestions(transcript);
   }, [transcript, updateDynamicSuggestions]);
 
+  const evaluateQuestProgress = useCallback(async (currentTranscript: ConversationTurn[]) => {
+    if (!activeQuest) return;
+    if (isEvaluatingQuestRef.current) return;
+
+    const turnsWithoutOperator = currentTranscript.filter((turn) => turn.speakerName !== 'Matrix Operator');
+    if (turnsWithoutOperator.length < 4) {
+      return;
+    }
+
+    isEvaluatingQuestRef.current = true;
+    try {
+      if (!process.env.API_KEY) throw new Error('API_KEY not set.');
+      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+
+      const recentTranscript = turnsWithoutOperator
+        .slice(-20)
+        .map((turn) => `${turn.speakerName}: ${turn.text}`)
+        .join('\n');
+
+      const focusPointList = activeQuest.focusPoints.map((point, index) => `${index + 1}. ${point}`).join('\n');
+
+      const prompt = `You are the Matrix Operator, monitoring a learning quest to ensure completion and readiness for a short verbal quiz. Analyze the dialogue transcript and report on progress for the quest below. Be strict about confirming mastery before allowing completion.\n\nQuest Title: ${activeQuest.title}\nObjective: ${activeQuest.objective}\nFocus Points:\n${focusPointList}\n\nTranscript:\n${recentTranscript}\n\nRespond with JSON describing progress.`;
+
+      const response = await ai.models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: prompt,
+        config: {
+          responseMimeType: 'application/json',
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+              summary: { type: Type.STRING },
+              completedFocusPoints: { type: Type.ARRAY, items: { type: Type.STRING } },
+              remainingFocusPoints: { type: Type.ARRAY, items: { type: Type.STRING } },
+              status: { type: Type.STRING },
+              quizQuestions: { type: Type.ARRAY, items: { type: Type.STRING } },
+              nextSteps: { type: Type.STRING },
+            },
+            required: ['summary', 'completedFocusPoints', 'remainingFocusPoints', 'status', 'nextSteps'],
+          },
+        },
+      });
+
+      if (!response.text) {
+        throw new Error('Quest progress evaluation returned no text');
+      }
+
+      const parsed = JSON.parse(response.text);
+
+      const completedPoints: string[] = Array.isArray(parsed.completedFocusPoints)
+        ? parsed.completedFocusPoints.map((point: string) => point.trim()).filter(Boolean)
+        : [];
+      const remainingPoints: string[] = Array.isArray(parsed.remainingFocusPoints)
+        ? parsed.remainingFocusPoints.map((point: string) => point.trim()).filter(Boolean)
+        : [];
+      const quizQuestions: string[] = Array.isArray(parsed.quizQuestions)
+        ? parsed.quizQuestions.map((question: string) => question.trim()).filter(Boolean)
+        : [];
+
+      const statusKey = JSON.stringify({
+        status: parsed.status,
+        completed: completedPoints,
+        remaining: remainingPoints,
+        quiz: quizQuestions,
+        nextSteps: parsed.nextSteps,
+      });
+
+      if (questProgressRef.current.statusKey === statusKey) {
+        return;
+      }
+
+      questProgressRef.current.statusKey = statusKey;
+
+      const lines: string[] = [];
+      const summaryText = typeof parsed.summary === 'string' ? parsed.summary.trim() : '';
+      if (summaryText) {
+        lines.push(`Progress update for "${activeQuest.title}": ${summaryText}`);
+      }
+
+      if (completedPoints.length > 0) {
+        lines.push(`✔ Completed focus points: ${completedPoints.join('; ')}`);
+      } else {
+        lines.push('✔ Completed focus points: none yet documented.');
+      }
+
+      if (remainingPoints.length > 0) {
+        lines.push(`📘 Still to cover: ${remainingPoints.join('; ')}`);
+      } else {
+        lines.push('🎉 All focus points accounted for in the dialogue.');
+      }
+
+      const nextStepsText = typeof parsed.nextSteps === 'string' ? parsed.nextSteps.trim() : '';
+      if (nextStepsText) {
+        lines.push(`Next steps: ${nextStepsText}`);
+      }
+
+      if (quizQuestions.length > 0) {
+        lines.push('Knowledge check questions:');
+        quizQuestions.forEach((question, index) => {
+          lines.push(`${index + 1}. ${question}`);
+        });
+      }
+
+      const operatorMessage = lines.join('\n');
+
+      setTranscript((prev) => [
+        ...prev,
+        {
+          speaker: 'model',
+          speakerName: 'Matrix Operator',
+          text: operatorMessage,
+        },
+      ]);
+
+      if (remainingPoints.length > 0) {
+        sendOperatorMessage(
+          `Matrix Operator to ${character.name}: focus on covering these quest points next - ${remainingPoints.join(', ')}. Guide the learner until they can explain them clearly before concluding.`,
+        );
+      } else if (quizQuestions.length > 0 && !questProgressRef.current.quizIssued) {
+        sendOperatorMessage(
+          `Matrix Operator to ${character.name}: the learner appears ready for the end-of-quest knowledge check. Ask these questions one at a time, probe for understanding, then confirm the quest completion: ${quizQuestions.join(' | ')}. Congratulate them once mastery is clear.`,
+        );
+        questProgressRef.current.quizIssued = true;
+      }
+    } catch (error) {
+      console.error('Failed to evaluate quest progress:', error);
+    } finally {
+      isEvaluatingQuestRef.current = false;
+    }
+  }, [activeQuest, character.name, sendOperatorMessage]);
+
+  useEffect(() => {
+    if (!activeQuest) return;
+    if (transcript.length === 0) return;
+
+    const lastTurn = transcript[transcript.length - 1];
+    if (lastTurn?.speakerName === 'Matrix Operator') return;
+
+    evaluateQuestProgress(transcript);
+  }, [transcript, activeQuest, evaluateQuestProgress]);
+
   // Auto-save conversation on transcript change
   useEffect(() => {
     if (transcript.length === 0 && !environmentImageUrl) return;
@@ -521,6 +669,8 @@ ${contextTranscript}
         changeAmbienceTrack(initialSrc);
         
         const questMetadata = sessionQuestRef.current;
+
+        questProgressRef.current = { statusKey: '', quizIssued: false };
 
         const clearedConversation: SavedConversation = {
             id: sessionIdRef.current,
