@@ -3,6 +3,8 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { GoogleGenAI, LiveServerMessage, Modality, Blob, FunctionDeclaration, Type, SessionResumptionConfig } from '@google/genai';
 import { ConnectionState, Quest } from '../types';
 
+const DEFAULT_LANGUAGE_CODE = 'en-US';
+
 // Audio Encoding & Decoding functions
 function encode(bytes: Uint8Array): string {
     let binary = '';
@@ -127,6 +129,7 @@ export const useGeminiLive = (
     onEnvironmentChangeRequest: (description: string) => void,
     onArtifactDisplayRequest: (name: string, description: string) => void,
     activeQuest: Quest | null,
+    defaultLanguageCode: string = DEFAULT_LANGUAGE_CODE,
 ) => {
     const [connectionState, setConnectionState] = useState<ConnectionState>(ConnectionState.IDLE);
     const [userTranscription, setUserTranscription] = useState<string>('');
@@ -262,19 +265,38 @@ export const useGeminiLive = (
             const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
             const sanitizedAccent = voiceAccent?.trim();
+            const sanitizedLanguageCode = defaultLanguageCode?.trim() || DEFAULT_LANGUAGE_CODE;
+            const normalizedLanguageCode = sanitizedLanguageCode || DEFAULT_LANGUAGE_CODE;
             let baseInstruction = systemInstruction.trim();
+
+            const normalizedInstruction = baseInstruction.toLowerCase();
+            const directives: string[] = [];
+
+            if (!normalizedInstruction.includes('speak in english')) {
+                directives.push(
+                    `LANGUAGE REQUIREMENT: Always speak in English (language code: ${normalizedLanguageCode}), even when emulating historical accents or when the user speaks another language.`
+                );
+            }
+
             if (sanitizedAccent) {
-                const accentDirective = `Always speak using ${sanitizedAccent}, ensuring the accent, gender, and tone remain consistent. If your voice deviates from ${sanitizedAccent}, correct it immediately before continuing.`;
-                const normalizedInstruction = baseInstruction.toLowerCase();
-                if (!normalizedInstruction.includes(sanitizedAccent.toLowerCase())) {
-                    baseInstruction = `${baseInstruction}\n\nVOICE ACCENT REQUIREMENT: ${accentDirective}`;
-                }
+                directives.push(
+                    `VOICE ACCENT REQUIREMENT: Maintain ${sanitizedAccent} while continuing to speak English. If your voice deviates from ${sanitizedAccent}, correct it immediately before continuing.`
+                );
+            }
+
+            if (directives.length > 0) {
+                baseInstruction = `${baseInstruction}\n\n${directives.join('\n\n')}`;
             }
 
             let finalSystemInstruction = baseInstruction;
             if (activeQuest) {
                 finalSystemInstruction = `YOUR CURRENT MISSION: As a mentor, your primary goal is to guide the student to understand the following: "${activeQuest.objective}". Tailor your questions and explanations to lead them towards this goal.\n\nQUEST COMPLETION PROTOCOL:\n1. Explicitly track the quest's focus points and confirm each one with the learner.\n2. The moment the learner demonstrates mastery of every focus area, clearly announce that the quest curriculum is complete. Congratulate them, encourage a brief self-reflection, and invite them to end the session so they can take the mastery quiz.\n3. After declaring completion, avoid introducing new topics unless the learner requests a targeted review.\n\n---\n\n${baseInstruction}`;
             }
+
+            const languageCode = normalizedLanguageCode || DEFAULT_LANGUAGE_CODE;
+            const transcriptionConfig = {
+                languageCode,
+            };
 
             const sessionResumptionConfig: SessionResumptionConfig = {};
             if (pendingResumptionHandleRef.current) {
@@ -455,9 +477,10 @@ export const useGeminiLive = (
                 },
                 config: {
                     responseModalities: [Modality.AUDIO],
-                    inputAudioTranscription: {},
-                    outputAudioTranscription: {},
+                    inputAudioTranscription: transcriptionConfig,
+                    outputAudioTranscription: transcriptionConfig,
                     speechConfig: {
+                        languageCode,
                         voiceConfig: { prebuiltVoiceConfig: { voiceName: voiceName } },
                     },
                     systemInstruction: finalSystemInstruction,
@@ -479,7 +502,7 @@ export const useGeminiLive = (
             console.error('Failed to connect to Gemini Live:', error);
             setConnectionState(ConnectionState.ERROR);
         }
-    }, [systemInstruction, voiceName, voiceAccent, activeQuest, disconnect]);
+    }, [systemInstruction, voiceName, voiceAccent, activeQuest, defaultLanguageCode, disconnect]);
 
     useEffect(() => {
         connect();

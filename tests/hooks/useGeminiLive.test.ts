@@ -229,6 +229,24 @@ describe('useGeminiLive', () => {
         // We cannot assert the state of an unmounted hook, but we have verified the cleanup functions were called.
     });
 
+    it('should enforce english language settings in the live session config', async () => {
+        renderHook(() =>
+            useGeminiLive('system-instruction', 'test-voice', 'en-US', mockOnTurnComplete, mockOnEnvironmentChangeRequest, mockOnArtifactDisplayRequest, null)
+        );
+
+        await waitFor(() => {
+            expect(mockConnect).toHaveBeenCalled();
+        });
+
+        const lastCall = mockConnect.mock.calls[mockConnect.mock.calls.length - 1];
+        const { config } = lastCall[0];
+
+        expect(config.systemInstruction).toContain('Always speak in English');
+        expect(config.speechConfig?.languageCode).toBe('en-US');
+        expect(config.inputAudioTranscription).toMatchObject({ languageCode: 'en-US' });
+        expect(config.outputAudioTranscription).toMatchObject({ languageCode: 'en-US' });
+    });
+
     it('should set state to DISCONNECTED on session close', async () => {
         let oncloseCallback: () => void;
 
