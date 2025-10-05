@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { GoogleGenAI, Type } from '@google/genai';
 
 import type {
@@ -25,6 +25,7 @@ const CUSTOM_CHARACTERS_KEY = 'school-of-the-ancients-custom-characters';
 const HISTORY_KEY = 'school-of-the-ancients-history';
 const COMPLETED_QUESTS_KEY = 'school-of-the-ancients-completed-quests';
 const CUSTOM_QUESTS_KEY = 'school-of-the-ancients-custom-quests';
+const ACTIVE_QUEST_KEY = 'school-of-the-ancients-active-quest';
 
 // ---- Local storage helpers -------------------------------------------------
 
@@ -89,6 +90,27 @@ const saveCustomQuests = (quests: Quest[]) => {
   }
 };
 
+const loadActiveQuestId = (): string | null => {
+  try {
+    return localStorage.getItem(ACTIVE_QUEST_KEY);
+  } catch (error) {
+    console.error('Failed to load active quest:', error);
+    return null;
+  }
+};
+
+const saveActiveQuestId = (questId: string | null) => {
+  try {
+    if (questId) {
+      localStorage.setItem(ACTIVE_QUEST_KEY, questId);
+    } else {
+      localStorage.removeItem(ACTIVE_QUEST_KEY);
+    }
+  } catch (error) {
+    console.error('Failed to save active quest:', error);
+  }
+};
+
 // ---- App -------------------------------------------------------------------
 
 const App: React.FC = () => {
@@ -110,6 +132,8 @@ const App: React.FC = () => {
   const [lastQuestOutcome, setLastQuestOutcome] = useState<QuestAssessment | null>(null);
   const [inProgressQuestIds, setInProgressQuestIds] = useState<string[]>([]);
   const [questCreatorPrefill, setQuestCreatorPrefill] = useState<string | null>(null);
+  const [hasHydratedLocalData, setHasHydratedLocalData] = useState(false);
+  const hasHydratedActiveQuestRef = useRef(false);
 
   const allQuests = useMemo(() => [...customQuests, ...QUESTS], [customQuests]);
 
@@ -150,7 +174,13 @@ const App: React.FC = () => {
 
     setInProgressQuestIds((prev) => prev.filter((id) => !removedQuestIds.includes(id)));
 
-    setActiveQuest((current) => (current && removedQuestIds.includes(current.id) ? null : current));
+    setActiveQuest((current) => {
+      if (current && removedQuestIds.includes(current.id)) {
+        saveActiveQuestId(null);
+        return null;
+      }
+      return current;
+    });
   }, [customQuests, customCharacters]);
 
   const syncQuestProgress = useCallback(() => {
@@ -181,9 +211,7 @@ const App: React.FC = () => {
     }
 
     loadedCustomQuests = loadCustomQuests();
-    if (loadedCustomQuests.length > 0) {
-      setCustomQuests(loadedCustomQuests);
-    }
+    setCustomQuests(loadedCustomQuests);
 
     const urlParams = new URLSearchParams(window.location.search);
     const characterId = urlParams.get('character');
@@ -198,8 +226,49 @@ const App: React.FC = () => {
 
     setCompletedQuests(loadCompletedQuests());
     syncQuestProgress();
+    setHasHydratedLocalData(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [syncQuestProgress]);
+
+  useEffect(() => {
+    if (!hasHydratedLocalData || hasHydratedActiveQuestRef.current) {
+      return;
+    }
+
+    try {
+      const storedQuestId = loadActiveQuestId();
+      if (!storedQuestId) {
+        hasHydratedActiveQuestRef.current = true;
+        return;
+      }
+
+      const questToRestore = [...customQuests, ...QUESTS].find((quest) => quest.id === storedQuestId);
+      if (!questToRestore) {
+        saveActiveQuestId(null);
+        hasHydratedActiveQuestRef.current = true;
+        return;
+      }
+
+      const allCharacters = [...customCharacters, ...CHARACTERS];
+      const questCharacter = allCharacters.find((character) => character.id === questToRestore.characterId);
+      if (!questCharacter) {
+        saveActiveQuestId(null);
+        hasHydratedActiveQuestRef.current = true;
+        return;
+      }
+
+      setActiveQuest(questToRestore);
+      setSelectedCharacter(questCharacter);
+      setView('conversation');
+      const url = new URL(window.location.href);
+      url.searchParams.set('character', questCharacter.id);
+      window.history.replaceState({}, '', url);
+    } catch (error) {
+      console.error('Failed to restore active quest:', error);
+    } finally {
+      hasHydratedActiveQuestRef.current = true;
+    }
+  }, [customQuests, customCharacters, hasHydratedLocalData]);
 
   // ---- Navigation helpers ----
 
@@ -207,6 +276,7 @@ const App: React.FC = () => {
     setSelectedCharacter(character);
     setView('conversation');
     setActiveQuest(null); // clear any quest when directly picking a character
+    saveActiveQuestId(null);
     setResumeConversationId(null);
     const url = new URL(window.location.href);
     url.searchParams.set('character', character.id);
@@ -218,6 +288,7 @@ const App: React.FC = () => {
     const characterForQuest = allCharacters.find((c) => c.id === quest.characterId);
     if (characterForQuest) {
       setActiveQuest(quest);
+      saveActiveQuestId(quest.id);
       setSelectedCharacter(characterForQuest);
       setView('conversation');
       setResumeConversationId(null);
@@ -258,12 +329,15 @@ const App: React.FC = () => {
       const questToResume = allQuests.find((quest) => quest.id === conversation.questId);
       if (questToResume) {
         setActiveQuest(questToResume);
+        saveActiveQuestId(questToResume.id);
       } else {
         console.warn(`Quest with ID ${conversation.questId} not found while resuming conversation.`);
         setActiveQuest(null);
+        saveActiveQuestId(null);
       }
     } else {
       setActiveQuest(null);
+      saveActiveQuestId(null);
     }
 
     setView('conversation');
@@ -324,7 +398,13 @@ const App: React.FC = () => {
 
     setInProgressQuestIds((prev) => prev.filter((id) => id !== questId));
 
-    setActiveQuest((current) => (current?.id === questId ? null : current));
+    setActiveQuest((current) => {
+      if (current?.id === questId) {
+        saveActiveQuestId(null);
+        return null;
+      }
+      return current;
+    });
   };
 
   const openQuestCreator = (goal?: string | null) => {
@@ -364,6 +444,7 @@ const App: React.FC = () => {
       return updated;
     });
     setActiveQuest(quest);
+    saveActiveQuestId(quest.id);
     setSelectedCharacter(mentor);
     setView('conversation');
     setResumeConversationId(null);
@@ -554,6 +635,7 @@ Focus only on the student's contributions. Mark passed=true only if the learner 
       setView('selector');
       setEnvironmentImageUrl(null);
       setActiveQuest(null);
+      saveActiveQuestId(null);
       setResumeConversationId(null);
       window.history.pushState({}, '', window.location.pathname);
     }
