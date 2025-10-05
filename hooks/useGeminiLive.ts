@@ -42,16 +42,62 @@ async function decodeAudioData(
     return buffer;
 }
 
-function createBlob(data: Float32Array): Blob {
-    const l = data.length;
-    const int16 = new Int16Array(l);
-    for (let i = 0; i < l; i++) {
-        int16[i] = data[i] * 32768;
+function clampSample(sample: number): number {
+    if (sample > 1) return 1;
+    if (sample < -1) return -1;
+    return sample;
+}
+
+function createBlob(data: Float32Array, sampleRate: number, channelCount: number): Blob {
+    const length = data.length;
+    const int16 = new Int16Array(length);
+    for (let i = 0; i < length; i++) {
+        int16[i] = Math.round(clampSample(data[i]) * 32767);
     }
+
+    const normalizedRate = Math.max(1, Math.round(sampleRate));
+    const normalizedChannels = Math.max(1, Math.round(channelCount));
+
     return {
         data: encode(new Uint8Array(int16.buffer)),
-        mimeType: 'audio/pcm;rate=16000',
+        mimeType: `audio/pcm;rate=${normalizedRate};channels=${normalizedChannels}`,
     };
+}
+
+function mixToMono(buffer: AudioBuffer): Float32Array {
+    const { length, numberOfChannels } = buffer;
+
+    if (numberOfChannels === 1) {
+        return buffer.getChannelData(0).slice();
+    }
+
+    const monoData = new Float32Array(length);
+    for (let channel = 0; channel < numberOfChannels; channel++) {
+        const channelData = buffer.getChannelData(channel);
+        for (let i = 0; i < length; i++) {
+            monoData[i] += channelData[i];
+        }
+    }
+
+    for (let i = 0; i < length; i++) {
+        monoData[i] /= numberOfChannels;
+    }
+
+    return monoData;
+}
+
+function resolveLanguageCode(): string {
+    const fallback = 'en-US';
+    if (typeof navigator === 'undefined' || !navigator.language) {
+        return fallback;
+    }
+
+    const normalized = navigator.language.replace('_', '-');
+    if (normalized.includes('-')) {
+        return normalized;
+    }
+
+    return `${normalized}-US`;
 }
 
 const changeEnvironmentFunctionDeclaration: FunctionDeclaration = {
@@ -145,6 +191,20 @@ export const useGeminiLive = (
                     setConnectionState(ConnectionState.LISTENING);
                 } else {
                     source.disconnect(processor);
+                    try {
+                        processor.disconnect(context.destination);
+                    } catch (error) {
+                        // Safe to ignore if already disconnected.
+                    }
+                    sessionPromiseRef.current?.then(session => {
+                        try {
+                            session.sendRealtimeInput({ audioStreamEnd: true });
+                        } catch (err) {
+                            console.warn('Unable to notify server about mic pause:', err);
+                        }
+                    }).catch(err => {
+                        console.warn('Unable to notify server about mic pause:', err);
+                    });
                     setConnectionState(ConnectionState.CONNECTED);
                 }
             } catch (e) {
@@ -186,6 +246,7 @@ export const useGeminiLive = (
 
         try {
             const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+            const transcriptionLanguageCode = resolveLanguageCode();
 
             const sanitizedAccent = voiceAccent?.trim();
             let baseInstruction = systemInstruction.trim();
@@ -211,7 +272,21 @@ export const useGeminiLive = (
                         inputAudioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 16000 });
                         outputAudioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
 
-                        mediaStreamRef.current = await navigator.mediaDevices.getUserMedia({ audio: true });
+                        const audioConstraints: MediaTrackConstraints = {
+                            channelCount: { ideal: 1 },
+                            sampleRate: { ideal: 16000 },
+                            sampleSize: { ideal: 16 },
+                            noiseSuppression: { ideal: true },
+                            echoCancellation: { ideal: true },
+                            autoGainControl: { ideal: true },
+                        };
+
+                        try {
+                            mediaStreamRef.current = await navigator.mediaDevices.getUserMedia({ audio: audioConstraints });
+                        } catch (error) {
+                            console.warn('Falling back to default audio constraints:', error);
+                            mediaStreamRef.current = await navigator.mediaDevices.getUserMedia({ audio: true });
+                        }
 
                         const source = inputAudioContextRef.current.createMediaStreamSource(mediaStreamRef.current);
                         mediaStreamSourceRef.current = source;
@@ -220,10 +295,13 @@ export const useGeminiLive = (
                         scriptProcessorRef.current = scriptProcessor;
 
                         scriptProcessor.onaudioprocess = (audioProcessingEvent) => {
-                            const inputData = audioProcessingEvent.inputBuffer.getChannelData(0);
-                            const pcmBlob = createBlob(inputData);
+                            const monoData = mixToMono(audioProcessingEvent.inputBuffer);
+                            const sampleRate = audioProcessingEvent.inputBuffer.sampleRate
+                                || inputAudioContextRef.current?.sampleRate
+                                || 16000;
+                            const pcmBlob = createBlob(monoData, sampleRate, 1);
                             sessionPromiseRef.current?.then((session) => {
-                                session.sendRealtimeInput({ media: pcmBlob });
+                                session.sendRealtimeInput({ audio: pcmBlob });
                             }).catch(err => {
                                 console.warn('Error sending audio data; session may be closing.', err);
                             });
@@ -241,7 +319,14 @@ export const useGeminiLive = (
                             let currentOutput = modelTranscriptionRef.current;
 
                             if (message.serverContent?.inputTranscription) {
-                                currentInput += message.serverContent.inputTranscription.text;
+                                const nextText = message.serverContent.inputTranscription.text ?? '';
+                                if (nextText) {
+                                    if (nextText.startsWith(currentInput)) {
+                                        currentInput = nextText;
+                                    } else {
+                                        currentInput = `${currentInput}${nextText}`;
+                                    }
+                                }
                                 setUserTranscription(currentInput);
                                 userTranscriptionRef.current = currentInput;
                             } else if (message.serverContent?.outputTranscription) {
@@ -335,8 +420,12 @@ export const useGeminiLive = (
                 },
                 config: {
                     responseModalities: [Modality.AUDIO],
-                    inputAudioTranscription: {},
-                    outputAudioTranscription: {},
+                    inputAudioTranscription: {
+                        languageCode: transcriptionLanguageCode,
+                    },
+                    outputAudioTranscription: {
+                        languageCode: transcriptionLanguageCode,
+                    },
                     speechConfig: {
                         voiceConfig: { prebuiltVoiceConfig: { voiceName: voiceName } },
                     },
@@ -359,7 +448,14 @@ export const useGeminiLive = (
     }, [systemInstruction, voiceName, activeQuest]);
 
     const disconnect = useCallback(() => {
-        sessionPromiseRef.current?.then((session) => session.close()).catch(err => {
+        sessionPromiseRef.current?.then((session) => {
+            try {
+                session.sendRealtimeInput({ audioStreamEnd: true });
+            } catch (err) {
+                console.warn('Unable to notify server about disconnect:', err);
+            }
+            return session.close();
+        }).catch(err => {
             console.warn('Error during session close:', err);
         });
 
@@ -367,8 +463,9 @@ export const useGeminiLive = (
 
         if (scriptProcessorRef.current && mediaStreamSourceRef.current) {
             try {
-                mediaStreamSourceRef.current.disconnect(scriptProcessorRef.current);
-                scriptProcessorRef.current.disconnect();
+                const processor = scriptProcessorRef.current;
+                mediaStreamSourceRef.current.disconnect(processor);
+                processor.disconnect();
             } catch (e) {
                 // Ignore errors
             }
