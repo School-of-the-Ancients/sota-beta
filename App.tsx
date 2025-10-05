@@ -113,6 +113,46 @@ const App: React.FC = () => {
 
   const allQuests = useMemo(() => [...customQuests, ...QUESTS], [customQuests]);
 
+  useEffect(() => {
+    if (customQuests.length === 0) {
+      return;
+    }
+
+    const availableCharacterIds = new Set([
+      ...customCharacters.map((character) => character.id),
+      ...CHARACTERS.map((character) => character.id),
+    ]);
+
+    const removedQuestIds: string[] = [];
+    const validQuests = customQuests.filter((quest) => {
+      const isValid = availableCharacterIds.has(quest.characterId);
+      if (!isValid) {
+        removedQuestIds.push(quest.id);
+      }
+      return isValid;
+    });
+
+    if (removedQuestIds.length === 0) {
+      return;
+    }
+
+    setCustomQuests(validQuests);
+    saveCustomQuests(validQuests);
+
+    setCompletedQuests((prev) => {
+      const updated = prev.filter((id) => !removedQuestIds.includes(id));
+      if (updated.length !== prev.length) {
+        saveCompletedQuests(updated);
+        return updated;
+      }
+      return prev;
+    });
+
+    setInProgressQuestIds((prev) => prev.filter((id) => !removedQuestIds.includes(id)));
+
+    setActiveQuest((current) => (current && removedQuestIds.includes(current.id) ? null : current));
+  }, [customQuests, customCharacters]);
+
   const syncQuestProgress = useCallback(() => {
     const history = loadConversations();
     const inProgress = new Set<string>();

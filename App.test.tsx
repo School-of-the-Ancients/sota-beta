@@ -1,7 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import App from './App';
 import { ConnectionState, Character } from './types';
+import { QUESTS } from './constants';
 
 // Mock dependencies
 vi.mock('@google/genai', () => {
@@ -132,4 +133,100 @@ describe('App', () => {
     // A button unique to the conversation view should be present
     expect(screen.getByRole('button', { name: 'End' })).toBeInTheDocument();
   });
+
+  it('updates quest progress when a custom quest is deleted', async () => {
+    const defaultQuestCount = QUESTS.length;
+    const customQuest = {
+      id: 'quest_test_custom',
+      title: 'Custom Quest for Testing',
+      description: 'A quest created during tests.',
+      objective: 'Verify quest deletion updates progress.',
+      focusPoints: ['Understand the deletion flow'],
+      duration: '5 minutes',
+      characterId: 'davinci',
+    };
+
+    mockLocalStorage.setItem(
+      'school-of-the-ancients-custom-quests',
+      JSON.stringify([customQuest])
+    );
+    mockLocalStorage.setItem('school-of-the-ancients-completed-quests', JSON.stringify([]));
+    mockLocalStorage.setItem('school-of-the-ancients-custom-characters', JSON.stringify([]));
+
+    Object.defineProperty(window, 'location', {
+      value: {
+        search: '',
+      },
+      writable: true,
+    });
+
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
+
+    render(<App />);
+
+    await waitFor(() => {
+      expect(
+        screen.getByText(new RegExp(`0 of ${defaultQuestCount + 1} quests completed`, 'i'))
+      ).toBeInTheDocument();
+    });
+
+    const questViewButton = screen.getByRole('button', { name: /learning quests/i });
+    fireEvent.click(questViewButton);
+
+    const deleteButton = await screen.findByRole('button', { name: /delete quest/i });
+    fireEvent.click(deleteButton);
+
+    const backButton = await screen.findByRole('button', { name: /back to ancients/i });
+    fireEvent.click(backButton);
+
+    await waitFor(() => {
+      expect(
+        screen.getByText(new RegExp(`0 of ${defaultQuestCount} quests completed`, 'i'))
+      ).toBeInTheDocument();
+    });
+
+    confirmSpy.mockRestore();
+  });
+
+  it('drops orphaned custom quests that reference missing characters', async () => {
+    const defaultQuestCount = QUESTS.length;
+    const orphanQuest = {
+      id: 'quest_orphan',
+      title: 'Ghost Quest',
+      description: 'This quest references a character that no longer exists.',
+      objective: 'Ensure cleanup runs.',
+      focusPoints: ['Clean up stale quests'],
+      duration: '5 minutes',
+      characterId: 'custom_missing_character',
+    };
+
+    mockLocalStorage.setItem(
+      'school-of-the-ancients-custom-quests',
+      JSON.stringify([orphanQuest])
+    );
+    mockLocalStorage.setItem(
+      'school-of-the-ancients-completed-quests',
+      JSON.stringify([orphanQuest.id])
+    );
+    mockLocalStorage.setItem('school-of-the-ancients-custom-characters', JSON.stringify([]));
+
+    Object.defineProperty(window, 'location', {
+      value: {
+        search: '',
+      },
+      writable: true,
+    });
+
+    render(<App />);
+
+    await waitFor(() => {
+      expect(
+        screen.getByText(new RegExp(`0 of ${defaultQuestCount} quests completed`, 'i'))
+      ).toBeInTheDocument();
+    });
+
+    expect(mockLocalStorage.getItem('school-of-the-ancients-custom-quests')).toBe(JSON.stringify([]));
+    expect(mockLocalStorage.getItem('school-of-the-ancients-completed-quests')).toBe(JSON.stringify([]));
+  });
 });
+
