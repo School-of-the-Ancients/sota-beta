@@ -477,10 +477,8 @@ ${contextTranscript}
     }
   }, [character.name]);
 
-  useEffect(() => {
-    if (transcript.length > 0 && transcript[transcript.length - 1].speaker === 'model') {
-      updateDynamicSuggestions(transcript);
-    }
+  const requestDynamicSuggestions = useCallback(() => {
+    updateDynamicSuggestions(transcript);
   }, [transcript, updateDynamicSuggestions]);
 
   // Auto-save conversation on transcript change
@@ -620,27 +618,37 @@ ${contextTranscript}
             ) : (
                 <div className="animate-fade-in">
                 <h4 className="text-md font-bold text-amber-200 mb-2 text-center">Topics to Explore</h4>
-                {isFetchingSuggestions ? (
+                <div className="space-y-3">
+                    <button
+                    type="button"
+                    onClick={requestDynamicSuggestions}
+                    disabled={isFetchingSuggestions}
+                    className="w-full text-sm font-semibold bg-amber-800/70 hover:bg-amber-700 text-amber-100 py-2 px-3 rounded-lg transition-colors duration-200 border border-amber-700 disabled:opacity-60 disabled:cursor-not-allowed"
+                    >
+                    {isFetchingSuggestions ? 'Generating suggestions...' : 'Suggest prompts'}
+                    </button>
+                    {isFetchingSuggestions ? (
                     <div className="space-y-2">
-                    <div className="w-full bg-gray-800/60 p-3 rounded-lg h-[44px] animate-pulse"></div>
-                    <div className="w-full bg-gray-800/60 p-3 rounded-lg h-[44px] animate-pulse" style={{ animationDelay: '75ms' }}></div>
-                    <div className="w-full bg-gray-800/60 p-3 rounded-lg h-[44px] animate-pulse" style={{ animationDelay: '150ms' }}></div>
+                        <div className="w-full bg-gray-800/60 p-3 rounded-lg h-[44px] animate-pulse"></div>
+                        <div className="w-full bg-gray-800/60 p-3 rounded-lg h-[44px] animate-pulse" style={{ animationDelay: '75ms' }}></div>
+                        <div className="w-full bg-gray-800/60 p-3 rounded-lg h-[44px] animate-pulse" style={{ animationDelay: '150ms' }}></div>
                     </div>
-                ) : (
+                    ) : (
                     <div className="space-y-2">
-                    {(dynamicSuggestions.length > 0 ? dynamicSuggestions : character.suggestedPrompts).map((prompt, i) => (
+                        {(dynamicSuggestions.length > 0 ? dynamicSuggestions : character.suggestedPrompts).map((prompt, i) => (
                         <button
-                        key={i}
-                        onClick={() => sendTextMessage(prompt)}
-                        className="w-full text-sm text-left bg-gray-800/60 hover:bg-gray-700/80 p-3 rounded-lg transition-colors duration-200 border border-gray-700 text-gray-300 disabled:opacity-50"
-                        disabled={connectionState !== ConnectionState.LISTENING && connectionState !== ConnectionState.CONNECTED}
+                            key={i}
+                            onClick={() => sendTextMessage(prompt)}
+                            className="w-full text-sm text-left bg-gray-800/60 hover:bg-gray-700/80 p-3 rounded-lg transition-colors duration-200 border border-gray-700 text-gray-300 disabled:opacity-50"
+                            disabled={connectionState !== ConnectionState.LISTENING && connectionState !== ConnectionState.CONNECTED}
                         >
-                        <span className="text-amber-300 mr-2">»</span>
-                        {prompt}
+                            <span className="text-amber-300 mr-2">»</span>
+                            {prompt}
                         </button>
-                    ))}
+                        ))}
                     </div>
-                )}
+                    )}
+                </div>
                 </div>
             )}
             </div>
