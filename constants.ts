@@ -1,5 +1,7 @@
 import type { Character, Ambience, Quest, VoiceProfile } from './types';
 
+// Voice metadata mirrors the Chirp 3: HD voice catalog genders published by Google.
+// https://cloud.google.com/text-to-speech/docs/chirp3-hd#voice_options
 export const AVAILABLE_VOICES: VoiceProfile[] = [
   {
     name: 'Zephyr',
@@ -42,7 +44,7 @@ export const AVAILABLE_VOICES: VoiceProfile[] = [
     description: 'a lyrical mezzo with musical phrasing and a soft Hellenic inflection',
   },
   {
-    name: 'Callirhoe',
+    name: 'Callirrhoe',
     gender: 'female',
     description: 'a lush contralto with smoky jazz color and measured delivery',
   },
@@ -63,13 +65,13 @@ export const AVAILABLE_VOICES: VoiceProfile[] = [
   },
   {
     name: 'Umbriel',
-    gender: 'female',
-    description: 'a cool, composed alto threaded with a subtle transatlantic cadence',
+    gender: 'male',
+    description: 'a cool, composed baritone threaded with a subtle transatlantic cadence',
   },
   {
     name: 'Algieba',
-    gender: 'female',
-    description: 'a bright, theatrical mezzo whose playful emphasis keeps conversations lively',
+    gender: 'male',
+    description: 'a bright, theatrical baritone whose playful emphasis keeps conversations lively',
   },
   {
     name: 'Despina',
@@ -98,23 +100,23 @@ export const AVAILABLE_VOICES: VoiceProfile[] = [
   },
   {
     name: 'Achernar',
-    gender: 'male',
-    description: 'a brisk tenor with a confident Australasian edge',
+    gender: 'female',
+    description: 'a brisk mezzo-soprano with a confident Australasian edge',
   },
   {
     name: 'Alnilam',
-    gender: 'female',
-    description: 'a shimmering soprano touched by Middle Eastern-inspired lyricism',
+    gender: 'male',
+    description: 'a shimmering tenor touched by Middle Eastern-inspired lyricism',
   },
   {
     name: 'Schedar',
-    gender: 'female',
-    description: 'a balanced mezzo whose composed tone suits academic explanations',
+    gender: 'male',
+    description: 'a balanced baritone whose composed tone suits academic explanations',
   },
   {
     name: 'Gacrux',
-    gender: 'male',
-    description: 'a grounded bass-baritone with Antipodean warmth and easy authority',
+    gender: 'female',
+    description: 'a grounded alto with Antipodean warmth and easy authority',
   },
   {
     name: 'Pulcherrima',
@@ -123,8 +125,8 @@ export const AVAILABLE_VOICES: VoiceProfile[] = [
   },
   {
     name: 'Achird',
-    gender: 'female',
-    description: 'a tender alto with a nurturing cadence ideal for coaching moments',
+    gender: 'male',
+    description: 'a tender lyric baritone with a nurturing cadence ideal for coaching moments',
   },
   {
     name: 'Zubenelgenubi',
@@ -138,8 +140,8 @@ export const AVAILABLE_VOICES: VoiceProfile[] = [
   },
   {
     name: 'Sadachbia',
-    gender: 'female',
-    description: 'a soothing contralto that favors calm, meditative pacing',
+    gender: 'male',
+    description: 'a soothing baritone that favors calm, meditative pacing',
   },
   {
     name: 'Sadaltager',
