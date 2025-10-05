@@ -25,6 +25,7 @@ const CUSTOM_CHARACTERS_KEY = 'school-of-the-ancients-custom-characters';
 const HISTORY_KEY = 'school-of-the-ancients-history';
 const COMPLETED_QUESTS_KEY = 'school-of-the-ancients-completed-quests';
 const CUSTOM_QUESTS_KEY = 'school-of-the-ancients-custom-quests';
+const ACTIVE_QUEST_KEY = 'school-of-the-ancients-active-quest-id';
 
 // ---- Local storage helpers -------------------------------------------------
 
@@ -86,6 +87,33 @@ const saveCustomQuests = (quests: Quest[]) => {
     localStorage.setItem(CUSTOM_QUESTS_KEY, JSON.stringify(quests));
   } catch (error) {
     console.error('Failed to save custom quests:', error);
+  }
+};
+
+const loadActiveQuestId = (): string | null => {
+  try {
+    return localStorage.getItem(ACTIVE_QUEST_KEY);
+  } catch (error) {
+    console.error('Failed to load active quest id:', error);
+    return null;
+  }
+};
+
+const saveActiveQuestId = (questId: string) => {
+  try {
+    localStorage.setItem(ACTIVE_QUEST_KEY, questId);
+  } catch (error) {
+    console.error('Failed to save active quest id:', error);
+  }
+};
+
+const clearActiveQuestId = () => {
+  try {
+    if (typeof localStorage.removeItem === 'function') {
+      localStorage.removeItem(ACTIVE_QUEST_KEY);
+    }
+  } catch (error) {
+    console.error('Failed to clear active quest id:', error);
   }
 };
 
@@ -185,14 +213,39 @@ const App: React.FC = () => {
       setCustomQuests(loadedCustomQuests);
     }
 
-    const urlParams = new URLSearchParams(window.location.search);
-    const characterId = urlParams.get('character');
-    if (characterId) {
-      const allCharacters = [...loadedCustomCharacters, ...CHARACTERS];
-      const characterFromUrl = allCharacters.find((c) => c.id === characterId);
-      if (characterFromUrl) {
-        setSelectedCharacter(characterFromUrl);
-        setView('conversation');
+    const allCharacters = [...loadedCustomCharacters, ...CHARACTERS];
+    const storedActiveQuestId = loadActiveQuestId();
+    let questRestored = false;
+    if (storedActiveQuestId) {
+      const availableQuests = [...loadedCustomQuests, ...QUESTS];
+      const storedQuest = availableQuests.find((quest) => quest.id === storedActiveQuestId);
+      if (storedQuest) {
+        const questCharacter = allCharacters.find((character) => character.id === storedQuest.characterId);
+        if (questCharacter) {
+          setActiveQuest(storedQuest);
+          setSelectedCharacter(questCharacter);
+          setView('conversation');
+          const url = new URL(window.location.href);
+          url.searchParams.set('character', questCharacter.id);
+          window.history.replaceState({}, '', url);
+          questRestored = true;
+        } else {
+          clearActiveQuestId();
+        }
+      } else {
+        clearActiveQuestId();
+      }
+    }
+
+    if (!questRestored) {
+      const urlParams = new URLSearchParams(window.location.search);
+      const characterId = urlParams.get('character');
+      if (characterId) {
+        const characterFromUrl = allCharacters.find((c) => c.id === characterId);
+        if (characterFromUrl) {
+          setSelectedCharacter(characterFromUrl);
+          setView('conversation');
+        }
       }
     }
 
@@ -200,6 +253,14 @@ const App: React.FC = () => {
     syncQuestProgress();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [syncQuestProgress]);
+
+  useEffect(() => {
+    if (activeQuest) {
+      saveActiveQuestId(activeQuest.id);
+    } else {
+      clearActiveQuestId();
+    }
+  }, [activeQuest]);
 
   // ---- Navigation helpers ----
 
