@@ -3,7 +3,7 @@ import { GoogleGenAI, Type } from '@google/genai';
 import type { Character, ConversationTurn, SavedConversation, Quest } from '../types';
 import { useGeminiLive } from '../hooks/useGeminiLive';
 import { useAmbientAudio } from '../hooks/useAmbientAudio';
-import { ConnectionState } from '../types';
+import { ConnectionState, RealtimeProvider } from '../types';
 import { AMBIENCE_LIBRARY } from '../constants';
 import MicrophoneIcon from './icons/MicrophoneIcon';
 import MicrophoneOffIcon from './icons/MicrophoneOffIcon';
@@ -115,6 +115,7 @@ const ConversationView: React.FC<ConversationViewProps> = ({
   const [isFetchingSuggestions, setIsFetchingSuggestions] = useState(false);
   const [isGeneratingVisual, setIsGeneratingVisual] = useState(false);
   const [generationMessage, setGenerationMessage] = useState('');
+  const [provider, setProvider] = useState<RealtimeProvider>(RealtimeProvider.GEMINI);
 
   const initialAudioSrc = AMBIENCE_LIBRARY.find(a => a.tag === character.ambienceTag)?.audioSrc ?? null;
   const { isMuted: isAmbienceMuted, toggleMute: toggleAmbienceMute, changeTrack: changeAmbienceTrack } = useAmbientAudio(initialAudioSrc);
@@ -152,6 +153,14 @@ const ConversationView: React.FC<ConversationViewProps> = ({
 
   const sessionIdRef = useRef(`conv_${character.id}_${Date.now()}`);
   const sessionQuestRef = useRef<{ questId?: string; questTitle?: string }>({});
+
+  const realtimeOptions = useMemo(() => ({
+    provider,
+    openAi: {
+      model: process.env.OPENAI_REALTIME_MODEL as string | undefined,
+      voice: 'alloy',
+    },
+  }), [provider]);
 
   // Load existing conversation or start a new one with a greeting
   useEffect(() => {
@@ -269,6 +278,10 @@ const ConversationView: React.FC<ConversationViewProps> = ({
       return updatedTranscript;
     });
   }, [character.name]);
+
+  const handleProviderChange = useCallback((event: React.ChangeEvent<HTMLSelectElement>) => {
+    setProvider(event.target.value as RealtimeProvider);
+  }, []);
 
   const handleEnvironmentChange = useCallback(async (description: string) => {
     const environmentArtifactId = `env_${Date.now()}`;
@@ -426,6 +439,7 @@ const ConversationView: React.FC<ConversationViewProps> = ({
     handleEnvironmentChange,
     handleArtifactDisplay,
     activeQuest,
+    realtimeOptions,
   );
 
   const updateDynamicSuggestions = useCallback(async (currentTranscript: ConversationTurn[]) => {
@@ -574,7 +588,27 @@ ${contextTranscript}
             </div>
             <h2 className="text-2xl sm:text-3xl font-bold text-amber-200 mt-8">{character.name}</h2>
             <p className="text-gray-400 italic">{character.title}</p>
-            
+
+            <div className="mt-6 w-full max-w-xs text-left">
+              <label htmlFor="provider-select" className="block text-xs font-semibold uppercase tracking-wide text-amber-300 mb-2">
+                Realtime Provider
+              </label>
+              <select
+                id="provider-select"
+                value={provider}
+                onChange={handleProviderChange}
+                className="w-full bg-gray-800/70 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-200 focus:outline-none focus:ring-2 focus:ring-amber-400"
+              >
+                <option value={RealtimeProvider.GEMINI}>Google Gemini Live</option>
+                <option value={RealtimeProvider.OPENAI}>OpenAI Realtime</option>
+              </select>
+              {provider === RealtimeProvider.OPENAI && !process.env.OPENAI_API_KEY && (
+                <p className="mt-2 text-xs text-amber-200/70">
+                  Provide an OPENAI_API_KEY or configure a token proxy before switching to OpenAI in production.
+                </p>
+              )}
+            </div>
+
             {activeQuest && (
                 <div className="mt-4 p-4 w-full max-w-xs bg-amber-900/40 border border-amber-800/80 rounded-lg text-left animate-fade-in space-y-3">
                     <div>

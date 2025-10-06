@@ -1,7 +1,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { GoogleGenAI, LiveServerMessage, Modality, Blob, FunctionDeclaration, Type, SessionResumptionConfig } from '@google/genai';
-import { ConnectionState, Quest } from '../types';
+import { ConnectionState, Quest, RealtimeProvider } from '../types';
 
 // Audio Encoding & Decoding functions
 function encode(bytes: Uint8Array): string {
@@ -54,6 +54,27 @@ function createBlob(data: Float32Array): Blob {
     };
 }
 
+function createBase64PcmAudio(data: Float32Array): string {
+    const buffer = new ArrayBuffer(data.length * 2);
+    const view = new DataView(buffer);
+    for (let i = 0; i < data.length; i++) {
+        let sample = data[i];
+        sample = Math.max(-1, Math.min(1, sample));
+        view.setInt16(i * 2, sample * 0x7fff, true);
+    }
+    return encode(new Uint8Array(buffer));
+}
+
+const DEFAULT_OPENAI_MODEL = 'gpt-4o-realtime-preview-2024-12-17';
+const DEFAULT_OPENAI_VOICE = 'alloy';
+
+interface OpenAIRealtimeOptions {
+    apiKey?: string;
+    model?: string;
+    voice?: string;
+    tokenProvider?: () => Promise<string>;
+}
+
 function parseDurationToMs(duration?: string | null): number | null {
     if (!duration) {
         return null;
@@ -99,7 +120,7 @@ const changeEnvironmentFunctionDeclaration: FunctionDeclaration = {
       required: ['description'],
     },
   };
-  
+
   const displayArtifactFunctionDeclaration: FunctionDeclaration = {
     name: 'displayArtifact',
     parameters: {
@@ -119,6 +140,43 @@ const changeEnvironmentFunctionDeclaration: FunctionDeclaration = {
     },
   };
 
+const openAiToolDeclarations = [
+    {
+        type: 'function',
+        name: 'changeEnvironment',
+        description: "Changes the user's visual environment to a specified location or scene. Use this when the user says 'take me to', 'show me', 'go to', or similar phrases requesting a scene change, or when addressing the 'Operator' (e.g., 'Operator, take me to the Roman Forum').",
+        parameters: {
+            type: 'object',
+            properties: {
+                description: {
+                    type: 'string',
+                    description: 'A detailed description of the environment, e.g., "the Egyptian pyramids at sunset" or "Leonardo da Vinci\'s workshop".',
+                },
+            },
+            required: ['description'],
+        },
+    },
+    {
+        type: 'function',
+        name: 'displayArtifact',
+        description: "Generates and displays an image of a specific object, artifact, or concept being discussed. Use this when the character wants to 'show' something to the user, when the user asks to see something, or when addressing the 'Operator'.",
+        parameters: {
+            type: 'object',
+            properties: {
+                name: {
+                    type: 'string',
+                    description: 'The name of the artifact, e.g., "flying machine" or "Mona Lisa".',
+                },
+                description: {
+                    type: 'string',
+                    description: 'A detailed prompt for the image generation model to create a visual representation of the artifact.',
+                },
+            },
+            required: ['name', 'description'],
+        },
+    },
+];
+
 export const useGeminiLive = (
     systemInstruction: string,
     voiceName: string,
@@ -127,7 +185,18 @@ export const useGeminiLive = (
     onEnvironmentChangeRequest: (description: string) => void,
     onArtifactDisplayRequest: (name: string, description: string) => void,
     activeQuest: Quest | null,
+    options?: {
+        provider?: RealtimeProvider;
+        openAi?: OpenAIRealtimeOptions;
+    },
 ) => {
+    const provider = options?.provider ?? RealtimeProvider.GEMINI;
+    const openAiOptions = options?.openAi ?? {};
+    const openAiModel = openAiOptions.model ?? DEFAULT_OPENAI_MODEL;
+    const openAiVoice = openAiOptions.voice ?? DEFAULT_OPENAI_VOICE;
+    const openAiApiKey = openAiOptions.apiKey ?? (process.env.OPENAI_API_KEY as string | undefined);
+    const openAiTokenProvider = openAiOptions.tokenProvider;
+
     const [connectionState, setConnectionState] = useState<ConnectionState>(ConnectionState.IDLE);
     const [userTranscription, setUserTranscription] = useState<string>('');
     const [modelTranscription, setModelTranscription] = useState<string>('');
@@ -142,6 +211,15 @@ export const useGeminiLive = (
     const scriptProcessorRef = useRef<ScriptProcessorNode | null>(null);
     const mediaStreamSourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
     const silentGainNodeRef = useRef<GainNode | null>(null);
+    const openAiSocketRef = useRef<WebSocket | null>(null);
+    const openAiPendingResponseRef = useRef(false);
+    const openAiCommitTimeoutRef = useRef<number | null>(null);
+    const openAiHasBufferedAudioRef = useRef(false);
+    const openAiLastUserInputRef = useRef('');
+    const providerRef = useRef(provider);
+    useEffect(() => {
+        providerRef.current = provider;
+    }, [provider]);
 
     const userTranscriptionRef = useRef('');
     const modelTranscriptionRef = useRef('');
@@ -228,8 +306,182 @@ export const useGeminiLive = (
         }
     }, []);
 
+    const clearOpenAiCommitTimeout = useCallback(() => {
+        if (openAiCommitTimeoutRef.current !== null) {
+            window.clearTimeout(openAiCommitTimeoutRef.current);
+            openAiCommitTimeoutRef.current = null;
+        }
+    }, []);
+
+    const requestOpenAiResponse = useCallback(() => {
+        const socket = openAiSocketRef.current;
+        if (!socket || socket.readyState !== WebSocket.OPEN || openAiPendingResponseRef.current) {
+            return;
+        }
+        openAiPendingResponseRef.current = true;
+        socket.send(JSON.stringify({
+            type: 'response.create',
+            response: {
+                modalities: ['audio', 'text'],
+                audio: { voice: openAiVoice },
+            },
+        }));
+        setConnectionState(ConnectionState.THINKING);
+    }, [openAiVoice]);
+
+    const scheduleOpenAiCommit = useCallback(() => {
+        if (openAiCommitTimeoutRef.current !== null) {
+            return;
+        }
+
+        openAiCommitTimeoutRef.current = window.setTimeout(() => {
+            openAiCommitTimeoutRef.current = null;
+            const socket = openAiSocketRef.current;
+            if (socket && socket.readyState === WebSocket.OPEN && openAiHasBufferedAudioRef.current) {
+                socket.send(JSON.stringify({ type: 'input_audio_buffer.commit' }));
+                openAiHasBufferedAudioRef.current = false;
+                requestOpenAiResponse();
+            }
+        }, 250);
+    }, [requestOpenAiResponse]);
+
+    const handleOpenAiMessage = useCallback(async (event: MessageEvent) => {
+        try {
+            const payload = JSON.parse(event.data as string);
+            const type = payload?.type;
+
+            if (!type) {
+                return;
+            }
+
+            if (type === 'response.output_text.delta') {
+                const delta: string | undefined = payload.delta ?? payload.text;
+                if (typeof delta === 'string' && delta) {
+                    const updated = modelTranscriptionRef.current + delta;
+                    modelTranscriptionRef.current = updated;
+                    setModelTranscription(updated);
+                    setConnectionState(ConnectionState.THINKING);
+                }
+                return;
+            }
+
+            if (type === 'response.output_audio.delta') {
+                const base64: string | undefined = payload.delta ?? payload.audio;
+                if (typeof base64 === 'string' && outputAudioContextRef.current) {
+                    setConnectionState(ConnectionState.SPEAKING);
+                    const audioData = decode(base64);
+                    const audioBuffer = await decodeAudioData(audioData, outputAudioContextRef.current, 24000, 1);
+
+                    const source = outputAudioContextRef.current.createBufferSource();
+                    source.buffer = audioBuffer;
+                    source.connect(outputAudioContextRef.current.destination);
+
+                    const currentTime = outputAudioContextRef.current.currentTime;
+                    const startTime = Math.max(currentTime, nextStartTimeRef.current);
+                    source.start(startTime);
+                    nextStartTimeRef.current = startTime + audioBuffer.duration;
+
+                    audioBufferSources.current.add(source);
+                    source.onended = () => {
+                        audioBufferSources.current.delete(source);
+                        if (audioBufferSources.current.size === 0) {
+                            setConnectionState(isMicActiveRef.current ? ConnectionState.LISTENING : ConnectionState.CONNECTED);
+                        }
+                    };
+                }
+                return;
+            }
+
+            if (type === 'response.output_tool_calls' && Array.isArray(payload.output_tool_calls)) {
+                for (const toolCall of payload.output_tool_calls) {
+                    const functionName = toolCall?.function?.name;
+                    const rawArgs = toolCall?.function?.arguments;
+                    let parsedArgs: Record<string, unknown> = {};
+                    if (typeof rawArgs === 'string') {
+                        try {
+                            parsedArgs = JSON.parse(rawArgs);
+                        } catch (parseError) {
+                            console.warn('Failed to parse OpenAI tool call arguments:', parseError);
+                        }
+                    } else if (rawArgs && typeof rawArgs === 'object') {
+                        parsedArgs = rawArgs as Record<string, unknown>;
+                    }
+
+                    if (functionName === 'changeEnvironment' && typeof parsedArgs.description === 'string') {
+                        onEnvironmentChangeRequestRef.current(parsedArgs.description);
+                    } else if (functionName === 'displayArtifact' && typeof parsedArgs.name === 'string' && typeof parsedArgs.description === 'string') {
+                        onArtifactDisplayRequestRef.current(parsedArgs.name, parsedArgs.description);
+                    }
+
+                    const callId = toolCall?.id ?? toolCall?.call_id;
+                    if (callId) {
+                        const socket = openAiSocketRef.current;
+                        if (socket && socket.readyState === WebSocket.OPEN) {
+                            socket.send(JSON.stringify({
+                                type: 'tool_output.create',
+                                tool_output: {
+                                    call_id: callId,
+                                    content: [{ type: 'output_text', text: 'ok, action started' }],
+                                },
+                            }));
+                            socket.send(JSON.stringify({
+                                type: 'tool_output.complete',
+                                tool_output: { call_id: callId },
+                            }));
+                        }
+                    }
+                }
+                return;
+            }
+
+            if (type === 'input_audio_buffer.transcription.delta') {
+                const delta: string | undefined = payload.delta ?? payload.text;
+                if (typeof delta === 'string') {
+                    const updated = userTranscriptionRef.current + delta;
+                    userTranscriptionRef.current = updated;
+                    setUserTranscription(updated);
+                }
+                return;
+            }
+
+            if (type === 'input_audio_buffer.transcription.completed') {
+                const transcription: string | undefined = payload.transcription;
+                if (typeof transcription === 'string') {
+                    userTranscriptionRef.current = transcription;
+                    setUserTranscription(transcription);
+                }
+                return;
+            }
+
+            if (type === 'response.completed') {
+                openAiPendingResponseRef.current = false;
+                if (modelTranscriptionRef.current.trim()) {
+                    onTurnCompleteRef.current({ user: '', model: modelTranscriptionRef.current });
+                }
+                modelTranscriptionRef.current = '';
+                setModelTranscription('');
+                setUserTranscription('');
+                openAiLastUserInputRef.current = '';
+                if (audioBufferSources.current.size === 0) {
+                    setConnectionState(isMicActiveRef.current ? ConnectionState.LISTENING : ConnectionState.CONNECTED);
+                }
+                return;
+            }
+
+            if (type === 'response.failed' || type === 'session.error') {
+                openAiPendingResponseRef.current = false;
+                console.error('OpenAI realtime error payload:', payload);
+                setConnectionState(ConnectionState.ERROR);
+                return;
+            }
+        } catch (error) {
+            console.error('Error handling OpenAI realtime message:', error);
+        }
+    }, []);
+
     const disconnect = useCallback(() => {
         clearScheduledRenewal();
+        clearOpenAiCommitTimeout();
         isRenewingSessionRef.current = false;
 
         sessionPromiseRef.current?.then((session) => session.close()).catch(err => {
@@ -267,6 +519,18 @@ export const useGeminiLive = (
         mediaStreamSourceRef.current = null;
         silentGainNodeRef.current = null;
 
+        if (openAiSocketRef.current) {
+            try {
+                openAiSocketRef.current.close();
+            } catch (e) {
+                console.warn('Error closing OpenAI socket:', e);
+            }
+        }
+        openAiSocketRef.current = null;
+        openAiPendingResponseRef.current = false;
+        openAiHasBufferedAudioRef.current = false;
+        openAiLastUserInputRef.current = '';
+
         inputAudioContextRef.current?.close().catch(console.error);
         outputAudioContextRef.current?.close().catch(console.error);
 
@@ -276,13 +540,32 @@ export const useGeminiLive = (
         sessionPromiseRef.current = null;
 
         setConnectionState(ConnectionState.DISCONNECTED);
-    }, [clearScheduledRenewal]);
+    }, [clearScheduledRenewal, clearOpenAiCommitTimeout]);
 
     const sendTextMessage = useCallback((text: string) => {
         if (!text.trim()) return;
 
         onTurnCompleteRef.current({ user: text, model: '' });
-        userTranscriptionRef.current = ''; // Clear after adding to transcript
+        userTranscriptionRef.current = '';
+        openAiLastUserInputRef.current = text;
+
+        if (providerRef.current === RealtimeProvider.OPENAI) {
+            const socket = openAiSocketRef.current;
+            if (!socket || socket.readyState !== WebSocket.OPEN) {
+                console.error('OpenAI Realtime socket not connected.');
+                setConnectionState(ConnectionState.ERROR);
+                return;
+            }
+
+            try {
+                socket.send(JSON.stringify({ type: 'input_text', text }));
+                requestOpenAiResponse();
+            } catch (error) {
+                console.error('Failed to send text over OpenAI socket:', error);
+                setConnectionState(ConnectionState.ERROR);
+            }
+            return;
+        }
 
         setConnectionState(ConnectionState.THINKING);
         sessionPromiseRef.current?.then((session) => {
@@ -296,34 +579,185 @@ export const useGeminiLive = (
             console.error("Error sending text message (async):", e);
             setConnectionState(ConnectionState.ERROR);
         });
-    }, []);
+    }, [requestOpenAiResponse]);
 
     const connect = useCallback(async () => {
         setConnectionState(ConnectionState.CONNECTING);
 
+        const sanitizedAccent = voiceAccent?.trim();
+        let baseInstruction = systemInstruction.trim();
+        if (sanitizedAccent) {
+            const accentDirective = `Always speak using ${sanitizedAccent}, ensuring the accent, gender, and tone remain consistent. If your voice deviates from ${sanitizedAccent}, correct it immediately before continuing.`;
+            const normalizedInstruction = baseInstruction.toLowerCase();
+            if (!normalizedInstruction.includes(sanitizedAccent.toLowerCase())) {
+                baseInstruction = `${baseInstruction}\n\nVOICE ACCENT REQUIREMENT: ${accentDirective}`;
+            }
+        }
+
+        let finalSystemInstruction = baseInstruction;
+        if (activeQuest) {
+            finalSystemInstruction = `YOUR CURRENT MISSION: As a mentor, your primary goal is to guide the student to understand the following: "${activeQuest.objective}". Tailor your questions and explanations to lead them towards this goal.\n\nQUEST COMPLETION PROTOCOL:\n1. Explicitly track the quest's focus points and confirm each one with the learner.\n2. The moment the learner demonstrates mastery of every focus area, clearly announce that the quest curriculum is complete. Congratulate them, encourage a brief self-reflection, and invite them to end the session so they can take the mastery quiz.\n3. After declaring completion, avoid introducing new topics unless the learner requests a targeted review.\n\n---\n\n${baseInstruction}`;
+        }
+
+        if (provider === RealtimeProvider.OPENAI) {
+            try {
+                let token: string | undefined;
+                if (openAiTokenProvider) {
+                    token = await openAiTokenProvider();
+                } else {
+                    token = openAiApiKey;
+                }
+
+                if (!token) {
+                    console.error('OpenAI API key or token provider not configured.');
+                    setConnectionState(ConnectionState.ERROR);
+                    return;
+                }
+
+                inputAudioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 16000 });
+                outputAudioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
+
+                mediaStreamRef.current = await navigator.mediaDevices.getUserMedia({ audio: true });
+                const source = inputAudioContextRef.current.createMediaStreamSource(mediaStreamRef.current);
+                mediaStreamSourceRef.current = source;
+
+                let initialized = false;
+                const audioWorklet = inputAudioContextRef.current.audioWorklet;
+                if (audioWorklet && typeof audioWorklet.addModule === 'function') {
+                    try {
+                        const workletModuleUrl = new URL('../audio/microphoneWorkletProcessor.js', import.meta.url);
+                        await audioWorklet.addModule(workletModuleUrl);
+
+                        const audioWorkletNode = new AudioWorkletNode(inputAudioContextRef.current, 'microphone-processor', {
+                            numberOfInputs: 1,
+                            numberOfOutputs: 1,
+                            channelCount: 1,
+                        });
+                        audioWorkletNodeRef.current = audioWorkletNode;
+
+                        audioWorkletNode.port.onmessage = (event) => {
+                            const inputData = event.data as Float32Array | undefined;
+                            if (!(inputData instanceof Float32Array) || !isMicActiveRef.current) {
+                                return;
+                            }
+
+                            const socket = openAiSocketRef.current;
+                            if (socket && socket.readyState === WebSocket.OPEN) {
+                                try {
+                                    const audioBase64 = createBase64PcmAudio(inputData);
+                                    socket.send(JSON.stringify({ type: 'input_audio_buffer.append', audio: audioBase64 }));
+                                    openAiHasBufferedAudioRef.current = true;
+                                    scheduleOpenAiCommit();
+                                } catch (err) {
+                                    console.warn('Error sending audio data to OpenAI:', err);
+                                }
+                            }
+                        };
+
+                        if (isMicActiveRef.current) {
+                            source.connect(audioWorkletNode);
+                            if (!silentGainNodeRef.current) {
+                                const silentGain = inputAudioContextRef.current.createGain();
+                                silentGain.gain.value = 0;
+                                audioWorkletNode.connect(silentGain);
+                                silentGain.connect(inputAudioContextRef.current.destination);
+                                silentGainNodeRef.current = silentGain;
+                            }
+                            setConnectionState(ConnectionState.LISTENING);
+                        }
+
+                        initialized = true;
+                    } catch (audioInitError) {
+                        console.warn('AudioWorkletNode unavailable for OpenAI, falling back to ScriptProcessorNode:', audioInitError);
+                    }
+                }
+
+                if (!initialized) {
+                    const scriptProcessor = inputAudioContextRef.current.createScriptProcessor(4096, 1, 1);
+                    scriptProcessorRef.current = scriptProcessor;
+
+                    scriptProcessor.onaudioprocess = (audioProcessingEvent) => {
+                        if (!isMicActiveRef.current) {
+                            return;
+                        }
+
+                        const socket = openAiSocketRef.current;
+                        if (socket && socket.readyState === WebSocket.OPEN) {
+                            try {
+                                const inputData = audioProcessingEvent.inputBuffer.getChannelData(0);
+                                const audioBase64 = createBase64PcmAudio(inputData);
+                                socket.send(JSON.stringify({ type: 'input_audio_buffer.append', audio: audioBase64 }));
+                                openAiHasBufferedAudioRef.current = true;
+                                scheduleOpenAiCommit();
+                            } catch (err) {
+                                console.warn('Error sending audio data to OpenAI:', err);
+                            }
+                        }
+                    };
+
+                    if (isMicActiveRef.current) {
+                        source.connect(scriptProcessor);
+                        scriptProcessor.connect(inputAudioContextRef.current.destination);
+                        setConnectionState(ConnectionState.LISTENING);
+                    }
+                }
+
+                const socket = new WebSocket(`wss://api.openai.com/v1/realtime?model=${encodeURIComponent(openAiModel)}`, [
+                    'realtime',
+                    'openai-insecure-api-key',
+                    `openai-insecure-api-key.${token}`,
+                ]);
+                openAiSocketRef.current = socket;
+                openAiPendingResponseRef.current = false;
+                openAiHasBufferedAudioRef.current = false;
+
+                socket.onopen = () => {
+                    setConnectionState(isMicActiveRef.current ? ConnectionState.LISTENING : ConnectionState.CONNECTED);
+                    try {
+                        socket.send(JSON.stringify({
+                            type: 'session.update',
+                            session: {
+                                instructions: finalSystemInstruction,
+                                voice: openAiVoice,
+                                modalities: ['audio', 'text'],
+                                input_audio_format: { type: 'pcm16', sample_rate_hz: 16000 },
+                                output_audio_format: { type: 'pcm16', sample_rate_hz: 24000 },
+                                tools: openAiToolDeclarations,
+                            },
+                        }));
+                    } catch (configError) {
+                        console.error('Failed to configure OpenAI realtime session:', configError);
+                        setConnectionState(ConnectionState.ERROR);
+                    }
+                };
+
+                socket.onmessage = (event) => {
+                    void handleOpenAiMessage(event);
+                };
+
+                socket.onerror = (event) => {
+                    console.error('OpenAI realtime session error:', event);
+                    setConnectionState(ConnectionState.ERROR);
+                };
+
+                socket.onclose = () => {
+                    setConnectionState(ConnectionState.DISCONNECTED);
+                };
+            } catch (error) {
+                console.error('Failed to connect to OpenAI Realtime:', error);
+                setConnectionState(ConnectionState.ERROR);
+            }
+            return;
+        }
+
         if (!process.env.API_KEY) {
-            console.error("API_KEY environment variable not set.");
+            console.error('API_KEY environment variable not set.');
             setConnectionState(ConnectionState.ERROR);
             return;
         }
 
         try {
             const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-
-            const sanitizedAccent = voiceAccent?.trim();
-            let baseInstruction = systemInstruction.trim();
-            if (sanitizedAccent) {
-                const accentDirective = `Always speak using ${sanitizedAccent}, ensuring the accent, gender, and tone remain consistent. If your voice deviates from ${sanitizedAccent}, correct it immediately before continuing.`;
-                const normalizedInstruction = baseInstruction.toLowerCase();
-                if (!normalizedInstruction.includes(sanitizedAccent.toLowerCase())) {
-                    baseInstruction = `${baseInstruction}\n\nVOICE ACCENT REQUIREMENT: ${accentDirective}`;
-                }
-            }
-
-            let finalSystemInstruction = baseInstruction;
-            if (activeQuest) {
-                finalSystemInstruction = `YOUR CURRENT MISSION: As a mentor, your primary goal is to guide the student to understand the following: "${activeQuest.objective}". Tailor your questions and explanations to lead them towards this goal.\n\nQUEST COMPLETION PROTOCOL:\n1. Explicitly track the quest's focus points and confirm each one with the learner.\n2. The moment the learner demonstrates mastery of every focus area, clearly announce that the quest curriculum is complete. Congratulate them, encourage a brief self-reflection, and invite them to end the session so they can take the mastery quiz.\n3. After declaring completion, avoid introducing new topics unless the learner requests a targeted review.\n\n---\n\n${baseInstruction}`;
-            }
 
             const sessionResumptionConfig: SessionResumptionConfig = {};
             if (pendingResumptionHandleRef.current) {
@@ -437,23 +871,23 @@ export const useGeminiLive = (
 
                             if (message.toolCall) {
                                 for (const fc of message.toolCall.functionCalls) {
-                                  if (fc.name === 'changeEnvironment' && fc.args && typeof fc.args.description === 'string') {
-                                    onEnvironmentChangeRequestRef.current(fc.args.description);
-                                  } else if (fc.name === 'displayArtifact' && fc.args && typeof fc.args.name === 'string' && typeof fc.args.description === 'string') {
-                                    onArtifactDisplayRequestRef.current(fc.args.name, fc.args.description);
-                                  }
-                        
-                                  sessionPromiseRef.current?.then((session) => {
-                                    session.sendToolResponse({
-                                      functionResponses: {
-                                        id: fc.id,
-                                        name: fc.name,
-                                        response: { result: "ok, action started" },
-                                      }
+                                    if (fc.name === 'changeEnvironment' && fc.args && typeof fc.args.description === 'string') {
+                                        onEnvironmentChangeRequestRef.current(fc.args.description);
+                                    } else if (fc.name === 'displayArtifact' && fc.args && typeof fc.args.name === 'string' && typeof fc.args.description === 'string') {
+                                        onArtifactDisplayRequestRef.current(fc.args.name, fc.args.description);
+                                    }
+
+                                    sessionPromiseRef.current?.then((session) => {
+                                        session.sendToolResponse({
+                                            functionResponses: {
+                                                id: fc.id,
+                                                name: fc.name,
+                                                response: { result: 'ok, action started' },
+                                            }
+                                        });
                                     });
-                                  });
                                 }
-                              }
+                            }
 
                             if (message.serverContent?.turnComplete) {
                                 if (userTranscriptionRef.current.trim() || modelTranscriptionRef.current.trim()) {
@@ -514,8 +948,8 @@ export const useGeminiLive = (
                                 for (const source of audioBufferSources.current.values()) {
                                     try {
                                         source.stop();
-                                    } catch(e) {
-                                        console.warn("Could not stop audio source, it may have already stopped:", e);
+                                    } catch (e) {
+                                        console.warn('Could not stop audio source, it may have already stopped:', e);
                                     }
                                     audioBufferSources.current.delete(source);
                                 }
@@ -546,7 +980,7 @@ export const useGeminiLive = (
                                 };
                             }
                         } catch (error) {
-                            console.error("Error in onmessage handler:", error);
+                            console.error('Error in onmessage handler:', error);
                             setConnectionState(ConnectionState.ERROR);
                         }
                     },
@@ -566,7 +1000,7 @@ export const useGeminiLive = (
                         voiceConfig: { prebuiltVoiceConfig: { voiceName: voiceName } },
                     },
                     systemInstruction: finalSystemInstruction,
-                    tools: [{functionDeclarations: [changeEnvironmentFunctionDeclaration, displayArtifactFunctionDeclaration]}],
+                    tools: [{ functionDeclarations: [changeEnvironmentFunctionDeclaration, displayArtifactFunctionDeclaration] }],
                     sessionResumption: sessionResumptionConfig,
                 },
             });
@@ -584,7 +1018,7 @@ export const useGeminiLive = (
             console.error('Failed to connect to Gemini Live:', error);
             setConnectionState(ConnectionState.ERROR);
         }
-    }, [systemInstruction, voiceName, voiceAccent, activeQuest, disconnect]);
+    }, [systemInstruction, voiceName, voiceAccent, activeQuest, provider, openAiApiKey, openAiModel, openAiVoice, openAiTokenProvider, scheduleOpenAiCommit, handleOpenAiMessage, disconnect]);
 
     useEffect(() => {
         connect();

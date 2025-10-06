@@ -53,6 +53,11 @@ export enum ConnectionState {
   DISCONNECTED = 'DISCONNECTED',
 }
 
+export enum RealtimeProvider {
+  GEMINI = 'gemini',
+  OPENAI = 'openai',
+}
+
 export interface ConversationTurn {
   speaker: 'user' | 'model';
   speakerName: string;

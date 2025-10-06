@@ -32,7 +32,7 @@
 
 ## Overview
 
-School of the Ancients is a modern web application that pairs immersive visuals with live audio conversations. Powered by the Google Gemini API, you can speak with legendary minds like Leonardo da Vinci, Socrates, and Cleopatra. Mentors converse in their authentic voice, adapt the scenery around you, and display custom artifacts to support the lesson. The result is a "Matrix Operator"-style learning environment that blends dialogue, imagery, and exploration.
+School of the Ancients is a modern web application that pairs immersive visuals with live audio conversations. Powered by the Google Gemini Live API by default — with an optional OpenAI Realtime mode — you can speak with legendary minds like Leonardo da Vinci, Socrates, and Cleopatra. Mentors converse in their authentic voice, adapt the scenery around you, and display custom artifacts to support the lesson. The result is a "Matrix Operator"-style learning environment that blends dialogue, imagery, and exploration.
 
 ## Feature Overview
 
@@ -40,6 +40,7 @@ School of the Ancients is a modern web application that pairs immersive visuals 
 
 - **AI-emulated mentors** &mdash; Each historical figure is defined by a richly crafted system prompt that captures personality, accent, and teaching style.
 - **Dynamic voice conversations** &mdash; The Gemini Live API powers low-latency, two-way audio with real-time transcription and speech synthesis so you can speak naturally.
+- **Provider toggle** &mdash; Switch between Gemini Live and OpenAI Realtime on the fly to compare latency, voices, or tool integrations.
 - **Socratic dialogue** &mdash; Mentors avoid blunt answers, instead guiding you with probing questions, comprehension checks, and follow-up challenges.
 
 ### Immersive Worlds & Artifacts
@@ -74,6 +75,7 @@ School of the Ancients is a modern web application that pairs immersive visuals 
   - `gemini-2.5-flash-native-audio-preview-09-2025` drives live, bi-directional voice chat and function calling.
   - `imagen-4.0-generate-001` renders portraits, environments, and historical artifacts.
   - `gemini-2.5-flash` supports structured JSON output for the Character Creator and dynamic prompt generation.
+- **OpenAI realtime support**: Toggle to `gpt-4o-realtime-preview-2024-12-17` for an alternative WebSocket transport, voice, and tool-calling experience.
 - **Function calling workflow**: The frontend exposes `changeEnvironment` and `displayArtifact`. When the mentor or student decides to alter the scene, Gemini issues a structured call that triggers new imagery and UI updates instead of plain text.
 - **Prompt engineering**: Persona prompts enforce the Socratic method, proactive tool use, and regular comprehension checks so every conversation feels guided and intentional.
 
@@ -101,6 +103,7 @@ School of the Ancients is a modern web application that pairs immersive visuals 
 - **Node.js** 20 or later
 - **npm** 10 or later (ships with modern Node releases)
 - A Google Gemini API key with access to the realtime and Imagen models
+- (Optional) An OpenAI API key with Realtime API access or an endpoint that can mint ephemeral tokens
 
 ### Installation
 
@@ -112,6 +115,12 @@ School of the Ancients is a modern web application that pairs immersive visuals 
 3. Create a `.env` file in the project root and add your Gemini credentials:
    ```bash
    GEMINI_API_KEY=your_api_key_here
+   ```
+   Optionally, set OpenAI credentials to enable the realtime provider toggle:
+   ```bash
+   # Optional OpenAI configuration
+   OPENAI_API_KEY=your_openai_key_here
+   OPENAI_REALTIME_MODEL=gpt-4o-realtime-preview-2024-12-17
    ```
 
 ### Running Locally
@@ -154,6 +163,7 @@ Deploy the contents of `dist/` to your static hosting platform of choice.
 - **"API_KEY not set" errors**: Ensure your `.env` file is present and you restarted `npm run dev` after adding it.
 - **Microphone permissions**: Clear browser permissions if you accidentally deny access; audio capture is required for real-time chat.
 - **Slow or missing visuals**: Imagen requests can take a few seconds. Watch the developer console for network errors if images do not appear.
+- **OpenAI websocket auth errors**: The browser client expects either an `OPENAI_API_KEY` (for local testing) or a backend endpoint that mints short-lived Realtime tokens. Configure one before switching providers in production environments.
 
 ---
 

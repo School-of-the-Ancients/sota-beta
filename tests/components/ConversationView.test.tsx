@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, act, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import ConversationView from '../../components/ConversationView';
-import { ConnectionState, Character } from '../../types';
+import { ConnectionState, Character, RealtimeProvider } from '../../types';
 
 // Mocks
 vi.mock('../../constants', () => ({
@@ -34,12 +34,24 @@ let onArtifactDisplayRequestCallback: (name: string, description: string) => voi
 const mockToggleMicrophone = vi.fn();
 const mockSendTextMessage = vi.fn();
 const useGeminiLiveMock = vi.fn();
+const useGeminiLiveArgsSpy = vi.fn();
 
 vi.mock('../../hooks/useGeminiLive', () => ({
   useGeminiLive: vi.fn((
     sysInstruction, voice, accent,
-    onTurnComplete, onEnvironmentChange, onArtifactDisplay
+    onTurnComplete, onEnvironmentChange, onArtifactDisplay,
+    quest, options
   ) => {
+    useGeminiLiveArgsSpy(
+      sysInstruction,
+      voice,
+      accent,
+      onTurnComplete,
+      onEnvironmentChange,
+      onArtifactDisplay,
+      quest,
+      options,
+    );
     onTurnCompleteCallback = onTurnComplete;
     onEnvironmentChangeRequestCallback = onEnvironmentChange;
     onArtifactDisplayRequestCallback = onArtifactDisplay;
@@ -82,6 +94,7 @@ describe('ConversationView', () => {
         localStorage.clear();
         vi.spyOn(global, 'setInterval').mockImplementation(vi.fn() as any);
         vi.spyOn(global, 'clearInterval').mockImplementation(vi.fn());
+        useGeminiLiveArgsSpy.mockClear();
 
         useGeminiLiveMock.mockReturnValue({
             connectionState: ConnectionState.CONNECTED, userTranscription: '', modelTranscription: '',
@@ -101,6 +114,24 @@ describe('ConversationView', () => {
         expect(screen.getByRole('heading', { name: 'Socrates' })).toBeInTheDocument();
         expect(screen.getByText('The Gadfly of Athens')).toBeInTheDocument();
         expect(screen.getByText('What is it you seek to understand?')).toBeInTheDocument();
+    });
+
+    it('should allow switching realtime providers', async () => {
+        const user = userEvent.setup();
+        renderComponent();
+
+        const providerSelect = screen.getByLabelText(/realtime provider/i);
+        expect(providerSelect).toHaveValue(RealtimeProvider.GEMINI);
+        const initialCall = useGeminiLiveArgsSpy.mock.calls.at(-1);
+        expect(initialCall?.[7]).toMatchObject({ provider: RealtimeProvider.GEMINI });
+
+        await user.selectOptions(providerSelect, RealtimeProvider.OPENAI);
+
+        expect(providerSelect).toHaveValue(RealtimeProvider.OPENAI);
+        await waitFor(() => {
+            const latestCall = useGeminiLiveArgsSpy.mock.calls.at(-1);
+            expect(latestCall?.[7]).toMatchObject({ provider: RealtimeProvider.OPENAI });
+        });
     });
 
     it('should allow sending a text message', async () => {
