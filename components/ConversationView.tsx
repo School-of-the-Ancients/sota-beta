@@ -17,6 +17,7 @@ const HISTORY_KEY = 'school-of-the-ancients-history';
 
 interface ConversationViewProps {
   character: Character;
+  apiKey: string;
   onEndConversation: (transcript: ConversationTurn[], sessionId: string) => void;
   environmentImageUrl: string | null;
   onEnvironmentUpdate: (url: string | null) => void;
@@ -102,6 +103,7 @@ const ArtifactDisplay: React.FC<{ artifact: NonNullable<ConversationTurn['artifa
 
 const ConversationView: React.FC<ConversationViewProps> = ({
   character,
+  apiKey,
   onEndConversation,
   environmentImageUrl,
   onEnvironmentUpdate,
@@ -288,8 +290,10 @@ const ConversationView: React.FC<ConversationViewProps> = ({
     setIsGeneratingVisual(true);
     setGenerationMessage(`Entering ${description}...`);
     try {
-      if (!process.env.API_KEY) throw new Error("API_KEY not set.");
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+      if (!apiKey) {
+        throw new Error('API key not set.');
+      }
+      const ai = new GoogleGenAI({ apiKey });
       
       const imagePromise = ai.models.generateImages({
         model: 'imagen-4.0-generate-001',
@@ -337,7 +341,7 @@ const ConversationView: React.FC<ConversationViewProps> = ({
         }));
       }
     } catch (err) {
-      console.error("Failed to generate environment:", err);
+      console.error('Failed to generate environment:', err);
       setTranscript(prev => prev.map(turn => {
         if (turn.artifact?.id === environmentArtifactId) {
             const newTurn = { ...turn };
@@ -350,7 +354,7 @@ const ConversationView: React.FC<ConversationViewProps> = ({
     } finally {
       setIsGeneratingVisual(false);
     }
-  }, [onEnvironmentUpdate, character, changeAmbienceTrack]);
+  }, [apiKey, onEnvironmentUpdate, character, changeAmbienceTrack]);
 
   const handleArtifactDisplay = useCallback(async (name: string, description: string) => {
     const artifactId = `artifact_${Date.now()}`;
@@ -366,8 +370,10 @@ const ConversationView: React.FC<ConversationViewProps> = ({
     setGenerationMessage(`Creating ${name}...`);
 
     try {
-        if (!process.env.API_KEY) throw new Error("API_KEY not set.");
-        const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+        if (!apiKey) {
+          throw new Error('API key not set.');
+        }
+        const ai = new GoogleGenAI({ apiKey });
         const response = await ai.models.generateImages({
             model: 'imagen-4.0-generate-001',
             prompt: `A detailed, clear image of: a "${name}". ${description}. The artifact should be rendered in a style authentic to ${character.name}'s era and work (e.g., a da Vinci sketch, a 19th-century diagram, a classical Greek sculpture). Present it on a simple, non-distracting background like aged parchment or a museum display.`,
@@ -395,7 +401,7 @@ const ConversationView: React.FC<ConversationViewProps> = ({
             }));
         }
     } catch (err) {
-      console.error("Failed to generate artifact:", err);
+      console.error('Failed to generate artifact:', err);
       setTranscript(prev => prev.map(turn => {
         if (turn.artifact?.id === artifactId) {
           const newTurn = { ...turn };
@@ -408,7 +414,7 @@ const ConversationView: React.FC<ConversationViewProps> = ({
     } finally {
         setIsGeneratingVisual(false);
     }
-  }, [character]);
+  }, [apiKey, character]);
 
 
   const {
@@ -426,14 +432,17 @@ const ConversationView: React.FC<ConversationViewProps> = ({
     handleEnvironmentChange,
     handleArtifactDisplay,
     activeQuest,
+    apiKey,
   );
 
   const updateDynamicSuggestions = useCallback(async (currentTranscript: ConversationTurn[]) => {
     if (currentTranscript.length === 0) return;
     setIsFetchingSuggestions(true);
     try {
-        if (!process.env.API_KEY) throw new Error("API_KEY not set.");
-        const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+        if (!apiKey) {
+          throw new Error('API key not set.');
+        }
+        const ai = new GoogleGenAI({ apiKey });
 
         const contextTranscript = currentTranscript.slice(-4).map(turn => `${turn.speakerName}: ${turn.text}`).join('\n');
 
@@ -471,11 +480,11 @@ ${contextTranscript}
         }
 
     } catch (err) {
-        console.error("Failed to fetch dynamic suggestions:", err);
+        console.error('Failed to fetch dynamic suggestions:', err);
     } finally {
         setIsFetchingSuggestions(false);
     }
-  }, [character.name]);
+  }, [apiKey, character.name]);
 
   const requestDynamicSuggestions = useCallback(() => {
     updateDynamicSuggestions(transcript);

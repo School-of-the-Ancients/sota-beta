@@ -6,6 +6,7 @@ import { HISTORICAL_FIGURES_SUGGESTIONS } from '../suggestions';
 import DiceIcon from './icons/DiceIcon';
 
 interface CharacterCreatorProps {
+  apiKey: string | null;
   onCharacterCreated: (character: Character) => void;
   onBack: () => void;
 }
@@ -37,7 +38,7 @@ function makeFallbackAvatar(name: string, title?: string) {
   return `data:image/svg+xml;charset=utf-8,${svg}`;
 }
 
-const CharacterCreator: React.FC<CharacterCreatorProps> = ({ onCharacterCreated, onBack }) => {
+const CharacterCreator: React.FC<CharacterCreatorProps> = ({ apiKey, onCharacterCreated, onBack }) => {
   const [name, setName] = useState('');
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState('');
@@ -112,8 +113,12 @@ If you are not at least 80% confident in their historicity, set verified to fals
       setLoading(true);
       setMsg('Verifying historical figure…');
 
-      if (!process.env.API_KEY) throw new Error('API_KEY not set.');
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+      if (!apiKey) {
+        setError('Add your Gemini API key in the header to generate new mentors.');
+        setLoading(false);
+        return;
+      }
+      const ai = new GoogleGenAI({ apiKey });
 
       const verification = await verifyHistoricalFigure(ai, clean);
 

@@ -109,10 +109,7 @@ School of the Ancients is a modern web application that pairs immersive visuals 
    ```bash
    npm install
    ```
-3. Create a `.env` file in the project root and add your Gemini credentials:
-   ```bash
-   GEMINI_API_KEY=your_api_key_here
-   ```
+3. Start the development server (see below) and, once the app loads in your browser, paste your Gemini API key into the banner at the top of the page. The key is saved to localStorage in that browser only so every visitor can supply their own credentials.
 
 ### Running Locally
 
@@ -123,6 +120,8 @@ npm run dev
 ```
 
 Visit the printed URL (defaults to http://localhost:3000) and grant the browser microphone access when prompted.
+
+When the interface loads, use the “Gemini API key” form in the hero banner to supply your key. You can clear or replace it at any time; the key never leaves your browser. (Optional) Keep a `.env` file locally if you want a convenient place to copy your key from during development, but it is no longer read automatically by the app.
 
 ### Building for Production
 
@@ -137,7 +136,7 @@ Deploy the contents of `dist/` to your static hosting platform of choice.
 
 ## Development Tips
 
-- Vite exposes `process.env.API_KEY` and `process.env.GEMINI_API_KEY` based on the `GEMINI_API_KEY` entry in your `.env` file. Be sure not to commit this file.
+- The header banner persists the Gemini API key in `localStorage`. Clearing browser storage or switching devices will require re-entering the key.
 - Shared UI components live in `components/`, while feature views are registered in `App.tsx`.
 - Hooks such as `useGeminiLive` encapsulate audio capture, streaming, and playback logic.
 - Tailwind utility classes handle layout; extend the Tailwind config before introducing custom CSS.
@@ -151,7 +150,7 @@ Deploy the contents of `dist/` to your static hosting platform of choice.
 
 ## Troubleshooting
 
-- **"API_KEY not set" errors**: Ensure your `.env` file is present and you restarted `npm run dev` after adding it.
+- **"API key not set" messages**: Paste your Gemini API key into the header banner and click **Save key**. Each browser stores the key locally.
 - **Microphone permissions**: Clear browser permissions if you accidentally deny access; audio capture is required for real-time chat.
 - **Slow or missing visuals**: Imagen requests can take a few seconds. Watch the developer console for network errors if images do not appear.
 

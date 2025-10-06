@@ -47,6 +47,9 @@ const mockLocalStorage = (() => {
     setItem: (key: string, value: string) => {
       store[key] = value.toString();
     },
+    removeItem: (key: string) => {
+      delete store[key];
+    },
     clear: () => {
       store = {};
     },
@@ -71,6 +74,7 @@ Object.defineProperty(window, 'history', {
 describe('App', () => {
   beforeEach(() => {
     mockLocalStorage.clear();
+    mockLocalStorage.setItem('school-of-the-ancients-api-key', 'test-api-key');
     vi.clearAllMocks();
 
     // Mock browser APIs

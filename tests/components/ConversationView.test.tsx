@@ -70,8 +70,13 @@ const mockOnEnvironmentUpdate = vi.fn();
 const renderComponent = (props = {}) => {
     return render(
         <ConversationView
-            character={mockCharacter} onEndConversation={mockOnEndConversation}
-            onEnvironmentUpdate={mockOnEnvironmentUpdate} activeQuest={null} isSaving={false} {...props}
+            character={mockCharacter}
+            apiKey="test-api-key"
+            onEndConversation={mockOnEndConversation}
+            onEnvironmentUpdate={mockOnEnvironmentUpdate}
+            activeQuest={null}
+            isSaving={false}
+            {...props}
         />
     );
 };
