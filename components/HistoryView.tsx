@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import type { SavedConversation, ConversationTurn } from '../types';
 import DownloadIcon from './icons/DownloadIcon';
+import { USER_STATE_EVENT, dispatchUserStateMutation } from '../services/userStateEvents';
 
 const HISTORY_KEY = 'school-of-the-ancients-history';
 
@@ -57,8 +58,20 @@ const HistoryView: React.FC<HistoryViewProps> = ({ onBack, onResumeConversation,
       if (selectedConversation?.id === id) {
         setSelectedConversation(null);
       }
+      dispatchUserStateMutation();
     }
   };
+
+  useEffect(() => {
+    const handleUserStateChange = () => {
+      setHistory(loadConversations());
+    };
+
+    window.addEventListener(USER_STATE_EVENT, handleUserStateChange);
+    return () => {
+      window.removeEventListener(USER_STATE_EVENT, handleUserStateChange);
+    };
+  }, []);
 
   const handleDownload = () => {
     if (!selectedConversation) return;

@@ -53,7 +53,7 @@ School of the Ancients is a modern web application that pairs immersive visuals 
 - **Curated quest board** &mdash; Pick from ready-to-run quests, each linking a legendary mentor with a focused learning objective and estimated duration.
 - **Quest-aware conversations** &mdash; When a quest is active, the mentor keeps you on track, surfaces scene changes, and captures artifacts tied to the objective.
 - **Automatic mastery reviews** &mdash; Ending a quest triggers an AI assessment of your transcript, summarizing what you grasped, what evidence proves it, and what to revisit.
-- **Progress tracking** &mdash; Completed quest IDs persist in `localStorage`, powering progress meters and keeping your accomplishments pinned between sessions.
+- **Progress tracking** &mdash; Completed quest IDs persist to your Supabase profile (with local caching for offline sessions), powering progress meters and keeping your accomplishments pinned between devices.
 
 ### Custom Mentors & Quest Builder
 
@@ -63,7 +63,7 @@ School of the Ancients is a modern web application that pairs immersive visuals 
 
 ### Progression & Reflection
 
-- **Conversation history** &mdash; Sessions, transcripts, artifacts, and environments are stored in browser `localStorage` for later review or resuming quests.
+- **Conversation history** &mdash; Sessions, transcripts, artifacts, and environments sync to Supabase per user while retaining a local cache for instant access.
 - **Quest dossiers** &mdash; Each AI review summarizes mastery, highlights evidence, and recommends improvements so you can iterate on your learning plan.
 - **Responsive design** &mdash; Tailwind CSS keeps the UI beautiful and accessible on mobile, tablet, and desktop displays.
 
@@ -101,6 +101,7 @@ School of the Ancients is a modern web application that pairs immersive visuals 
 - **Node.js** 20 or later
 - **npm** 10 or later (ships with modern Node releases)
 - A Google Gemini API key with access to the realtime and Imagen models
+- (Recommended) A Supabase project with Google OAuth enabled for user authentication
 
 ### Installation
 
@@ -109,10 +110,14 @@ School of the Ancients is a modern web application that pairs immersive visuals 
    ```bash
    npm install
    ```
-3. Create a `.env` file in the project root and add your Gemini credentials:
-   ```bash
-   GEMINI_API_KEY=your_api_key_here
-   ```
+3. Create a `.env` file in the project root and add your Gemini credentials and Supabase environment variables:
+  ```bash
+  GEMINI_API_KEY=your_api_key_here
+  VITE_SUPABASE_URL=https://your-project.supabase.co
+  VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
+  ```
+
+   See [`docs/SUPABASE_SETUP.md`](docs/SUPABASE_SETUP.md) for detailed table definitions, recommended RLS policies, and OAuth configuration notes.
 
 ### Running Locally
 

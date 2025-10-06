@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { GoogleGenAI, Type } from '@google/genai';
 
 import type {
@@ -22,6 +22,10 @@ import QuestCreator from './components/QuestCreator'; // NEW
 import QuestQuiz from './components/QuestQuiz';
 
 import { CHARACTERS, QUESTS } from './constants';
+import useSupabaseAuth from './hooks/useSupabaseAuth';
+import { fetchUserState, getDefaultUserSnapshot, upsertUserState } from './services/userData';
+import { isSupabaseConfigured } from './supabaseClient';
+import { USER_STATE_EVENT, dispatchUserStateMutation } from './services/userStateEvents';
 
 const CUSTOM_CHARACTERS_KEY = 'school-of-the-ancients-custom-characters';
 const HISTORY_KEY = 'school-of-the-ancients-history';
@@ -52,6 +56,7 @@ const saveConversationToLocalStorage = (conversation: SavedConversation) => {
       history.unshift(conversation);
     }
     localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
+    dispatchUserStateMutation();
   } catch (error) {
     console.error('Failed to save conversation:', error);
   }
@@ -70,6 +75,7 @@ const loadCompletedQuests = (): string[] => {
 const saveCompletedQuests = (questIds: string[]) => {
   try {
     localStorage.setItem(COMPLETED_QUESTS_KEY, JSON.stringify(questIds));
+    dispatchUserStateMutation();
   } catch (error) {
     console.error('Failed to save completed quests:', error);
   }
@@ -88,8 +94,18 @@ const loadCustomQuests = (): Quest[] => {
 const saveCustomQuests = (quests: Quest[]) => {
   try {
     localStorage.setItem(CUSTOM_QUESTS_KEY, JSON.stringify(quests));
+    dispatchUserStateMutation();
   } catch (error) {
     console.error('Failed to save custom quests:', error);
+  }
+};
+
+const saveCustomCharacters = (characters: Character[]) => {
+  try {
+    localStorage.setItem(CUSTOM_CHARACTERS_KEY, JSON.stringify(characters));
+    dispatchUserStateMutation();
+  } catch (error) {
+    console.error('Failed to persist custom characters:', error);
   }
 };
 
@@ -110,6 +126,7 @@ const saveLastQuizResult = (result: QuizResult | null) => {
     } else {
       localStorage.removeItem(LAST_QUIZ_RESULT_KEY);
     }
+    dispatchUserStateMutation();
   } catch (error) {
     console.error('Failed to persist last quiz result:', error);
   }
@@ -131,6 +148,7 @@ const saveActiveQuestId = (questId: string | null) => {
     } else {
       localStorage.removeItem(ACTIVE_QUEST_KEY);
     }
+    dispatchUserStateMutation();
   } catch (error) {
     console.error('Failed to persist active quest:', error);
   }
@@ -158,6 +176,10 @@ const updateCharacterQueryParam = (characterId: string, mode: 'push' | 'replace'
 // ---- App -------------------------------------------------------------------
 
 const App: React.FC = () => {
+  const { user, isAuthReady, signInWithProvider, signOut } = useSupabaseAuth();
+  const authDisabled = !isSupabaseConfigured;
+  const isAuthenticated = authDisabled || Boolean(user);
+
   const [selectedCharacter, setSelectedCharacter] = useState<Character | null>(null);
   const [view, setView] = useState<
     'selector' | 'conversation' | 'history' | 'creator' | 'quests' | 'questCreator' | 'quiz'
@@ -179,6 +201,51 @@ const App: React.FC = () => {
   const [quizQuest, setQuizQuest] = useState<Quest | null>(null);
   const [quizAssessment, setQuizAssessment] = useState<QuestAssessment | null>(null);
   const [lastQuizResult, setLastQuizResult] = useState<QuizResult | null>(null);
+  const [isRemoteSyncing, setIsRemoteSyncing] = useState(false);
+  const [remoteError, setRemoteError] = useState<string | null>(null);
+  const [hasHydratedRemote, setHasHydratedRemote] = useState<boolean>(!isSupabaseConfigured);
+  const syncTimeoutRef = useRef<number | null>(null);
+
+  const queueRemotePersist = useCallback(() => {
+    if (authDisabled || !user || !hasHydratedRemote) {
+      return;
+    }
+
+    if (syncTimeoutRef.current) {
+      window.clearTimeout(syncTimeoutRef.current);
+    }
+
+    const snapshot = {
+      history: loadConversations(),
+      completedQuestIds: completedQuests,
+      customCharacters,
+      customQuests,
+      activeQuestId: activeQuest?.id ?? null,
+      lastQuizResult,
+    };
+
+    const userId = user.id;
+
+    syncTimeoutRef.current = window.setTimeout(async () => {
+      setIsRemoteSyncing(true);
+      const { error } = await upsertUserState(userId, snapshot);
+      if (error) {
+        setRemoteError(error.message);
+      } else {
+        setRemoteError(null);
+      }
+      setIsRemoteSyncing(false);
+    }, 600);
+  }, [
+    activeQuest?.id,
+    authDisabled,
+    completedQuests,
+    customCharacters,
+    customQuests,
+    hasHydratedRemote,
+    lastQuizResult,
+    user,
+  ]);
 
   const allQuests = useMemo(() => [...customQuests, ...QUESTS], [customQuests]);
   const lastQuizQuest = useMemo(() => {
@@ -312,6 +379,124 @@ const App: React.FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [syncQuestProgress]);
 
+  useEffect(() => {
+    if (authDisabled) {
+      setHasHydratedRemote(true);
+      return;
+    }
+
+    if (!user) {
+      setHasHydratedRemote(false);
+
+      if (!authDisabled) {
+        try {
+          localStorage.removeItem(HISTORY_KEY);
+          localStorage.removeItem(CUSTOM_QUESTS_KEY);
+          localStorage.removeItem(COMPLETED_QUESTS_KEY);
+          localStorage.removeItem(CUSTOM_CHARACTERS_KEY);
+          localStorage.removeItem(ACTIVE_QUEST_KEY);
+          localStorage.removeItem(LAST_QUIZ_RESULT_KEY);
+        } catch (storageError) {
+          console.warn('Failed to clear cached user data after sign-out:', storageError);
+        }
+      }
+
+      setSelectedCharacter(null);
+      setView('selector');
+      setCustomCharacters([]);
+      setCustomQuests([]);
+      setCompletedQuests([]);
+      setActiveQuest(null);
+      setResumeConversationId(null);
+      setLastQuestOutcome(null);
+      setInProgressQuestIds([]);
+      setQuestCreatorPrefill(null);
+      setQuizQuest(null);
+      setQuizAssessment(null);
+      setLastQuizResult(null);
+      dispatchUserStateMutation();
+      return;
+    }
+
+    let isActive = true;
+
+    const hydrateFromRemote = async () => {
+      setIsRemoteSyncing(true);
+      const { data, error } = await fetchUserState(user.id);
+
+      if (!isActive) {
+        return;
+      }
+
+      if (error) {
+        console.error('Failed to load user data from Supabase:', error.message);
+        setRemoteError(error.message);
+      } else {
+        setRemoteError(null);
+      }
+
+      const snapshot = data ?? getDefaultUserSnapshot();
+
+      try {
+        localStorage.setItem(HISTORY_KEY, JSON.stringify(snapshot.history ?? []));
+        localStorage.setItem(CUSTOM_QUESTS_KEY, JSON.stringify(snapshot.customQuests ?? []));
+        localStorage.setItem(COMPLETED_QUESTS_KEY, JSON.stringify(snapshot.completedQuestIds ?? []));
+        localStorage.setItem(CUSTOM_CHARACTERS_KEY, JSON.stringify(snapshot.customCharacters ?? []));
+        if (snapshot.activeQuestId) {
+          localStorage.setItem(ACTIVE_QUEST_KEY, snapshot.activeQuestId);
+        } else {
+          localStorage.removeItem(ACTIVE_QUEST_KEY);
+        }
+        if (snapshot.lastQuizResult) {
+          localStorage.setItem(LAST_QUIZ_RESULT_KEY, JSON.stringify(snapshot.lastQuizResult));
+        } else {
+          localStorage.removeItem(LAST_QUIZ_RESULT_KEY);
+        }
+      } catch (storageError) {
+        console.error('Failed to hydrate local storage from Supabase snapshot:', storageError);
+      }
+
+      setCustomCharacters(snapshot.customCharacters ?? []);
+      setCustomQuests(snapshot.customQuests ?? []);
+      setCompletedQuests(snapshot.completedQuestIds ?? []);
+      setLastQuizResult(snapshot.lastQuizResult ?? null);
+
+      if (snapshot.activeQuestId) {
+        const mergedQuests = [...snapshot.customQuests, ...QUESTS];
+        const questFromRemote = mergedQuests.find((quest) => quest.id === snapshot.activeQuestId) ?? null;
+        setActiveQuest(questFromRemote);
+      } else {
+        setActiveQuest(null);
+      }
+
+      syncQuestProgress();
+      dispatchUserStateMutation();
+      setIsRemoteSyncing(false);
+      setHasHydratedRemote(true);
+    };
+
+    hydrateFromRemote();
+
+    return () => {
+      isActive = false;
+    };
+  }, [authDisabled, user, syncQuestProgress]);
+
+  useEffect(() => {
+    if (authDisabled || !user) {
+      return;
+    }
+
+    const handleMutation = () => {
+      queueRemotePersist();
+    };
+
+    window.addEventListener(USER_STATE_EVENT, handleMutation);
+    return () => {
+      window.removeEventListener(USER_STATE_EVENT, handleMutation);
+    };
+  }, [authDisabled, queueRemotePersist, user]);
+
   // ---- Navigation helpers ----
 
   const handleSelectCharacter = (character: Character) => {
@@ -386,11 +571,7 @@ const App: React.FC = () => {
   const handleCharacterCreated = (newCharacter: Character) => {
     const updatedCharacters = [newCharacter, ...customCharacters];
     setCustomCharacters(updatedCharacters);
-    try {
-      localStorage.setItem(CUSTOM_CHARACTERS_KEY, JSON.stringify(updatedCharacters));
-    } catch (e) {
-      console.error('Failed to save custom character:', e);
-    }
+    saveCustomCharacters(updatedCharacters);
     handleSelectCharacter(newCharacter);
   };
 
@@ -398,11 +579,7 @@ const App: React.FC = () => {
     if (window.confirm('Are you sure you want to permanently delete this ancient?')) {
       const updatedCharacters = customCharacters.filter((c) => c.id !== characterId);
       setCustomCharacters(updatedCharacters);
-      try {
-        localStorage.setItem(CUSTOM_CHARACTERS_KEY, JSON.stringify(updatedCharacters));
-      } catch (e) {
-        console.error('Failed to delete custom character:', e);
-      }
+      saveCustomCharacters(updatedCharacters);
     }
   };
 
@@ -525,6 +702,14 @@ const App: React.FC = () => {
     setQuizAssessment(null);
     setView('selector');
   };
+
+  useEffect(() => {
+    return () => {
+      if (syncTimeoutRef.current) {
+        window.clearTimeout(syncTimeoutRef.current);
+      }
+    };
+  }, []);
 
   const launchQuizForQuest = (questId: string) => {
     const quest = allQuests.find((q) => q.id === questId);
@@ -741,6 +926,35 @@ Focus only on the student's contributions. Mark passed=true only if the learner 
   // ---- View switcher ----
 
   const renderContent = () => {
+    if (!authDisabled && !isAuthReady) {
+      return (
+        <div className="flex flex-col items-center justify-center flex-1 text-center text-gray-300 gap-4 py-16">
+          <p className="text-xl font-semibold">Connecting to the academy…</p>
+          <p className="max-w-lg text-gray-400">
+            Preparing your profile and syncing progress. Hang tight while we open the gates.
+          </p>
+        </div>
+      );
+    }
+
+    if (!isAuthenticated) {
+      return (
+        <div className="flex flex-col items-center justify-center flex-1 text-center gap-6 py-16">
+          <p className="text-2xl font-bold text-amber-300 tracking-wide">Sign in to enter the School of the Ancients</p>
+          <p className="max-w-2xl text-gray-300">
+            Create or resume quests, track your mastery, and sync conversations across devices with a Supabase account.
+          </p>
+          <button
+            type="button"
+            onClick={() => signInWithProvider()}
+            className="rounded-lg bg-amber-500 px-6 py-3 text-lg font-semibold text-black shadow-lg transition hover:bg-amber-400"
+          >
+            Sign in
+          </button>
+        </div>
+      );
+    }
+
     switch (view) {
       case 'conversation':
         return selectedCharacter ? (
@@ -798,9 +1012,7 @@ Focus only on the student's contributions. Mark passed=true only if the learner 
             onCharacterCreated={(newChar) => {
               const updated = [newChar, ...customCharacters];
               setCustomCharacters(updated);
-              try {
-                localStorage.setItem(CUSTOM_CHARACTERS_KEY, JSON.stringify(updated));
-              } catch {}
+              saveCustomCharacters(updated);
             }}
             initialGoal={questCreatorPrefill ?? undefined}
           />
@@ -1030,6 +1242,42 @@ Focus only on the student's contributions. Mark passed=true only if the learner 
         className="relative z-10 min-h-screen flex flex-col text-gray-200 font-serif p-4 sm:p-6 lg:p-8"
         style={{ background: environmentImageUrl ? 'transparent' : 'linear-gradient(to bottom right, #1a1a1a, #2b2b2b)' }}
       >
+        <div className="flex justify-end items-center gap-3 mb-4 min-h-[2.5rem]">
+          {!authDisabled && (
+            <>
+              {isRemoteSyncing && (
+                <span className="text-xs uppercase tracking-wide text-emerald-300">Syncing…</span>
+              )}
+              {remoteError && (
+                <span className="text-xs text-red-400" role="status">
+                  Sync issue: {remoteError}
+                </span>
+              )}
+              {user ? (
+                <div className="flex items-center gap-3">
+                  {user.email && (
+                    <span className="text-sm text-gray-300 hidden sm:inline">{user.email}</span>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => signOut()}
+                    className="rounded-md border border-amber-400/70 px-4 py-1.5 text-sm font-semibold text-amber-200 hover:bg-amber-500/20"
+                  >
+                    Sign out
+                  </button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => signInWithProvider()}
+                  className="rounded-md bg-amber-500 px-4 py-1.5 text-sm font-semibold text-black shadow hover:bg-amber-400"
+                >
+                  Sign in
+                </button>
+              )}
+            </>
+          )}
+        </div>
         <header className="text-center mb-8">
           <h1
             className="text-4xl sm:text-5xl md:text-6xl font-bold text-amber-300 tracking-wider"

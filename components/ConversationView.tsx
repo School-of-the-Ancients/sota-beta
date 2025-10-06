@@ -12,6 +12,7 @@ import ThinkingIcon from './icons/ThinkingIcon';
 import SendIcon from './icons/SendIcon';
 import MuteIcon from './icons/MuteIcon';
 import UnmuteIcon from './icons/UnmuteIcon';
+import { dispatchUserStateMutation } from '../services/userStateEvents';
 
 const HISTORY_KEY = 'school-of-the-ancients-history';
 
@@ -45,6 +46,7 @@ const saveConversationToLocalStorage = (conversation: SavedConversation) => {
       history.unshift(conversation);
     }
     localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
+    dispatchUserStateMutation();
   } catch (error) {
     console.error("Failed to save conversation:", error);
   }
