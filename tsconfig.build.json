@@ -1,0 +1,18 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "composite": true,
+    "noEmit": false,
+    "emitDeclarationOnly": true,
+    "outDir": "./.tsbuild"
+  },
+  "include": [
+    "src/**/*",
+    "components/**/*",
+    "constants.ts",
+    "suggestions.ts",
+    "types.ts",
+    "hooks/**/*"
+  ],
+  "exclude": ["node_modules", "dist", "coverage"]
+}

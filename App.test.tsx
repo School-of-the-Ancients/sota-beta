@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';
-import App from './App';
+import { MemoryRouter } from 'react-router-dom';
+import App from './src/App';
 import { ConnectionState, Character } from './types';
 import { QUESTS } from './constants';
 
@@ -47,6 +48,9 @@ const mockLocalStorage = (() => {
     setItem: (key: string, value: string) => {
       store[key] = value.toString();
     },
+    removeItem: (key: string) => {
+      delete store[key];
+    },
     clear: () => {
       store = {};
     },
@@ -72,6 +76,8 @@ describe('App', () => {
   beforeEach(() => {
     mockLocalStorage.clear();
     vi.clearAllMocks();
+
+    window.scrollTo = vi.fn();
 
     // Mock browser APIs
     const mockIntersectionObserver = vi.fn();
@@ -115,15 +121,11 @@ describe('App', () => {
       JSON.stringify([customCharacter])
     );
 
-    // Set up the URL search parameter
-    Object.defineProperty(window, 'location', {
-        value: {
-            search: `?character=${customCharacter.id}`
-        },
-        writable: true
-    });
-
-    render(<App />);
+    render(
+      <MemoryRouter initialEntries={[`/conversation?character=${customCharacter.id}`]}>
+        <App />
+      </MemoryRouter>,
+    );
 
     // The app should switch to the conversation view and display the character's name
     await waitFor(() => {
@@ -153,16 +155,13 @@ describe('App', () => {
     mockLocalStorage.setItem('school-of-the-ancients-completed-quests', JSON.stringify([]));
     mockLocalStorage.setItem('school-of-the-ancients-custom-characters', JSON.stringify([]));
 
-    Object.defineProperty(window, 'location', {
-      value: {
-        search: '',
-      },
-      writable: true,
-    });
-
     const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
 
-    render(<App />);
+    render(
+      <MemoryRouter>
+        <App />
+      </MemoryRouter>,
+    );
 
     await waitFor(() => {
       expect(
@@ -170,7 +169,7 @@ describe('App', () => {
       ).toBeInTheDocument();
     });
 
-    const questViewButton = screen.getByRole('button', { name: /learning quests/i });
+    const questViewButton = screen.getByRole('link', { name: /learning quests/i });
     fireEvent.click(questViewButton);
 
     const deleteButton = await screen.findByRole('button', { name: /delete quest/i });
@@ -210,14 +209,11 @@ describe('App', () => {
     );
     mockLocalStorage.setItem('school-of-the-ancients-custom-characters', JSON.stringify([]));
 
-    Object.defineProperty(window, 'location', {
-      value: {
-        search: '',
-      },
-      writable: true,
-    });
-
-    render(<App />);
+    render(
+      <MemoryRouter>
+        <App />
+      </MemoryRouter>,
+    );
 
     await waitFor(() => {
       expect(

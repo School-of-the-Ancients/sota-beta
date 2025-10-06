@@ -122,7 +122,7 @@ const changeEnvironmentFunctionDeclaration: FunctionDeclaration = {
 export const useGeminiLive = (
     systemInstruction: string,
     voiceName: string,
-    voiceAccent?: string,
+    voiceAccent: string | undefined,
     onTurnComplete: (turn: { user: string; model: string }) => void,
     onEnvironmentChangeRequest: (description: string) => void,
     onArtifactDisplayRequest: (name: string, description: string) => void,
