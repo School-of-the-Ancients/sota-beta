@@ -212,6 +212,31 @@ describe('useGeminiLive', () => {
         expect(result.current.connectionState).toBe(ConnectionState.LISTENING);
     });
 
+    it('disconnects when disabled', async () => {
+        const { rerender } = renderHook(
+            ({ enabled }: { enabled: boolean }) =>
+                useGeminiLive(
+                    'system-instruction',
+                    'test-voice',
+                    'en-US',
+                    mockOnTurnComplete,
+                    mockOnEnvironmentChangeRequest,
+                    mockOnArtifactDisplayRequest,
+                    null,
+                    enabled,
+                ),
+            { initialProps: { enabled: true } },
+        );
+
+        await waitFor(() => expect(mockConnect).toHaveBeenCalled());
+
+        rerender({ enabled: false });
+
+        await waitFor(() => {
+            expect(mockLiveSession.close).toHaveBeenCalled();
+        });
+    });
+
     it('should handle disconnect properly', async () => {
         const { result, unmount } = renderHook(() =>
             useGeminiLive('system-instruction', 'test-voice', 'en-US', mockOnTurnComplete, mockOnEnvironmentChangeRequest, mockOnArtifactDisplayRequest, null)

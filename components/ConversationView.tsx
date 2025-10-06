@@ -2,6 +2,7 @@ import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react'
 import { GoogleGenAI, Type } from '@google/genai';
 import type { Character, ConversationTurn, SavedConversation, Quest } from '../types';
 import { useGeminiLive } from '../hooks/useGeminiLive';
+import { useOpenAiLive } from '../hooks/useOpenAiLive';
 import { useAmbientAudio } from '../hooks/useAmbientAudio';
 import { ConnectionState } from '../types';
 import { AMBIENCE_LIBRARY } from '../constants';
@@ -115,6 +116,7 @@ const ConversationView: React.FC<ConversationViewProps> = ({
   const [isFetchingSuggestions, setIsFetchingSuggestions] = useState(false);
   const [isGeneratingVisual, setIsGeneratingVisual] = useState(false);
   const [generationMessage, setGenerationMessage] = useState('');
+  const [realtimeProvider, setRealtimeProvider] = useState<'gemini' | 'openai'>('gemini');
 
   const initialAudioSrc = AMBIENCE_LIBRARY.find(a => a.tag === character.ambienceTag)?.audioSrc ?? null;
   const { isMuted: isAmbienceMuted, toggleMute: toggleAmbienceMute, changeTrack: changeAmbienceTrack } = useAmbientAudio(initialAudioSrc);
@@ -411,14 +413,7 @@ const ConversationView: React.FC<ConversationViewProps> = ({
   }, [character]);
 
 
-  const {
-    connectionState,
-    userTranscription,
-    modelTranscription,
-    isMicActive,
-    toggleMicrophone,
-    sendTextMessage
-  } = useGeminiLive(
+  const geminiSession = useGeminiLive(
     character.systemInstruction,
     character.voiceName,
     character.voiceAccent,
@@ -426,7 +421,28 @@ const ConversationView: React.FC<ConversationViewProps> = ({
     handleEnvironmentChange,
     handleArtifactDisplay,
     activeQuest,
+    realtimeProvider === 'gemini',
   );
+
+  const openAiSession = useOpenAiLive(
+    character.systemInstruction,
+    character.voiceName,
+    character.voiceAccent,
+    handleTurnComplete,
+    handleEnvironmentChange,
+    handleArtifactDisplay,
+    activeQuest,
+    realtimeProvider === 'openai',
+  );
+
+  const {
+    connectionState,
+    userTranscription,
+    modelTranscription,
+    isMicActive,
+    toggleMicrophone,
+    sendTextMessage,
+  } = realtimeProvider === 'gemini' ? geminiSession : openAiSession;
 
   const updateDynamicSuggestions = useCallback(async (currentTranscript: ConversationTurn[]) => {
     if (currentTranscript.length === 0) return;
@@ -571,6 +587,21 @@ ${contextTranscript}
                 <div className="absolute -bottom-4 left-1/2 -translate-x-1/2">
                     <StatusIndicator state={connectionState} isMicActive={isMicActive} />
                 </div>
+            </div>
+            <div className="mt-6 w-full max-w-xs text-left">
+                <label htmlFor="realtime-provider-select" className="block text-xs font-semibold uppercase tracking-wide text-amber-200/80">Realtime Provider</label>
+                <select
+                    id="realtime-provider-select"
+                    value={realtimeProvider}
+                    onChange={(event) => setRealtimeProvider(event.target.value as 'gemini' | 'openai')}
+                    className="mt-1 w-full rounded-md border border-gray-700 bg-gray-800/70 p-2 text-sm text-amber-100 focus:outline-none focus:ring-2 focus:ring-teal-400"
+                >
+                    <option value="gemini">Google Gemini Live</option>
+                    <option value="openai">OpenAI Realtime</option>
+                </select>
+                <p className="mt-2 text-xs text-gray-400">
+                    {realtimeProvider === 'gemini' ? 'Streaming via Google Gemini Live.' : 'Streaming via OpenAI Realtime.'}
+                </p>
             </div>
             <h2 className="text-2xl sm:text-3xl font-bold text-amber-200 mt-8">{character.name}</h2>
             <p className="text-gray-400 italic">{character.title}</p>

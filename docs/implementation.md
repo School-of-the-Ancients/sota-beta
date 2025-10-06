@@ -17,7 +17,7 @@ This document outlines the engineering tasks required to implement the features 
 - `App.tsx`: To manage new views (`quests`), state (`activeQuest`), and integrate the new `HowToGuide`.
 - `ConversationView.tsx`: To integrate the `useAmbientAudio` hook, display the active quest, and trigger the conversation summary generation.
 - `HistoryView.tsx`: To display the new conversation summaries.
-- `hooks/useGeminiLive.ts`: To accept an `activeQuest` and modify the system instruction accordingly.
+- `hooks/useGeminiLive.ts` / `hooks/useOpenAiLive.ts`: To handle provider-specific realtime streaming while incorporating the active quest system instruction adjustments.
 - `types.ts`: To add `summary` and `ambience` to `SavedConversation` and `Character` interfaces, and define the `Quest` interface.
 - `constants.ts`: To define the list of available `QUESTS` and a new `AMBIENCE_LIBRARY`.
 - `components/CharacterSelector.tsx`: To add buttons for accessing the `QuestsView`.

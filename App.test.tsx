@@ -40,6 +40,17 @@ vi.mock('./hooks/useGeminiLive', () => ({
   })),
 }));
 
+vi.mock('./hooks/useOpenAiLive', () => ({
+  useOpenAiLive: vi.fn(() => ({
+    connectionState: ConnectionState.CONNECTED,
+    userTranscription: '',
+    modelTranscription: '',
+    isMicActive: true,
+    toggleMicrophone: vi.fn(),
+    sendTextMessage: vi.fn(),
+  })),
+}));
+
 const mockLocalStorage = (() => {
   let store: Record<string, string> = {};
   return {

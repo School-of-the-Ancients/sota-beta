@@ -33,7 +33,10 @@ let onArtifactDisplayRequestCallback: (name: string, description: string) => voi
 
 const mockToggleMicrophone = vi.fn();
 const mockSendTextMessage = vi.fn();
+const mockToggleMicrophoneOpenAi = vi.fn();
+const mockSendTextMessageOpenAi = vi.fn();
 const useGeminiLiveMock = vi.fn();
+const useOpenAiLiveMock = vi.fn();
 
 vi.mock('../../hooks/useGeminiLive', () => ({
   useGeminiLive: vi.fn((
@@ -44,6 +47,18 @@ vi.mock('../../hooks/useGeminiLive', () => ({
     onEnvironmentChangeRequestCallback = onEnvironmentChange;
     onArtifactDisplayRequestCallback = onArtifactDisplay;
     return useGeminiLiveMock();
+  }),
+}));
+
+vi.mock('../../hooks/useOpenAiLive', () => ({
+  useOpenAiLive: vi.fn((
+    sysInstruction, voice, accent,
+    onTurnComplete, onEnvironmentChange, onArtifactDisplay
+  ) => {
+    onTurnCompleteCallback = onTurnComplete;
+    onEnvironmentChangeRequestCallback = onEnvironmentChange;
+    onArtifactDisplayRequestCallback = onArtifactDisplay;
+    return useOpenAiLiveMock();
   }),
 }));
 
@@ -88,6 +103,11 @@ describe('ConversationView', () => {
             isMicActive: true, toggleMicrophone: mockToggleMicrophone, sendTextMessage: mockSendTextMessage,
         });
 
+        useOpenAiLiveMock.mockReturnValue({
+            connectionState: ConnectionState.CONNECTED, userTranscription: '', modelTranscription: '',
+            isMicActive: true, toggleMicrophone: mockToggleMicrophoneOpenAi, sendTextMessage: mockSendTextMessageOpenAi,
+        });
+
         // Default mock for any suggestion calls
         mockGenerateContent.mockResolvedValue({ text: JSON.stringify({ suggestions: [] }) });
     });
@@ -113,6 +133,21 @@ describe('ConversationView', () => {
 
         expect(mockSendTextMessage).toHaveBeenCalledWith('Hello, Socrates!');
         expect(input).toHaveValue('');
+    });
+
+    it('switches realtime providers when the selector changes', async () => {
+        const user = userEvent.setup();
+        renderComponent();
+
+        const providerSelect = screen.getByLabelText(/realtime provider/i);
+        await user.selectOptions(providerSelect, 'openai');
+
+        const input = screen.getByPlaceholderText(/type a message/i);
+        await user.type(input, 'Hi from OpenAI');
+        await user.click(screen.getByRole('button', { name: 'Send message' }));
+
+        expect(mockSendTextMessageOpenAi).toHaveBeenCalledWith('Hi from OpenAI');
+        expect(mockSendTextMessage).not.toHaveBeenCalledWith('Hi from OpenAI');
     });
 
     it('should update transcript when a turn is completed', async () => {

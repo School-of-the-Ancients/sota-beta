@@ -101,6 +101,7 @@ School of the Ancients is a modern web application that pairs immersive visuals 
 - **Node.js** 20 or later
 - **npm** 10 or later (ships with modern Node releases)
 - A Google Gemini API key with access to the realtime and Imagen models
+- (Optional) An OpenAI API key with access to the Realtime API if you plan to use the OpenAI transport
 
 ### Installation
 
@@ -109,9 +110,10 @@ School of the Ancients is a modern web application that pairs immersive visuals 
    ```bash
    npm install
    ```
-3. Create a `.env` file in the project root and add your Gemini credentials:
+3. Create a `.env` file in the project root and add your credentials:
    ```bash
-   GEMINI_API_KEY=your_api_key_here
+   GEMINI_API_KEY=your_gemini_key_here
+   OPENAI_API_KEY=your_openai_key_here # required only if you enable the OpenAI Realtime provider
    ```
 
 ### Running Locally
@@ -139,7 +141,7 @@ Deploy the contents of `dist/` to your static hosting platform of choice.
 
 - Vite exposes `process.env.API_KEY` and `process.env.GEMINI_API_KEY` based on the `GEMINI_API_KEY` entry in your `.env` file. Be sure not to commit this file.
 - Shared UI components live in `components/`, while feature views are registered in `App.tsx`.
-- Hooks such as `useGeminiLive` encapsulate audio capture, streaming, and playback logic.
+- Hooks such as `useGeminiLive` and `useOpenAiLive` encapsulate audio capture, streaming, and playback logic.
 - Tailwind utility classes handle layout; extend the Tailwind config before introducing custom CSS.
 - No automated tests exist yet. If you add Vitest or other tooling, expose it through an `npm run test` script.
 
@@ -151,7 +153,7 @@ Deploy the contents of `dist/` to your static hosting platform of choice.
 
 ## Troubleshooting
 
-- **"API_KEY not set" errors**: Ensure your `.env` file is present and you restarted `npm run dev` after adding it.
+- **"API_KEY not set" errors**: Ensure your `.env` file is present and you restarted `npm run dev` after adding it. For OpenAI connections, verify `OPENAI_API_KEY` is also defined.
 - **Microphone permissions**: Clear browser permissions if you accidentally deny access; audio capture is required for real-time chat.
 - **Slow or missing visuals**: Imagen requests can take a few seconds. Watch the developer console for network errors if images do not appear.
 

@@ -1,58 +1,16 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { GoogleGenAI, LiveServerMessage, Modality, Blob, FunctionDeclaration, Type, SessionResumptionConfig } from '@google/genai';
+import { GoogleGenAI, LiveServerMessage, Modality, SessionResumptionConfig } from '@google/genai';
 import { ConnectionState, Quest } from '../types';
-
-// Audio Encoding & Decoding functions
-function encode(bytes: Uint8Array): string {
-    let binary = '';
-    const len = bytes.byteLength;
-    for (let i = 0; i < len; i++) {
-        binary += String.fromCharCode(bytes[i]);
-    }
-    return btoa(binary);
-}
-
-function decode(base64: string): Uint8Array {
-    const binaryString = atob(base64);
-    const len = binaryString.length;
-    const bytes = new Uint8Array(len);
-    for (let i = 0; i < len; i++) {
-        bytes[i] = binaryString.charCodeAt(i);
-    }
-    return bytes;
-}
-
-async function decodeAudioData(
-    data: Uint8Array,
-    ctx: AudioContext,
-    sampleRate: number,
-    numChannels: number,
-): Promise<AudioBuffer> {
-    const dataInt16 = new Int16Array(data.buffer);
-    const frameCount = dataInt16.length / numChannels;
-    const buffer = ctx.createBuffer(numChannels, frameCount, sampleRate);
-
-    for (let channel = 0; channel < numChannels; channel++) {
-        const channelData = buffer.getChannelData(channel);
-        for (let i = 0; i < frameCount; i++) {
-            channelData[i] = dataInt16[i * numChannels + channel] / 32768.0;
-        }
-    }
-    return buffer;
-}
-
-function createBlob(data: Float32Array): Blob {
-    const l = data.length;
-    const int16 = new Int16Array(l);
-    for (let i = 0; i < l; i++) {
-        int16[i] = data[i] * 32768;
-    }
-    return {
-        data: encode(new Uint8Array(int16.buffer)),
-        mimeType: 'audio/pcm;rate=16000',
-    };
-}
+import {
+    createAudioBufferFromPCM16,
+    createGeminiRealtimeBlob,
+    decodeBase64ToPCM16,
+} from './audioUtils';
+import {
+    changeEnvironmentFunctionDeclaration,
+    displayArtifactFunctionDeclaration,
+} from './realtimeTools';
 
 function parseDurationToMs(duration?: string | null): number | null {
     if (!duration) {
@@ -85,40 +43,6 @@ function parseDurationToMs(duration?: string | null): number | null {
     return null;
 }
 
-const changeEnvironmentFunctionDeclaration: FunctionDeclaration = {
-    name: 'changeEnvironment',
-    parameters: {
-      type: Type.OBJECT,
-      description: "Changes the user's visual environment to a specified location or scene. Use this when the user says 'take me to', 'show me', 'go to', or similar phrases requesting a scene change, or when addressing the 'Operator' (e.g., 'Operator, take me to the Roman Forum').",
-      properties: {
-        description: {
-          type: Type.STRING,
-          description: 'A detailed description of the environment, e.g., "the Egyptian pyramids at sunset" or "Leonardo da Vinci\'s workshop".',
-        },
-      },
-      required: ['description'],
-    },
-  };
-  
-  const displayArtifactFunctionDeclaration: FunctionDeclaration = {
-    name: 'displayArtifact',
-    parameters: {
-      type: Type.OBJECT,
-      description: "Generates and displays an image of a specific object, artifact, or concept being discussed. Use this when the character wants to 'show' something to the user, when the user asks to see something (e.g. 'show me the artifact'), or when addressing the 'Operator' (e.g., 'Operator, show me a diagram').",
-      properties: {
-        name: {
-          type: Type.STRING,
-          description: 'The name of the artifact, e.g., "flying machine" or "Mona Lisa".',
-        },
-        description: {
-          type: Type.STRING,
-          description: 'A detailed prompt for the image generation model to create a visual representation of the artifact.',
-        },
-      },
-      required: ['name', 'description'],
-    },
-  };
-
 export const useGeminiLive = (
     systemInstruction: string,
     voiceName: string,
@@ -127,6 +51,7 @@ export const useGeminiLive = (
     onEnvironmentChangeRequest: (description: string) => void,
     onArtifactDisplayRequest: (name: string, description: string) => void,
     activeQuest: Quest | null,
+    enabled = true,
 ) => {
     const [connectionState, setConnectionState] = useState<ConnectionState>(ConnectionState.IDLE);
     const [userTranscription, setUserTranscription] = useState<string>('');
@@ -368,7 +293,7 @@ export const useGeminiLive = (
                                         return;
                                     }
 
-                                    const pcmBlob = createBlob(inputData);
+                                    const pcmBlob = createGeminiRealtimeBlob(inputData);
                                     sessionPromiseRef.current?.then((session) => {
                                         session.sendRealtimeInput({ media: pcmBlob });
                                     }).catch(err => {
@@ -404,7 +329,7 @@ export const useGeminiLive = (
                                 }
 
                                 const inputData = audioProcessingEvent.inputBuffer.getChannelData(0);
-                                const pcmBlob = createBlob(inputData);
+                                const pcmBlob = createGeminiRealtimeBlob(inputData);
                                 sessionPromiseRef.current?.then((session) => {
                                     session.sendRealtimeInput({ media: pcmBlob });
                                 }).catch(err => {
@@ -525,8 +450,8 @@ export const useGeminiLive = (
                             const base64Audio = message.serverContent?.modelTurn?.parts[0]?.inlineData?.data;
                             if (base64Audio && outputAudioContextRef.current) {
                                 setConnectionState(ConnectionState.SPEAKING);
-                                const audioData = decode(base64Audio);
-                                const audioBuffer = await decodeAudioData(audioData, outputAudioContextRef.current, 24000, 1);
+                            const audioInt16 = decodeBase64ToPCM16(base64Audio);
+                            const audioBuffer = createAudioBufferFromPCM16(audioInt16, outputAudioContextRef.current, 24000, 1);
 
                                 const source = outputAudioContextRef.current.createBufferSource();
                                 source.buffer = audioBuffer;
@@ -587,11 +512,16 @@ export const useGeminiLive = (
     }, [systemInstruction, voiceName, voiceAccent, activeQuest, disconnect]);
 
     useEffect(() => {
+        if (!enabled) {
+            disconnect();
+            return;
+        }
+
         connect();
         return () => {
             disconnect();
         };
-    }, [connect, disconnect]);
+    }, [connect, disconnect, enabled]);
 
     return { connectionState, userTranscription, modelTranscription, isMicActive, toggleMicrophone, sendTextMessage };
 };
