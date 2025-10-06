@@ -21,6 +21,7 @@ import Instructions from './components/Instructions';
 import QuestIcon from './components/icons/QuestIcon';
 import QuestCreator from './components/QuestCreator';
 import QuestQuiz from './components/QuestQuiz';
+import AuthDialog from './components/AuthDialog';
 
 import { CHARACTERS, QUESTS } from './constants';
 import { useSupabaseAuth } from './hooks/useSupabaseAuth';
@@ -49,7 +50,15 @@ const updateCharacterQueryParam = (characterId: string, mode: 'push' | 'replace'
 // ---- App -------------------------------------------------------------------
 
 const App: React.FC = () => {
-  const { user, loading: authLoading, isConfigured, signIn, signOut } = useSupabaseAuth();
+  const {
+    user,
+    loading: authLoading,
+    isConfigured,
+    signInWithGoogle,
+    signInWithEmail,
+    signUpWithEmail,
+    signOut,
+  } = useSupabaseAuth();
   const { data: userData, loading: dataLoading, saving: dataSaving, updateData } = useUserData();
 
   const [selectedCharacter, setSelectedCharacter] = useState<Character | null>(null);
@@ -69,6 +78,10 @@ const App: React.FC = () => {
   const [quizQuest, setQuizQuest] = useState<Quest | null>(null);
   const [quizAssessment, setQuizAssessment] = useState<QuestAssessment | null>(null);
   const [authPrompt, setAuthPrompt] = useState<string | null>(null);
+  const [isAuthDialogOpen, setIsAuthDialogOpen] = useState(false);
+  const [authDialogMode, setAuthDialogMode] = useState<'signIn' | 'signUp'>('signIn');
+  const [authErrorMessage, setAuthErrorMessage] = useState<string | null>(null);
+  const [isAuthSubmitting, setIsAuthSubmitting] = useState(false);
 
   const customCharacters = userData.customCharacters;
   const customQuests = userData.customQuests;
@@ -87,22 +100,20 @@ const App: React.FC = () => {
 
       const promptMessage = message ?? 'Sign in to continue your journey through history.';
       setAuthPrompt(promptMessage);
-
-      if (isConfigured) {
-        signIn().catch((error) => {
-          console.error('Supabase sign-in failed', error);
-          setAuthPrompt(error instanceof Error ? error.message : 'Unable to start sign-in.');
-        });
-      }
-
+      setAuthDialogMode('signIn');
+      setAuthErrorMessage(isConfigured ? null : 'Authentication is not configured.');
+      setIsAuthDialogOpen(true);
       return false;
     },
-    [isAuthenticated, isConfigured, signIn]
+    [isAuthenticated, isConfigured]
   );
 
   useEffect(() => {
     if (isAuthenticated) {
       setAuthPrompt(null);
+      setIsAuthDialogOpen(false);
+      setAuthErrorMessage(null);
+      setIsAuthSubmitting(false);
     }
   }, [isAuthenticated]);
 
@@ -1062,9 +1073,66 @@ const App: React.FC = () => {
       return;
     }
 
-    setAuthPrompt('Sign in to personalize your ancient studies.');
-    requireAuth();
+    requireAuth('Sign in to personalize your ancient studies.');
   }, [isAuthenticated, requireAuth, signOut]);
+
+  const handleCloseAuthDialog = useCallback(() => {
+    setIsAuthDialogOpen(false);
+    setAuthErrorMessage(null);
+    setIsAuthSubmitting(false);
+  }, []);
+
+  const handleSwitchAuthMode = useCallback((mode: 'signIn' | 'signUp') => {
+    setAuthDialogMode(mode);
+    setAuthErrorMessage(null);
+  }, []);
+
+  const handleGoogleAuth = useCallback(() => {
+    if (!isConfigured) {
+      setAuthErrorMessage('Authentication is not configured.');
+      return;
+    }
+
+    setAuthErrorMessage(null);
+    setIsAuthSubmitting(true);
+    signInWithGoogle().catch((error) => {
+      console.error('Supabase Google sign-in failed', error);
+      setAuthErrorMessage(error instanceof Error ? error.message : 'Unable to start Google sign-in.');
+      setIsAuthSubmitting(false);
+    });
+  }, [isConfigured, signInWithGoogle]);
+
+  const handleEmailAuth = useCallback(
+    (email: string, password: string) => {
+      if (!isConfigured) {
+        setAuthErrorMessage('Authentication is not configured.');
+        return;
+      }
+
+      setAuthErrorMessage(null);
+      setIsAuthSubmitting(true);
+
+      let authPromise: Promise<void>;
+      if (authDialogMode === 'signIn') {
+        authPromise = signInWithEmail(email, password);
+      } else {
+        authPromise = signUpWithEmail(email, password).then(() => {
+          setAuthPrompt('Check your email to confirm your account, then sign in to continue.');
+          setAuthDialogMode('signIn');
+        });
+      }
+
+      authPromise
+        .catch((error) => {
+          console.error('Supabase email auth failed', error);
+          setAuthErrorMessage(error instanceof Error ? error.message : 'Unable to authenticate with email.');
+        })
+        .finally(() => {
+          setIsAuthSubmitting(false);
+        });
+    },
+    [authDialogMode, isConfigured, signInWithEmail, signUpWithEmail]
+  );
 
   const userEmail = user?.email ?? (user?.user_metadata as { email?: string })?.email;
 
@@ -1084,6 +1152,18 @@ const App: React.FC = () => {
 
   return (
     <div className="relative min-h-screen bg-[#1a1a1a]">
+      <AuthDialog
+        isOpen={isAuthDialogOpen}
+        mode={authDialogMode}
+        prompt={authPrompt}
+        error={authErrorMessage}
+        loading={isAuthSubmitting}
+        isConfigured={isConfigured}
+        onClose={handleCloseAuthDialog}
+        onSwitchMode={handleSwitchAuthMode}
+        onSignInWithGoogle={handleGoogleAuth}
+        onSubmitEmail={handleEmailAuth}
+      />
       <div
         className="absolute inset-0 bg-cover bg-center transition-opacity duration-1000 z-0"
         style={{ backgroundImage: environmentImageUrl ? `url(${environmentImageUrl})` : 'none' }}
