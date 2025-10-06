@@ -1,29 +1,8 @@
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useMemo } from 'react';
 import type { SavedConversation, ConversationTurn } from '../types';
 import DownloadIcon from './icons/DownloadIcon';
-
-const HISTORY_KEY = 'school-of-the-ancients-history';
-
-const loadConversations = (): SavedConversation[] => {
-  try {
-    const rawHistory = localStorage.getItem(HISTORY_KEY);
-    return rawHistory ? JSON.parse(rawHistory) : [];
-  } catch (error) {
-    console.error("Failed to load conversation history:", error);
-    return [];
-  }
-};
-
-const deleteConversationFromLocalStorage = (id: string) => {
-  try {
-    let history = loadConversations();
-    history = history.filter(c => c.id !== id);
-    localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
-  } catch (error) {
-    console.error("Failed to delete conversation:", error);
-  }
-};
+import { useUserData } from '../context/UserDataContext';
 
 const ArtifactDisplay: React.FC<{ artifact: NonNullable<ConversationTurn['artifact']> }> = ({ artifact }) => {
   if (!artifact.imageUrl || artifact.loading) return null; // Don't show incomplete artifacts in history
@@ -43,19 +22,19 @@ interface HistoryViewProps {
 }
 
 const HistoryView: React.FC<HistoryViewProps> = ({ onBack, onResumeConversation, onCreateQuestFromNextSteps }) => {
-  const [history, setHistory] = useState<SavedConversation[]>([]);
-  const [selectedConversation, setSelectedConversation] = useState<SavedConversation | null>(null);
-
-  useEffect(() => {
-    setHistory(loadConversations());
-  }, []);
+  const { conversations, deleteConversation } = useUserData();
+  const history = useMemo(() => conversations, [conversations]);
+  const [selectedConversationId, setSelectedConversationId] = useState<string | null>(null);
+  const selectedConversation = useMemo(
+    () => history.find((conversation) => conversation.id === selectedConversationId) ?? null,
+    [history, selectedConversationId],
+  );
 
   const handleDelete = (id: string) => {
     if (window.confirm('Are you sure you want to delete this conversation?')) {
-      deleteConversationFromLocalStorage(id);
-      setHistory(loadConversations());
-      if (selectedConversation?.id === id) {
-        setSelectedConversation(null);
+      deleteConversation(id);
+      if (selectedConversationId === id) {
+        setSelectedConversationId(null);
       }
     }
   };
@@ -189,7 +168,7 @@ const HistoryView: React.FC<HistoryViewProps> = ({ onBack, onResumeConversation,
           <div className="flex flex-col sm:flex-row gap-4 mt-6">
             <div className="flex flex-col sm:flex-row gap-3">
               <button
-                onClick={() => setSelectedConversation(null)}
+            onClick={() => setSelectedConversationId(null)}
                 className="bg-amber-600 hover:bg-amber-500 text-black font-bold py-2 px-6 rounded-lg transition-colors"
               >
                 Back to History
@@ -243,7 +222,7 @@ const HistoryView: React.FC<HistoryViewProps> = ({ onBack, onResumeConversation,
                 </div>
               </div>
               <div className="flex gap-2 self-end sm:self-center">
-                <button onClick={() => setSelectedConversation(conv)} className="bg-blue-800/70 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition-colors">View</button>
+                <button onClick={() => setSelectedConversationId(conv.id)} className="bg-blue-800/70 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition-colors">View</button>
                 <button
                   onClick={() => onResumeConversation(conv)}
                   className="bg-emerald-700/80 hover:bg-emerald-600 text-white font-bold py-2 px-4 rounded-lg transition-colors"

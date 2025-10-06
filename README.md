@@ -53,7 +53,7 @@ School of the Ancients is a modern web application that pairs immersive visuals 
 - **Curated quest board** &mdash; Pick from ready-to-run quests, each linking a legendary mentor with a focused learning objective and estimated duration.
 - **Quest-aware conversations** &mdash; When a quest is active, the mentor keeps you on track, surfaces scene changes, and captures artifacts tied to the objective.
 - **Automatic mastery reviews** &mdash; Ending a quest triggers an AI assessment of your transcript, summarizing what you grasped, what evidence proves it, and what to revisit.
-- **Progress tracking** &mdash; Completed quest IDs persist in `localStorage`, powering progress meters and keeping your accomplishments pinned between sessions.
+- **Progress tracking** &mdash; Completed quest IDs and quest progress persist in Supabase, powering progress meters and keeping your accomplishments pinned between sessions.
 
 ### Custom Mentors & Quest Builder
 
@@ -63,7 +63,7 @@ School of the Ancients is a modern web application that pairs immersive visuals 
 
 ### Progression & Reflection
 
-- **Conversation history** &mdash; Sessions, transcripts, artifacts, and environments are stored in browser `localStorage` for later review or resuming quests.
+- **Conversation history** &mdash; Sessions, transcripts, artifacts, and environments are synced to Supabase for later review or resuming quests.
 - **Quest dossiers** &mdash; Each AI review summarizes mastery, highlights evidence, and recommends improvements so you can iterate on your learning plan.
 - **Responsive design** &mdash; Tailwind CSS keeps the UI beautiful and accessible on mobile, tablet, and desktop displays.
 
@@ -113,6 +113,7 @@ School of the Ancients is a modern web application that pairs immersive visuals 
    ```bash
    GEMINI_API_KEY=your_api_key_here
    ```
+4. Configure Supabase by following [`docs/SUPABASE_SETUP.md`](docs/SUPABASE_SETUP.md). At minimum you must supply `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` alongside the table described there.
 
 ### Running Locally
 

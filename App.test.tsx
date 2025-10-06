@@ -3,6 +3,7 @@ import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import App from './App';
 import { ConnectionState, Character } from './types';
 import { QUESTS } from './constants';
+import type { UserStateRecord } from './services/userStateRepository';
 
 // Mock dependencies
 vi.mock('@google/genai', () => {
@@ -40,23 +41,6 @@ vi.mock('./hooks/useGeminiLive', () => ({
   })),
 }));
 
-const mockLocalStorage = (() => {
-  let store: Record<string, string> = {};
-  return {
-    getItem: (key: string) => store[key] || null,
-    setItem: (key: string, value: string) => {
-      store[key] = value.toString();
-    },
-    clear: () => {
-      store = {};
-    },
-  };
-})();
-
-Object.defineProperty(window, 'localStorage', {
-  value: mockLocalStorage,
-});
-
 Object.defineProperty(window, 'history', {
   value: {
     pushState: vi.fn(),
@@ -68,9 +52,50 @@ Object.defineProperty(window, 'history', {
   writable: true
 });
 
+function createDefaultState(): UserStateRecord {
+  return {
+    conversations: [],
+    completedQuestIds: [],
+    customQuests: [],
+    customCharacters: [],
+    lastQuizResult: null,
+    activeQuestId: null,
+  };
+}
+
+let mockUserState: UserStateRecord = createDefaultState();
+
+const mockAuth = {
+  session: { user: { id: 'test-user', email: 'tester@example.com' } },
+  isLoading: false,
+  error: null as string | null,
+  authMode: 'signIn' as const,
+  setAuthMode: vi.fn(),
+  signIn: vi.fn(async () => undefined),
+  signUp: vi.fn(async () => undefined),
+  signOut: vi.fn(async () => undefined),
+  refreshSession: vi.fn(async () => undefined),
+  isConfigured: true,
+};
+
+vi.mock('./hooks/useSupabaseAuth', () => ({
+  useSupabaseAuth: () => mockAuth,
+}));
+
+vi.mock('./services/userStateRepository', () => ({
+  DEFAULT_USER_STATE: createDefaultState(),
+  fetchUserState: vi.fn(async () => mockUserState),
+  persistUserState: vi.fn(async (_userId: string, state: UserStateRecord) => {
+    mockUserState = state;
+  }),
+}));
+
 describe('App', () => {
   beforeEach(() => {
-    mockLocalStorage.clear();
+    mockUserState = createDefaultState();
+    mockAuth.session = { user: { id: 'test-user', email: 'tester@example.com' } };
+    mockAuth.error = null;
+    mockAuth.authMode = 'signIn';
     vi.clearAllMocks();
 
     // Mock browser APIs
@@ -109,11 +134,10 @@ describe('App', () => {
       suggestedPrompts: [],
     };
 
-    // Set up localStorage with the custom character
-    mockLocalStorage.setItem(
-      'school-of-the-ancients-custom-characters',
-      JSON.stringify([customCharacter])
-    );
+    mockUserState = {
+      ...createDefaultState(),
+      customCharacters: [customCharacter],
+    };
 
     // Set up the URL search parameter
     Object.defineProperty(window, 'location', {
@@ -131,7 +155,7 @@ describe('App', () => {
     });
 
     // A button unique to the conversation view should be present
-    expect(screen.getByRole('button', { name: 'End' })).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: 'End' })).toBeInTheDocument();
   });
 
   it('updates quest progress when a custom quest is deleted', async () => {
@@ -146,12 +170,10 @@ describe('App', () => {
       characterId: 'davinci',
     };
 
-    mockLocalStorage.setItem(
-      'school-of-the-ancients-custom-quests',
-      JSON.stringify([customQuest])
-    );
-    mockLocalStorage.setItem('school-of-the-ancients-completed-quests', JSON.stringify([]));
-    mockLocalStorage.setItem('school-of-the-ancients-custom-characters', JSON.stringify([]));
+    mockUserState = {
+      ...createDefaultState(),
+      customQuests: [customQuest],
+    };
 
     Object.defineProperty(window, 'location', {
       value: {
@@ -176,9 +198,6 @@ describe('App', () => {
     const deleteButton = await screen.findByRole('button', { name: /delete quest/i });
     fireEvent.click(deleteButton);
 
-    const backButton = await screen.findByRole('button', { name: /back to ancients/i });
-    fireEvent.click(backButton);
-
     await waitFor(() => {
       expect(
         screen.getByText(new RegExp(`0 of ${defaultQuestCount} quests completed`, 'i'))
@@ -200,15 +219,11 @@ describe('App', () => {
       characterId: 'custom_missing_character',
     };
 
-    mockLocalStorage.setItem(
-      'school-of-the-ancients-custom-quests',
-      JSON.stringify([orphanQuest])
-    );
-    mockLocalStorage.setItem(
-      'school-of-the-ancients-completed-quests',
-      JSON.stringify([orphanQuest.id])
-    );
-    mockLocalStorage.setItem('school-of-the-ancients-custom-characters', JSON.stringify([]));
+    mockUserState = {
+      ...createDefaultState(),
+      customQuests: [orphanQuest],
+      completedQuestIds: [orphanQuest.id],
+    };
 
     Object.defineProperty(window, 'location', {
       value: {
@@ -225,8 +240,10 @@ describe('App', () => {
       ).toBeInTheDocument();
     });
 
-    expect(mockLocalStorage.getItem('school-of-the-ancients-custom-quests')).toBe(JSON.stringify([]));
-    expect(mockLocalStorage.getItem('school-of-the-ancients-completed-quests')).toBe(JSON.stringify([]));
+    await waitFor(() => {
+      expect(mockUserState.customQuests).toHaveLength(0);
+      expect(mockUserState.completedQuestIds).toHaveLength(0);
+    });
   });
 });
 

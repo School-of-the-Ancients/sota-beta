@@ -1,8 +1,9 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, act, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import ConversationView from '../../components/ConversationView';
-import { ConnectionState, Character } from '../../types';
+import { ConnectionState, Character, type SavedConversation } from '../../types';
+import * as UserDataContextModule from '../../context/UserDataContext';
 
 // Mocks
 vi.mock('../../constants', () => ({
@@ -57,6 +58,35 @@ vi.mock('../../hooks/useAmbientAudio', () => ({
   }),
 }));
 
+const upsertConversationMock = vi.fn();
+const mockConversations: SavedConversation[] = [];
+
+vi.mock('../../context/UserDataContext', () => ({
+  useUserData: () => ({
+    conversations: mockConversations,
+    customCharacters: [],
+    customQuests: [],
+    completedQuestIds: [],
+    lastQuizResult: null,
+    activeQuestId: null,
+    isLoading: false,
+    isSyncing: false,
+    error: null,
+    refresh: vi.fn(),
+    upsertConversation: upsertConversationMock,
+    deleteConversation: vi.fn(),
+    setCompletedQuestIds: vi.fn(),
+    markQuestCompleted: vi.fn(),
+    markQuestIncomplete: vi.fn(),
+    upsertCustomQuest: vi.fn(),
+    deleteCustomQuest: vi.fn(),
+    upsertCustomCharacter: vi.fn(),
+    deleteCustomCharacter: vi.fn(),
+    setLastQuizResult: vi.fn(),
+    setActiveQuestId: vi.fn(),
+  }),
+}));
+
 const mockCharacter: Character = {
     id: 'char-1', name: 'Socrates', title: 'The Gadfly of Athens',
     greeting: 'What is it you seek to understand?', systemInstruction: 'You are Socrates.',
@@ -79,7 +109,8 @@ const renderComponent = (props = {}) => {
 describe('ConversationView', () => {
     beforeEach(() => {
         vi.clearAllMocks();
-        localStorage.clear();
+        upsertConversationMock.mockClear();
+        mockConversations.length = 0;
         vi.spyOn(global, 'setInterval').mockImplementation(vi.fn() as any);
         vi.spyOn(global, 'clearInterval').mockImplementation(vi.fn());
 
@@ -90,10 +121,6 @@ describe('ConversationView', () => {
 
         // Default mock for any suggestion calls
         mockGenerateContent.mockResolvedValue({ text: JSON.stringify({ suggestions: [] }) });
-    });
-
-    afterEach(() => {
-        vi.restoreAllMocks();
     });
 
     it('should render character details and initial greeting', () => {
