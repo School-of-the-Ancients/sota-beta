@@ -13,8 +13,6 @@ import SendIcon from './icons/SendIcon';
 import MuteIcon from './icons/MuteIcon';
 import UnmuteIcon from './icons/UnmuteIcon';
 
-const HISTORY_KEY = 'school-of-the-ancients-history';
-
 interface ConversationViewProps {
   character: Character;
   onEndConversation: (transcript: ConversationTurn[], sessionId: string) => void;
@@ -23,32 +21,9 @@ interface ConversationViewProps {
   activeQuest: Quest | null;
   isSaving: boolean;
   resumeConversationId?: string | null;
+  conversationHistory: SavedConversation[];
+  onConversationUpdate: (conversation: SavedConversation) => void;
 }
-
-const loadConversations = (): SavedConversation[] => {
-  try {
-    const rawHistory = localStorage.getItem(HISTORY_KEY);
-    return rawHistory ? JSON.parse(rawHistory) : [];
-  } catch (error) {
-    console.error("Failed to load conversation history:", error);
-    return [];
-  }
-};
-
-const saveConversationToLocalStorage = (conversation: SavedConversation) => {
-  try {
-    const history = loadConversations();
-    const existingIndex = history.findIndex(c => c.id === conversation.id);
-    if (existingIndex > -1) {
-      history[existingIndex] = conversation;
-    } else {
-      history.unshift(conversation);
-    }
-    localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
-  } catch (error) {
-    console.error("Failed to save conversation:", error);
-  }
-};
 
 const StatusIndicator: React.FC<{ state: ConnectionState; isMicActive: boolean }> = ({ state, isMicActive }) => {
   let statusText = 'Ready';
@@ -108,6 +83,8 @@ const ConversationView: React.FC<ConversationViewProps> = ({
   activeQuest,
   isSaving,
   resumeConversationId,
+  conversationHistory,
+  onConversationUpdate,
 }) => {
   const [transcript, setTranscript] = useState<ConversationTurn[]>([]);
   const [textInput, setTextInput] = useState('');
@@ -161,7 +138,7 @@ const ConversationView: React.FC<ConversationViewProps> = ({
       text: character.greeting,
     };
 
-    const history = loadConversations();
+    const history = conversationHistory;
 
     const hydrateFromConversation = (conversation: SavedConversation | undefined) => {
       if (conversation && conversation.transcript.length > 0) {
@@ -217,7 +194,7 @@ const ConversationView: React.FC<ConversationViewProps> = ({
           questTitle: existingConversation.questTitle,
         }
       : {};
-  }, [character, onEnvironmentUpdate, activeQuest, resumeConversationId]);
+  }, [character, onEnvironmentUpdate, activeQuest, resumeConversationId, conversationHistory]);
 
     // Cycle through placeholders for text input
     useEffect(() => {
@@ -502,8 +479,8 @@ ${contextTranscript}
           }
         : {}),
     };
-    saveConversationToLocalStorage(conversation);
-  }, [transcript, character, environmentImageUrl, activeQuest]);
+    onConversationUpdate(conversation);
+  }, [transcript, character, environmentImageUrl, activeQuest, onConversationUpdate]);
 
   const handleReset = () => {
     if (transcript.length === 0 && !environmentImageUrl) return;
@@ -537,7 +514,7 @@ ${contextTranscript}
                 }
               : {}),
         };
-        saveConversationToLocalStorage(clearedConversation);
+        onConversationUpdate(clearedConversation);
     }
   };
 
