@@ -21,6 +21,7 @@ import Instructions from './components/Instructions';
 import QuestIcon from './components/icons/QuestIcon';
 import QuestCreator from './components/QuestCreator';
 import QuestQuiz from './components/QuestQuiz';
+import AuthDialog from './components/AuthDialog';
 
 import { CHARACTERS, QUESTS } from './constants';
 import { useSupabaseAuth } from './hooks/useSupabaseAuth';
@@ -49,7 +50,15 @@ const updateCharacterQueryParam = (characterId: string, mode: 'push' | 'replace'
 // ---- App -------------------------------------------------------------------
 
 const App: React.FC = () => {
-  const { user, loading: authLoading, isConfigured, signIn, signOut } = useSupabaseAuth();
+  const {
+    user,
+    loading: authLoading,
+    isConfigured,
+    signInWithGoogle,
+    signInWithEmail,
+    signUpWithEmail,
+    signOut,
+  } = useSupabaseAuth();
   const { data: userData, loading: dataLoading, saving: dataSaving, updateData } = useUserData();
 
   const [selectedCharacter, setSelectedCharacter] = useState<Character | null>(null);
@@ -69,6 +78,7 @@ const App: React.FC = () => {
   const [quizQuest, setQuizQuest] = useState<Quest | null>(null);
   const [quizAssessment, setQuizAssessment] = useState<QuestAssessment | null>(null);
   const [authPrompt, setAuthPrompt] = useState<string | null>(null);
+  const [isAuthDialogOpen, setIsAuthDialogOpen] = useState(false);
 
   const customCharacters = userData.customCharacters;
   const customQuests = userData.customQuests;
@@ -89,20 +99,18 @@ const App: React.FC = () => {
       setAuthPrompt(promptMessage);
 
       if (isConfigured) {
-        signIn().catch((error) => {
-          console.error('Supabase sign-in failed', error);
-          setAuthPrompt(error instanceof Error ? error.message : 'Unable to start sign-in.');
-        });
+        setIsAuthDialogOpen(true);
       }
 
       return false;
     },
-    [isAuthenticated, isConfigured, signIn]
+    [isAuthenticated, isConfigured]
   );
 
   useEffect(() => {
     if (isAuthenticated) {
       setAuthPrompt(null);
+      setIsAuthDialogOpen(false);
     }
   }, [isAuthenticated]);
 
@@ -1063,8 +1071,28 @@ const App: React.FC = () => {
     }
 
     setAuthPrompt('Sign in to personalize your ancient studies.');
-    requireAuth();
-  }, [isAuthenticated, requireAuth, signOut]);
+    if (isConfigured) {
+      setIsAuthDialogOpen(true);
+    }
+  }, [isAuthenticated, isConfigured, signOut]);
+
+  const handleEmailSignIn = useCallback(
+    async (email: string, password: string) => {
+      await signInWithEmail(email, password);
+    },
+    [signInWithEmail]
+  );
+
+  const handleEmailSignUp = useCallback(
+    async (email: string, password: string) => {
+      const result = await signUpWithEmail(email, password);
+      if (result.requiresEmailConfirmation) {
+        setAuthPrompt('Check your email to confirm your account, then return to sign in.');
+      }
+      return result;
+    },
+    [signUpWithEmail]
+  );
 
   const userEmail = user?.email ?? (user?.user_metadata as { email?: string })?.email;
 
@@ -1125,6 +1153,14 @@ const App: React.FC = () => {
 
         <main className="max-w-7xl w-full mx-auto flex-grow flex flex-col">{renderContent()}</main>
       </div>
+      <AuthDialog
+        isOpen={isAuthDialogOpen && !isAuthenticated && isConfigured}
+        promptMessage={authPrompt}
+        onClose={() => setIsAuthDialogOpen(false)}
+        onSignInWithGoogle={signInWithGoogle}
+        onEmailSignIn={handleEmailSignIn}
+        onEmailSignUp={handleEmailSignUp}
+      />
     </div>
   );
 };
