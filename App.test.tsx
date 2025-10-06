@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import App from './App';
+import { ApiKeyProvider } from './hooks/useApiKey';
 import { ConnectionState, Character } from './types';
 import { QUESTS } from './constants';
 
@@ -73,6 +74,8 @@ describe('App', () => {
     mockLocalStorage.clear();
     vi.clearAllMocks();
 
+    mockLocalStorage.setItem('school-of-the-ancients-api-key', 'test-key');
+
     // Mock browser APIs
     const mockIntersectionObserver = vi.fn();
     mockIntersectionObserver.mockReturnValue({
@@ -123,7 +126,11 @@ describe('App', () => {
         writable: true
     });
 
-    render(<App />);
+    render(
+      <ApiKeyProvider>
+        <App />
+      </ApiKeyProvider>
+    );
 
     // The app should switch to the conversation view and display the character's name
     await waitFor(() => {
@@ -162,7 +169,11 @@ describe('App', () => {
 
     const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
 
-    render(<App />);
+    render(
+      <ApiKeyProvider>
+        <App />
+      </ApiKeyProvider>
+    );
 
     await waitFor(() => {
       expect(
@@ -217,7 +228,11 @@ describe('App', () => {
       writable: true,
     });
 
-    render(<App />);
+    render(
+      <ApiKeyProvider>
+        <App />
+      </ApiKeyProvider>
+    );
 
     await waitFor(() => {
       expect(

@@ -20,8 +20,10 @@ import Instructions from './components/Instructions';
 import QuestIcon from './components/icons/QuestIcon';
 import QuestCreator from './components/QuestCreator'; // NEW
 import QuestQuiz from './components/QuestQuiz';
+import ApiKeyModal from './components/ApiKeyModal';
 
 import { CHARACTERS, QUESTS } from './constants';
+import { useApiKey } from './hooks/useApiKey';
 
 const CUSTOM_CHARACTERS_KEY = 'school-of-the-ancients-custom-characters';
 const HISTORY_KEY = 'school-of-the-ancients-history';
@@ -158,10 +160,13 @@ const updateCharacterQueryParam = (characterId: string, mode: 'push' | 'replace'
 // ---- App -------------------------------------------------------------------
 
 const App: React.FC = () => {
+  const { apiKey, setApiKey } = useApiKey();
   const [selectedCharacter, setSelectedCharacter] = useState<Character | null>(null);
   const [view, setView] = useState<
     'selector' | 'conversation' | 'history' | 'creator' | 'quests' | 'questCreator' | 'quiz'
   >('selector');
+
+  const [isApiKeyModalOpen, setIsApiKeyModalOpen] = useState(false);
 
   const [customCharacters, setCustomCharacters] = useState<Character[]>([]);
   const [customQuests, setCustomQuests] = useState<Quest[]>([]);
@@ -187,6 +192,22 @@ const App: React.FC = () => {
     }
     return allQuests.find((quest) => quest.id === lastQuizResult.questId) ?? null;
   }, [allQuests, lastQuizResult]);
+
+  useEffect(() => {
+    if (!apiKey) {
+      setIsApiKeyModalOpen(true);
+    }
+  }, [apiKey]);
+
+  const handleApiKeySaved = (value: string) => {
+    setApiKey(value);
+    setIsApiKeyModalOpen(false);
+  };
+
+  const handleApiKeyCleared = () => {
+    setApiKey(null);
+    setIsApiKeyModalOpen(true);
+  };
 
   useEffect(() => {
     if (customQuests.length === 0) {
@@ -587,10 +608,10 @@ const App: React.FC = () => {
       }
 
       let ai: GoogleGenAI | null = null;
-      if (!process.env.API_KEY) {
-        console.error('API_KEY not set, skipping summary and quest assessment.');
+      if (apiKey) {
+        ai = new GoogleGenAI({ apiKey });
       } else {
-        ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+        console.warn('Gemini API key not set, skipping summary and quest assessment.');
       }
 
       // Conversation summary (skip first system/greeting turn)
@@ -1018,6 +1039,25 @@ Focus only on the student's contributions. Mark passed=true only if the learner 
     }
   };
 
+  const renderMissingApiKeyState = () => (
+    <div className="max-w-3xl mx-auto flex flex-col items-center justify-center text-center gap-6 text-gray-200">
+      <p className="text-lg">
+        Provide your own Google Gemini API key to explore the School of the Ancients. Your key is saved to this browser only
+        and never sent to our servers.
+      </p>
+      <button
+        type="button"
+        onClick={() => setIsApiKeyModalOpen(true)}
+        className="inline-flex items-center rounded-lg bg-amber-500 px-6 py-3 text-lg font-semibold text-black shadow-lg hover:bg-amber-400"
+      >
+        Enter API key
+      </button>
+      <p className="text-sm text-gray-400">
+        Tip: create or manage your key from the Google AI Studio dashboard.
+      </p>
+    </div>
+  );
+
   return (
     <div className="relative min-h-screen bg-[#1a1a1a]">
       <div
@@ -1038,10 +1078,42 @@ Focus only on the student's contributions. Mark passed=true only if the learner 
             School of the Ancients
           </h1>
           <p className="text-gray-400 mt-2 text-lg">Old world wisdom. New world classroom.</p>
+          <div className="mt-4 flex flex-wrap items-center justify-center gap-3">
+            <button
+              type="button"
+              onClick={() => setIsApiKeyModalOpen(true)}
+              className="rounded-md bg-amber-500 px-4 py-2 text-sm font-semibold text-black shadow hover:bg-amber-400"
+            >
+              {apiKey ? 'Update API key' : 'Enter API key'}
+            </button>
+            {apiKey && (
+              <button
+                type="button"
+                onClick={handleApiKeyCleared}
+                className="rounded-md border border-red-400 px-3 py-2 text-sm font-semibold text-red-200 hover:bg-red-500/10"
+              >
+                Clear key
+              </button>
+            )}
+          </div>
+          <p className="mt-2 text-xs text-gray-500">
+            Keys are stored locally in this browser and are never sent to our servers.
+          </p>
         </header>
 
-        <main className="max-w-7xl w-full mx-auto flex-grow flex flex-col">{renderContent()}</main>
+        <main className="max-w-7xl w-full mx-auto flex-grow flex flex-col">
+          {apiKey ? renderContent() : renderMissingApiKeyState()}
+        </main>
       </div>
+
+      <ApiKeyModal
+        isOpen={isApiKeyModalOpen}
+        initialValue={apiKey}
+        onClose={() => setIsApiKeyModalOpen(false)}
+        onSave={handleApiKeySaved}
+        onClear={handleApiKeyCleared}
+        requireKey={!apiKey}
+      />
     </div>
   );
 };

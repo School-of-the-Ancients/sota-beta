@@ -3,6 +3,7 @@ import { render, screen, act, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import ConversationView from '../../components/ConversationView';
 import { ConnectionState, Character } from '../../types';
+import { ApiKeyProvider } from '../../hooks/useApiKey';
 
 // Mocks
 vi.mock('../../constants', () => ({
@@ -67,19 +68,25 @@ const mockCharacter: Character = {
 const mockOnEndConversation = vi.fn();
 const mockOnEnvironmentUpdate = vi.fn();
 
-const renderComponent = (props = {}) => {
-    return render(
-        <ConversationView
-            character={mockCharacter} onEndConversation={mockOnEndConversation}
-            onEnvironmentUpdate={mockOnEnvironmentUpdate} activeQuest={null} isSaving={false} {...props}
-        />
+const renderComponent = (props = {}) =>
+    render(
+        <ApiKeyProvider>
+            <ConversationView
+                character={mockCharacter}
+                onEndConversation={mockOnEndConversation}
+                onEnvironmentUpdate={mockOnEnvironmentUpdate}
+                activeQuest={null}
+                isSaving={false}
+                {...props}
+            />
+        </ApiKeyProvider>
     );
-};
 
 describe('ConversationView', () => {
     beforeEach(() => {
         vi.clearAllMocks();
         localStorage.clear();
+        localStorage.setItem('school-of-the-ancients-api-key', 'test-key');
         vi.spyOn(global, 'setInterval').mockImplementation(vi.fn() as any);
         vi.spyOn(global, 'clearInterval').mockImplementation(vi.fn());
 

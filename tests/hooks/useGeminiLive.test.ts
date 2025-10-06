@@ -1,6 +1,8 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { renderHook, act, waitFor } from '@testing-library/react';
 import { useGeminiLive } from '../../hooks/useGeminiLive';
+import { ApiKeyProvider } from '../../hooks/useApiKey';
+import { createElement, type ReactNode } from 'react';
 import { ConnectionState, Quest } from '../../types';
 
 // Mock @google/genai
@@ -84,11 +86,26 @@ describe('useGeminiLive', () => {
             Promise.resolve().then(() => callbacks.onopen());
             return Promise.resolve(mockLiveSession);
         });
+        localStorage.clear();
+        localStorage.setItem('school-of-the-ancients-api-key', 'test-key');
     });
 
+    const wrapper = ({ children }: { children: ReactNode }) =>
+        createElement(ApiKeyProvider, null, children);
+
     it('should initialize with CONNECTING state and transition to LISTENING', async () => {
-        const { result } = renderHook(() =>
-            useGeminiLive('system-instruction', 'test-voice', 'en-US', mockOnTurnComplete, mockOnEnvironmentChangeRequest, mockOnArtifactDisplayRequest, null)
+        const { result } = renderHook(
+            () =>
+                useGeminiLive(
+                    'system-instruction',
+                    'test-voice',
+                    'en-US',
+                    mockOnTurnComplete,
+                    mockOnEnvironmentChangeRequest,
+                    mockOnArtifactDisplayRequest,
+                    null,
+                ),
+            { wrapper },
         );
 
         expect(result.current.connectionState).toBe(ConnectionState.CONNECTING);
@@ -101,8 +118,18 @@ describe('useGeminiLive', () => {
     });
 
     it('should handle sending a text message', async () => {
-        const { result } = renderHook(() =>
-            useGeminiLive('system-instruction', 'test-voice', 'en-US', mockOnTurnComplete, mockOnEnvironmentChangeRequest, mockOnArtifactDisplayRequest, null)
+        const { result } = renderHook(
+            () =>
+                useGeminiLive(
+                    'system-instruction',
+                    'test-voice',
+                    'en-US',
+                    mockOnTurnComplete,
+                    mockOnEnvironmentChangeRequest,
+                    mockOnArtifactDisplayRequest,
+                    null,
+                ),
+            { wrapper },
         );
 
         await waitFor(() => expect(result.current.connectionState).toBe(ConnectionState.LISTENING));
@@ -129,8 +156,18 @@ describe('useGeminiLive', () => {
             return Promise.resolve(mockLiveSession);
         });
 
-        const { result } = renderHook(() =>
-            useGeminiLive('system-instruction', 'test-voice', 'en-US', mockOnTurnComplete, mockOnEnvironmentChangeRequest, mockOnArtifactDisplayRequest, null)
+        const { result } = renderHook(
+            () =>
+                useGeminiLive(
+                    'system-instruction',
+                    'test-voice',
+                    'en-US',
+                    mockOnTurnComplete,
+                    mockOnEnvironmentChangeRequest,
+                    mockOnArtifactDisplayRequest,
+                    null,
+                ),
+            { wrapper },
         );
 
         await act(async () => {
@@ -170,8 +207,18 @@ describe('useGeminiLive', () => {
             return Promise.resolve(mockLiveSession);
         });
 
-        renderHook(() =>
-            useGeminiLive('system-instruction', 'test-voice', 'en-US', mockOnTurnComplete, mockOnEnvironmentChangeRequest, mockOnArtifactDisplayRequest, null)
+        renderHook(
+            () =>
+                useGeminiLive(
+                    'system-instruction',
+                    'test-voice',
+                    'en-US',
+                    mockOnTurnComplete,
+                    mockOnEnvironmentChangeRequest,
+                    mockOnArtifactDisplayRequest,
+                    null,
+                ),
+            { wrapper },
         );
 
         await act(async () => {
@@ -188,8 +235,18 @@ describe('useGeminiLive', () => {
     });
 
     it('should toggle microphone and update connection state', async () => {
-        const { result } = renderHook(() =>
-            useGeminiLive('system-instruction', 'test-voice', 'en-US', mockOnTurnComplete, mockOnEnvironmentChangeRequest, mockOnArtifactDisplayRequest, null)
+        const { result } = renderHook(
+            () =>
+                useGeminiLive(
+                    'system-instruction',
+                    'test-voice',
+                    'en-US',
+                    mockOnTurnComplete,
+                    mockOnEnvironmentChangeRequest,
+                    mockOnArtifactDisplayRequest,
+                    null,
+                ),
+            { wrapper },
         );
 
         await waitFor(() => expect(result.current.connectionState).toBe(ConnectionState.LISTENING));
@@ -213,8 +270,18 @@ describe('useGeminiLive', () => {
     });
 
     it('should handle disconnect properly', async () => {
-        const { result, unmount } = renderHook(() =>
-            useGeminiLive('system-instruction', 'test-voice', 'en-US', mockOnTurnComplete, mockOnEnvironmentChangeRequest, mockOnArtifactDisplayRequest, null)
+        const { result, unmount } = renderHook(
+            () =>
+                useGeminiLive(
+                    'system-instruction',
+                    'test-voice',
+                    'en-US',
+                    mockOnTurnComplete,
+                    mockOnEnvironmentChangeRequest,
+                    mockOnArtifactDisplayRequest,
+                    null,
+                ),
+            { wrapper },
         );
 
         await waitFor(() => expect(result.current.connectionState).toBe(ConnectionState.LISTENING));
@@ -240,8 +307,18 @@ describe('useGeminiLive', () => {
             return Promise.resolve(mockLiveSession);
         });
 
-        const { result } = renderHook(() =>
-            useGeminiLive('system-instruction', 'test-voice', 'en-US', mockOnTurnComplete, mockOnEnvironmentChangeRequest, mockOnArtifactDisplayRequest, null)
+        const { result } = renderHook(
+            () =>
+                useGeminiLive(
+                    'system-instruction',
+                    'test-voice',
+                    'en-US',
+                    mockOnTurnComplete,
+                    mockOnEnvironmentChangeRequest,
+                    mockOnArtifactDisplayRequest,
+                    null,
+                ),
+            { wrapper },
         );
 
         await waitFor(() => expect(result.current.connectionState).toBe(ConnectionState.LISTENING));
@@ -256,8 +333,18 @@ describe('useGeminiLive', () => {
     });
 
     it('should include quest objective in system instructions if a quest is active', async () => {
-        renderHook(() =>
-            useGeminiLive('system-instruction', 'test-voice', 'en-US', mockOnTurnComplete, mockOnEnvironmentChangeRequest, mockOnArtifactDisplayRequest, mockQuest)
+        renderHook(
+            () =>
+                useGeminiLive(
+                    'system-instruction',
+                    'test-voice',
+                    'en-US',
+                    mockOnTurnComplete,
+                    mockOnEnvironmentChangeRequest,
+                    mockOnArtifactDisplayRequest,
+                    mockQuest,
+                ),
+            { wrapper },
         );
 
         await waitFor(() => {

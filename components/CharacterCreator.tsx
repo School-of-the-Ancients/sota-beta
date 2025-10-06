@@ -4,6 +4,7 @@ import type { Character, PersonaData } from '../types';
 import { AMBIENCE_LIBRARY, AVAILABLE_VOICES } from '../constants';
 import { HISTORICAL_FIGURES_SUGGESTIONS } from '../suggestions';
 import DiceIcon from './icons/DiceIcon';
+import { useApiKey } from '../hooks/useApiKey';
 
 interface CharacterCreatorProps {
   onCharacterCreated: (character: Character) => void;
@@ -38,6 +39,7 @@ function makeFallbackAvatar(name: string, title?: string) {
 }
 
 const CharacterCreator: React.FC<CharacterCreatorProps> = ({ onCharacterCreated, onBack }) => {
+  const { apiKey } = useApiKey();
   const [name, setName] = useState('');
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState('');
@@ -112,8 +114,8 @@ If you are not at least 80% confident in their historicity, set verified to fals
       setLoading(true);
       setMsg('Verifying historical figure…');
 
-      if (!process.env.API_KEY) throw new Error('API_KEY not set.');
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+      if (!apiKey) throw new Error('Enter your Gemini API key to generate new mentors.');
+      const ai = new GoogleGenAI({ apiKey });
 
       const verification = await verifyHistoricalFigure(ai, clean);
 

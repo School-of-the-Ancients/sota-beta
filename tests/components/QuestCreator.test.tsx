@@ -1,8 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
+import type { ReactElement } from 'react';
 import userEvent from '@testing-library/user-event';
 import QuestCreator from '../../components/QuestCreator';
 import { Character } from '../../types';
+import { ApiKeyProvider } from '../../hooks/useApiKey';
 
 // Mock @google/genai
 const mockGenerateContent = vi.fn();
@@ -48,10 +50,22 @@ const mockExistingCharacters: Character[] = [
 describe('QuestCreator', () => {
     beforeEach(() => {
         vi.clearAllMocks();
+        localStorage.clear();
+        localStorage.setItem('school-of-the-ancients-api-key', 'test-key');
     });
 
+    const renderWithProvider = (ui: ReactElement) =>
+        render(<ApiKeyProvider>{ui}</ApiKeyProvider>);
+
     it('should render the form with a text area and select fields', () => {
-        render(<QuestCreator characters={[]} onBack={mockOnBack} onQuestReady={mockOnQuestReady} onCharacterCreated={mockOnCharacterCreated} />);
+        renderWithProvider(
+            <QuestCreator
+                characters={[]}
+                onBack={mockOnBack}
+                onQuestReady={mockOnQuestReady}
+                onCharacterCreated={mockOnCharacterCreated}
+            />
+        );
 
         expect(screen.getByPlaceholderText(/e.g., "Understand backpropagation/)).toBeInTheDocument();
         expect(screen.getByRole('combobox', { name: 'Difficulty' })).toBeInTheDocument();
@@ -62,7 +76,14 @@ describe('QuestCreator', () => {
 
     it('should show an error if the goal is empty on creation', async () => {
         const user = userEvent.setup();
-        render(<QuestCreator characters={[]} onBack={mockOnBack} onQuestReady={mockOnQuestReady} onCharacterCreated={mockOnCharacterCreated} />);
+        renderWithProvider(
+            <QuestCreator
+                characters={[]}
+                onBack={mockOnBack}
+                onQuestReady={mockOnQuestReady}
+                onCharacterCreated={mockOnCharacterCreated}
+            />
+        );
 
         await user.click(screen.getByRole('button', { name: 'Create Quest' }));
 
@@ -79,7 +100,14 @@ describe('QuestCreator', () => {
             .mockResolvedValueOnce({ text: JSON.stringify({ title: 'The Idealist', bio: 'I write dialogues.', greeting: 'Welcome.', timeframe: '4th century BC', expertise: 'Metaphysics', passion: 'Forms', systemInstruction: 'Act as Plato.', suggestedPrompts: ['What is virtue?'], voiceName: 'en-US-Standard-B', voiceAccent: 'en-US', ambienceTag: 'academy' }) });
         mockGenerateImages.mockResolvedValueOnce({ generatedImages: [{ image: { imageBytes: 'fake-portrait-data' } }] });
 
-        render(<QuestCreator characters={mockExistingCharacters} onBack={mockOnBack} onQuestReady={mockOnQuestReady} onCharacterCreated={mockOnCharacterCreated} />);
+        renderWithProvider(
+            <QuestCreator
+                characters={mockExistingCharacters}
+                onBack={mockOnBack}
+                onQuestReady={mockOnQuestReady}
+                onCharacterCreated={mockOnCharacterCreated}
+            />
+        );
 
         await user.type(screen.getByPlaceholderText(/e.g., "Understand backpropagation/), 'Learn about justice');
         await user.click(screen.getByRole('button', { name: 'Create Quest' }));
@@ -102,7 +130,14 @@ describe('QuestCreator', () => {
             .mockResolvedValueOnce({ text: JSON.stringify({ title: 'The Examined Life', description: 'A quest about self-knowledge.', objective: 'Know thyself.', focusPoints: ['Socratic method'], duration: '10-15 min', mentorName: 'Socrates' }) })
             .mockResolvedValueOnce({ text: JSON.stringify({ mentorName: 'Socrates' }) });
 
-        render(<QuestCreator characters={mockExistingCharacters} onBack={mockOnBack} onQuestReady={mockOnQuestReady} onCharacterCreated={mockOnCharacterCreated} />);
+        renderWithProvider(
+            <QuestCreator
+                characters={mockExistingCharacters}
+                onBack={mockOnBack}
+                onQuestReady={mockOnQuestReady}
+                onCharacterCreated={mockOnCharacterCreated}
+            />
+        );
 
         await user.type(screen.getByPlaceholderText(/e.g., "Understand backpropagation/), 'Learn to question everything');
         await user.click(screen.getByRole('button', { name: 'Create Quest' }));
@@ -121,7 +156,14 @@ describe('QuestCreator', () => {
         const errorMessage = 'This goal is not specific enough.';
         mockGenerateContent.mockResolvedValueOnce({ text: JSON.stringify({ meaningful: false, reason: errorMessage }) });
 
-        render(<QuestCreator characters={[]} onBack={mockOnBack} onQuestReady={mockOnQuestReady} onCharacterCreated={mockOnCharacterCreated} />);
+        renderWithProvider(
+            <QuestCreator
+                characters={[]}
+                onBack={mockOnBack}
+                onQuestReady={mockOnQuestReady}
+                onCharacterCreated={mockOnCharacterCreated}
+            />
+        );
 
         await user.type(screen.getByPlaceholderText(/e.g., "Understand backpropagation/), 'asdfasdf');
         await user.click(screen.getByRole('button', { name: 'Create Quest' }));
@@ -134,7 +176,14 @@ describe('QuestCreator', () => {
         const user = userEvent.setup();
         mockGenerateContent.mockRejectedValue(new Error('Network Error'));
 
-        render(<QuestCreator characters={[]} onBack={mockOnBack} onQuestReady={mockOnQuestReady} onCharacterCreated={mockOnCharacterCreated} />);
+        renderWithProvider(
+            <QuestCreator
+                characters={[]}
+                onBack={mockOnBack}
+                onQuestReady={mockOnQuestReady}
+                onCharacterCreated={mockOnCharacterCreated}
+            />
+        );
 
         await user.type(screen.getByPlaceholderText(/e.g., "Understand backpropagation/), 'Learn about APIs');
         await user.click(screen.getByRole('button', { name: 'Create Quest' }));
