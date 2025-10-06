@@ -51,7 +51,9 @@ vi.mock('./hooks/useSupabaseAuth', () => ({
     session: null,
     loading: false,
     isConfigured: true,
-    signIn: vi.fn(),
+    signInWithGoogle: vi.fn(),
+    signInWithPassword: vi.fn(async () => ({ user: mockUser, session: null })),
+    signUpWithPassword: vi.fn(async () => ({ user: mockUser, session: null })),
     signOut: vi.fn(),
   }),
 }));
