@@ -5,29 +5,22 @@ import { ConnectionState, Character } from './types';
 import { QUESTS } from './constants';
 
 // Mock dependencies
-vi.mock('@google/genai', () => {
-  const mockGenerateContent = vi.fn(() => Promise.resolve({
-    text: JSON.stringify({ suggestions: ['suggestion 1', 'suggestion 2', 'suggestion 3'] }),
-  }));
+const mockGenerateContent = vi.fn();
+const mockGenerateImages = vi.fn();
 
-  const mockGenerateImages = vi.fn(() => Promise.resolve({
-    generatedImages: [{ image: { imageBytes: 'fake-image-bytes' } }],
-  }));
-
-  return {
-    GoogleGenAI: vi.fn(() => ({
-      models: {
-        generateContent: mockGenerateContent,
-        generateImages: mockGenerateImages,
-      },
-    })),
-    Type: {
-      OBJECT: 'OBJECT',
-      ARRAY: 'ARRAY',
-      STRING: 'STRING',
+vi.mock('@google/genai', () => ({
+  GoogleGenAI: vi.fn(() => ({
+    models: {
+      generateContent: mockGenerateContent,
+      generateImages: mockGenerateImages,
     },
-  };
-});
+  })),
+  Type: {
+    OBJECT: 'OBJECT',
+    ARRAY: 'ARRAY',
+    STRING: 'STRING',
+  },
+}));
 
 vi.mock('./hooks/useGeminiLive', () => ({
   useGeminiLive: vi.fn(() => ({
@@ -46,6 +39,9 @@ const mockLocalStorage = (() => {
     getItem: (key: string) => store[key] || null,
     setItem: (key: string, value: string) => {
       store[key] = value.toString();
+    },
+    removeItem: (key: string) => {
+      delete store[key];
     },
     clear: () => {
       store = {};
@@ -227,6 +223,71 @@ describe('App', () => {
 
     expect(mockLocalStorage.getItem('school-of-the-ancients-custom-quests')).toBe(JSON.stringify([]));
     expect(mockLocalStorage.getItem('school-of-the-ancients-completed-quests')).toBe(JSON.stringify([]));
+  });
+
+  it('does not un-complete a quest if a user fails it after initially passing', async () => {
+    const questToTest = QUESTS[0];
+    const characterForQuest = {
+      id: questToTest.characterId,
+      name: 'Test Character',
+      title: 'A Test Persona',
+      greeting: 'Hello!',
+      voiceName: 'test-voice',
+      voiceAccent: 'en-US',
+      systemInstruction: 'You are a test character.',
+      portraitUrl: '',
+      ambienceTag: 'none',
+      suggestedPrompts: [],
+    };
+
+    // 1. Initial state: The quest is already completed.
+    mockLocalStorage.setItem('school-of-the-ancients-completed-quests', JSON.stringify([questToTest.id]));
+    mockLocalStorage.setItem('school-of-the-ancients-active-quest-id', questToTest.id);
+    // The character is part of the default set, so we don't need to add it as a custom character.
+    // This prevents a duplicate key warning in React when the character selector is rendered.
+    mockLocalStorage.setItem('school-of-the-ancients-custom-characters', JSON.stringify([]));
+
+    // 2. Mock a failed AI assessment for the quest.
+    const mockFailedAssessment = {
+      passed: false,
+      summary: 'The student did not demonstrate understanding.',
+      evidence: [],
+      improvements: ['Review the core concepts.'],
+    };
+    const mockSummary = {
+      overview: 'A brief conversation.',
+      takeaways: ['A key point.'],
+    };
+    mockGenerateContent
+      .mockResolvedValueOnce({ text: JSON.stringify(mockSummary) })
+      .mockResolvedValueOnce({ text: JSON.stringify(mockFailedAssessment) });
+
+    // Set up the URL to trigger the conversation view with the right character
+    Object.defineProperty(window, 'location', {
+      value: {
+        search: `?character=${characterForQuest.id}`,
+      },
+      writable: true,
+    });
+
+    render(<App />);
+
+    // 3. Find the "End" button and click it to trigger handleEndConversation
+    const endButton = await screen.findByRole('button', { name: /^end$/i });
+    fireEvent.click(endButton);
+
+    // 4. Assert that the quest remains in the completed list.
+    await waitFor(() => {
+      const completedQuests = JSON.parse(
+        mockLocalStorage.getItem('school-of-the-ancients-completed-quests') || '[]'
+      );
+      expect(completedQuests).toContain(questToTest.id);
+    });
+
+    // Also check that the app returns to the selector view
+    await waitFor(() => {
+      expect(screen.getByText(/learning quests/i)).toBeInTheDocument();
+    });
   });
 });
 

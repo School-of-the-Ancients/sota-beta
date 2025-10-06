@@ -687,16 +687,6 @@ Focus only on the student's contributions. Mark passed=true only if the learner 
 
           if (questAssessment.passed) {
             // Quiz will finalize completion status.
-          } else {
-            setCompletedQuests((prev) => {
-              if (!prev.includes(questForSession.id)) {
-                saveCompletedQuests(prev);
-                return prev;
-              }
-              const updated = prev.filter((id) => id !== questForSession.id);
-              saveCompletedQuests(updated);
-              return updated;
-            });
           }
         }
       } else if (questForSession) {
