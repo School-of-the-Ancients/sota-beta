@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { GoogleGenAI, Type } from '@google/genai';
-import type { Character, ConversationTurn, SavedConversation, Quest } from '../types';
-import { useGeminiLive } from '../hooks/useGeminiLive';
+import type { Character, ConversationTurn, SavedConversation, Quest, RealtimeProvider } from '../types';
+import { useRealtimeSession } from '../hooks/useRealtimeSession';
 import { useAmbientAudio } from '../hooks/useAmbientAudio';
 import { ConnectionState } from '../types';
 import { AMBIENCE_LIBRARY } from '../constants';
@@ -14,6 +14,7 @@ import MuteIcon from './icons/MuteIcon';
 import UnmuteIcon from './icons/UnmuteIcon';
 
 const HISTORY_KEY = 'school-of-the-ancients-history';
+const PROVIDER_STORAGE_KEY = 'school-of-the-ancients-provider';
 
 interface ConversationViewProps {
   character: Character;
@@ -115,6 +116,18 @@ const ConversationView: React.FC<ConversationViewProps> = ({
   const [isFetchingSuggestions, setIsFetchingSuggestions] = useState(false);
   const [isGeneratingVisual, setIsGeneratingVisual] = useState(false);
   const [generationMessage, setGenerationMessage] = useState('');
+  const [realtimeProvider, setRealtimeProvider] = useState<RealtimeProvider>(() => {
+    if (typeof window === 'undefined') {
+      return 'gemini';
+    }
+    try {
+      const stored = window.localStorage.getItem(PROVIDER_STORAGE_KEY);
+      return stored === 'openai' ? 'openai' : 'gemini';
+    } catch (error) {
+      console.warn('Failed to read realtime provider preference:', error);
+      return 'gemini';
+    }
+  });
 
   const initialAudioSrc = AMBIENCE_LIBRARY.find(a => a.tag === character.ambienceTag)?.audioSrc ?? null;
   const { isMuted: isAmbienceMuted, toggleMute: toggleAmbienceMute, changeTrack: changeAmbienceTrack } = useAmbientAudio(initialAudioSrc);
@@ -152,6 +165,14 @@ const ConversationView: React.FC<ConversationViewProps> = ({
 
   const sessionIdRef = useRef(`conv_${character.id}_${Date.now()}`);
   const sessionQuestRef = useRef<{ questId?: string; questTitle?: string }>({});
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(PROVIDER_STORAGE_KEY, realtimeProvider);
+    } catch (error) {
+      console.warn('Failed to persist realtime provider preference:', error);
+    }
+  }, [realtimeProvider]);
 
   // Load existing conversation or start a new one with a greeting
   useEffect(() => {
@@ -417,8 +438,9 @@ const ConversationView: React.FC<ConversationViewProps> = ({
     modelTranscription,
     isMicActive,
     toggleMicrophone,
-    sendTextMessage
-  } = useGeminiLive(
+    sendTextMessage,
+  } = useRealtimeSession(
+    realtimeProvider,
     character.systemInstruction,
     character.voiceName,
     character.voiceAccent,
@@ -571,6 +593,20 @@ ${contextTranscript}
                 <div className="absolute -bottom-4 left-1/2 -translate-x-1/2">
                     <StatusIndicator state={connectionState} isMicActive={isMicActive} />
                 </div>
+            </div>
+            <div className="mt-10 w-full max-w-xs">
+              <label className="flex flex-col gap-1 text-left text-gray-300 text-sm">
+                <span className="uppercase text-xs tracking-widest text-amber-300">Realtime Provider</span>
+                <select
+                  value={realtimeProvider}
+                  onChange={(event) => setRealtimeProvider(event.target.value as RealtimeProvider)}
+                  className="bg-gray-800/80 border border-gray-700 rounded-lg px-3 py-2 text-gray-100 focus:outline-none focus:ring-2 focus:ring-amber-400"
+                >
+                  <option value="gemini">Google Gemini Live</option>
+                  <option value="openai">OpenAI Realtime</option>
+                </select>
+                <span className="text-xs text-gray-500">Switch between available realtime assistants without leaving the session.</span>
+              </label>
             </div>
             <h2 className="text-2xl sm:text-3xl font-bold text-amber-200 mt-8">{character.name}</h2>
             <p className="text-gray-400 italic">{character.title}</p>

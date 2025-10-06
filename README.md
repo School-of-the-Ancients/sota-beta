@@ -109,9 +109,15 @@ School of the Ancients is a modern web application that pairs immersive visuals 
    ```bash
    npm install
    ```
-3. Create a `.env` file in the project root and add your Gemini credentials:
+3. Create a `.env` file in the project root and add your Gemini credentials (and optional OpenAI realtime settings):
    ```bash
    GEMINI_API_KEY=your_api_key_here
+   # Optional if you plan to use the OpenAI realtime toggle
+   OPENAI_API_KEY=your_openai_api_key
+   OPENAI_REALTIME_MODEL=gpt-4o-realtime-preview-2024-12-17
+   # Provide a custom websocket host if proxying via your own edge worker
+   # OPENAI_REALTIME_URL=wss://api.openai.com/v1/realtime
+   # OPENAI_ORG_ID=your_org_id_if_required
    ```
 
 ### Running Locally
@@ -137,9 +143,9 @@ Deploy the contents of `dist/` to your static hosting platform of choice.
 
 ## Development Tips
 
-- Vite exposes `process.env.API_KEY` and `process.env.GEMINI_API_KEY` based on the `GEMINI_API_KEY` entry in your `.env` file. Be sure not to commit this file.
+- Vite exposes `process.env.API_KEY` and `process.env.GEMINI_API_KEY` based on the `GEMINI_API_KEY` entry in your `.env` file. When present, OpenAI credentials surface as `process.env.OPENAI_API_KEY`, `process.env.OPENAI_REALTIME_MODEL`, and related variables. Be sure not to commit this file.
 - Shared UI components live in `components/`, while feature views are registered in `App.tsx`.
-- Hooks such as `useGeminiLive` encapsulate audio capture, streaming, and playback logic.
+- Hooks such as `useRealtimeSession` encapsulate audio capture, streaming, and playback logic across Gemini and OpenAI realtime providers.
 - Tailwind utility classes handle layout; extend the Tailwind config before introducing custom CSS.
 - No automated tests exist yet. If you add Vitest or other tooling, expose it through an `npm run test` script.
 
@@ -152,6 +158,7 @@ Deploy the contents of `dist/` to your static hosting platform of choice.
 ## Troubleshooting
 
 - **"API_KEY not set" errors**: Ensure your `.env` file is present and you restarted `npm run dev` after adding it.
+- **"OPENAI_API_KEY environment variable not set" errors**: Either populate the OpenAI fields in your `.env` file or switch the realtime provider toggle back to Gemini.
 - **Microphone permissions**: Clear browser permissions if you accidentally deny access; audio capture is required for real-time chat.
 - **Slow or missing visuals**: Imagen requests can take a few seconds. Watch the developer console for network errors if images do not appear.
 

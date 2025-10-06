@@ -18,6 +18,7 @@ This document outlines the engineering tasks required to implement the features 
 - `ConversationView.tsx`: To integrate the `useAmbientAudio` hook, display the active quest, and trigger the conversation summary generation.
 - `HistoryView.tsx`: To display the new conversation summaries.
 - `hooks/useGeminiLive.ts`: To accept an `activeQuest` and modify the system instruction accordingly.
+- `hooks/useRealtimeSession.ts`: To delegate between Gemini and OpenAI realtime providers without duplicating consumer logic.
 - `types.ts`: To add `summary` and `ambience` to `SavedConversation` and `Character` interfaces, and define the `Quest` interface.
 - `constants.ts`: To define the list of available `QUESTS` and a new `AMBIENCE_LIBRARY`.
 - `components/CharacterSelector.tsx`: To add buttons for accessing the `QuestsView`.

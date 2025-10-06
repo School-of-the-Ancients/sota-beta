@@ -29,8 +29,8 @@ vi.mock('@google/genai', () => {
   };
 });
 
-vi.mock('./hooks/useGeminiLive', () => ({
-  useGeminiLive: vi.fn(() => ({
+vi.mock('./hooks/useRealtimeSession', () => ({
+  useRealtimeSession: vi.fn(() => ({
     connectionState: ConnectionState.CONNECTED,
     userTranscription: '',
     modelTranscription: '',

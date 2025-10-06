@@ -33,17 +33,22 @@ let onArtifactDisplayRequestCallback: (name: string, description: string) => voi
 
 const mockToggleMicrophone = vi.fn();
 const mockSendTextMessage = vi.fn();
-const useGeminiLiveMock = vi.fn();
+const useRealtimeSessionMock = vi.fn();
 
-vi.mock('../../hooks/useGeminiLive', () => ({
-  useGeminiLive: vi.fn((
-    sysInstruction, voice, accent,
-    onTurnComplete, onEnvironmentChange, onArtifactDisplay
+vi.mock('../../hooks/useRealtimeSession', () => ({
+  useRealtimeSession: vi.fn((
+    provider,
+    sysInstruction,
+    voice,
+    accent,
+    onTurnComplete,
+    onEnvironmentChange,
+    onArtifactDisplay,
   ) => {
     onTurnCompleteCallback = onTurnComplete;
     onEnvironmentChangeRequestCallback = onEnvironmentChange;
     onArtifactDisplayRequestCallback = onArtifactDisplay;
-    return useGeminiLiveMock();
+    return useRealtimeSessionMock(provider, sysInstruction, voice, accent);
   }),
 }));
 
@@ -83,7 +88,7 @@ describe('ConversationView', () => {
         vi.spyOn(global, 'setInterval').mockImplementation(vi.fn() as any);
         vi.spyOn(global, 'clearInterval').mockImplementation(vi.fn());
 
-        useGeminiLiveMock.mockReturnValue({
+        useRealtimeSessionMock.mockReturnValue({
             connectionState: ConnectionState.CONNECTED, userTranscription: '', modelTranscription: '',
             isMicActive: true, toggleMicrophone: mockToggleMicrophone, sendTextMessage: mockSendTextMessage,
         });
@@ -191,5 +196,21 @@ describe('ConversationView', () => {
 
         expect(await screen.findByText('Dynamic Suggestion 1')).toBeInTheDocument();
         expect(await screen.findByText('Dynamic Suggestion 2')).toBeInTheDocument();
+    });
+
+    it('allows switching between realtime providers', async () => {
+        const user = userEvent.setup();
+        renderComponent();
+
+        const providerSelect = screen.getByLabelText(/realtime provider/i) as HTMLSelectElement;
+        expect(providerSelect).toBeInTheDocument();
+        expect(providerSelect.value).toBe('gemini');
+        const [initialCall] = useRealtimeSessionMock.mock.calls;
+        expect(initialCall?.[0]).toBe('gemini');
+
+        await user.selectOptions(providerSelect, 'openai');
+
+        expect(providerSelect.value).toBe('openai');
+        expect(window.localStorage.getItem('school-of-the-ancients-provider')).toBe('openai');
     });
 });
