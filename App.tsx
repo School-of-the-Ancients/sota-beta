@@ -9,6 +9,7 @@ import type {
   Summary,
   QuestAssessment,
   QuizResult,
+  UserData,
 } from './types';
 
 import CharacterSelector from './components/CharacterSelector';
@@ -18,123 +19,13 @@ import CharacterCreator from './components/CharacterCreator';
 import QuestsView from './components/QuestsView';
 import Instructions from './components/Instructions';
 import QuestIcon from './components/icons/QuestIcon';
-import QuestCreator from './components/QuestCreator'; // NEW
+import QuestCreator from './components/QuestCreator';
 import QuestQuiz from './components/QuestQuiz';
 
 import { CHARACTERS, QUESTS } from './constants';
-
-const CUSTOM_CHARACTERS_KEY = 'school-of-the-ancients-custom-characters';
-const HISTORY_KEY = 'school-of-the-ancients-history';
-const COMPLETED_QUESTS_KEY = 'school-of-the-ancients-completed-quests';
-const CUSTOM_QUESTS_KEY = 'school-of-the-ancients-custom-quests';
-const ACTIVE_QUEST_KEY = 'school-of-the-ancients-active-quest-id';
-const LAST_QUIZ_RESULT_KEY = 'school-of-the-ancients-last-quiz-result';
-
-// ---- Local storage helpers -------------------------------------------------
-
-const loadConversations = (): SavedConversation[] => {
-  try {
-    const rawHistory = localStorage.getItem(HISTORY_KEY);
-    return rawHistory ? JSON.parse(rawHistory) : [];
-  } catch (error) {
-    console.error('Failed to load conversation history:', error);
-    return [];
-  }
-};
-
-const saveConversationToLocalStorage = (conversation: SavedConversation) => {
-  try {
-    const history = loadConversations();
-    const existingIndex = history.findIndex((c) => c.id === conversation.id);
-    if (existingIndex > -1) {
-      history[existingIndex] = conversation;
-    } else {
-      history.unshift(conversation);
-    }
-    localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
-  } catch (error) {
-    console.error('Failed to save conversation:', error);
-  }
-};
-
-const loadCompletedQuests = (): string[] => {
-  try {
-    const stored = localStorage.getItem(COMPLETED_QUESTS_KEY);
-    return stored ? JSON.parse(stored) : [];
-  } catch (error) {
-    console.error('Failed to load completed quests:', error);
-    return [];
-  }
-};
-
-const saveCompletedQuests = (questIds: string[]) => {
-  try {
-    localStorage.setItem(COMPLETED_QUESTS_KEY, JSON.stringify(questIds));
-  } catch (error) {
-    console.error('Failed to save completed quests:', error);
-  }
-};
-
-const loadCustomQuests = (): Quest[] => {
-  try {
-    const stored = localStorage.getItem(CUSTOM_QUESTS_KEY);
-    return stored ? JSON.parse(stored) : [];
-  } catch (error) {
-    console.error('Failed to load custom quests:', error);
-    return [];
-  }
-};
-
-const saveCustomQuests = (quests: Quest[]) => {
-  try {
-    localStorage.setItem(CUSTOM_QUESTS_KEY, JSON.stringify(quests));
-  } catch (error) {
-    console.error('Failed to save custom quests:', error);
-  }
-};
-
-const loadLastQuizResult = (): QuizResult | null => {
-  try {
-    const stored = localStorage.getItem(LAST_QUIZ_RESULT_KEY);
-    return stored ? JSON.parse(stored) : null;
-  } catch (error) {
-    console.error('Failed to load last quiz result:', error);
-    return null;
-  }
-};
-
-const saveLastQuizResult = (result: QuizResult | null) => {
-  try {
-    if (result) {
-      localStorage.setItem(LAST_QUIZ_RESULT_KEY, JSON.stringify(result));
-    } else {
-      localStorage.removeItem(LAST_QUIZ_RESULT_KEY);
-    }
-  } catch (error) {
-    console.error('Failed to persist last quiz result:', error);
-  }
-};
-
-const loadActiveQuestId = (): string | null => {
-  try {
-    return localStorage.getItem(ACTIVE_QUEST_KEY);
-  } catch (error) {
-    console.error('Failed to load active quest:', error);
-    return null;
-  }
-};
-
-const saveActiveQuestId = (questId: string | null) => {
-  try {
-    if (questId) {
-      localStorage.setItem(ACTIVE_QUEST_KEY, questId);
-    } else {
-      localStorage.removeItem(ACTIVE_QUEST_KEY);
-    }
-  } catch (error) {
-    console.error('Failed to persist active quest:', error);
-  }
-};
+import { useSupabaseAuth } from './hooks/useSupabaseAuth';
+import { useUserData } from './hooks/useUserData';
+import { DEFAULT_USER_DATA } from './supabase/userData';
 
 const updateCharacterQueryParam = (characterId: string, mode: 'push' | 'replace') => {
   try {
@@ -158,27 +49,62 @@ const updateCharacterQueryParam = (characterId: string, mode: 'push' | 'replace'
 // ---- App -------------------------------------------------------------------
 
 const App: React.FC = () => {
+  const { user, loading: authLoading, isConfigured, signIn, signOut } = useSupabaseAuth();
+  const { data: userData, loading: dataLoading, saving: dataSaving, updateData } = useUserData();
+
   const [selectedCharacter, setSelectedCharacter] = useState<Character | null>(null);
   const [view, setView] = useState<
     'selector' | 'conversation' | 'history' | 'creator' | 'quests' | 'questCreator' | 'quiz'
   >('selector');
 
-  const [customCharacters, setCustomCharacters] = useState<Character[]>([]);
-  const [customQuests, setCustomQuests] = useState<Quest[]>([]);
   const [environmentImageUrl, setEnvironmentImageUrl] = useState<string | null>(null);
   const [activeQuest, setActiveQuest] = useState<Quest | null>(null);
   const [resumeConversationId, setResumeConversationId] = useState<string | null>(null);
 
-  // end-conversation save/AI-eval flag
-  const [isSaving, setIsSaving] = useState(false);
+  const [isSavingConversation, setIsSavingConversation] = useState(false);
 
-  const [completedQuests, setCompletedQuests] = useState<string[]>([]);
   const [lastQuestOutcome, setLastQuestOutcome] = useState<QuestAssessment | null>(null);
   const [inProgressQuestIds, setInProgressQuestIds] = useState<string[]>([]);
   const [questCreatorPrefill, setQuestCreatorPrefill] = useState<string | null>(null);
   const [quizQuest, setQuizQuest] = useState<Quest | null>(null);
   const [quizAssessment, setQuizAssessment] = useState<QuestAssessment | null>(null);
-  const [lastQuizResult, setLastQuizResult] = useState<QuizResult | null>(null);
+  const [authPrompt, setAuthPrompt] = useState<string | null>(null);
+
+  const customCharacters = userData.customCharacters;
+  const customQuests = userData.customQuests;
+  const completedQuests = userData.completedQuestIds;
+  const conversationHistory = userData.conversations;
+  const lastQuizResult = userData.lastQuizResult;
+  const isSaving = isSavingConversation || dataSaving;
+  const isAuthenticated = Boolean(user);
+  const isAppLoading = authLoading || dataLoading;
+
+  const requireAuth = useCallback(
+    (message?: string) => {
+      if (isAuthenticated) {
+        return true;
+      }
+
+      const promptMessage = message ?? 'Sign in to continue your journey through history.';
+      setAuthPrompt(promptMessage);
+
+      if (isConfigured) {
+        signIn().catch((error) => {
+          console.error('Supabase sign-in failed', error);
+          setAuthPrompt(error instanceof Error ? error.message : 'Unable to start sign-in.');
+        });
+      }
+
+      return false;
+    },
+    [isAuthenticated, isConfigured, signIn]
+  );
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      setAuthPrompt(null);
+    }
+  }, [isAuthenticated]);
 
   const allQuests = useMemo(() => [...customQuests, ...QUESTS], [customQuests]);
   const lastQuizQuest = useMemo(() => {
@@ -211,33 +137,35 @@ const App: React.FC = () => {
       return;
     }
 
-    setCustomQuests(validQuests);
-    saveCustomQuests(validQuests);
-
-    setCompletedQuests((prev) => {
-      const updated = prev.filter((id) => !removedQuestIds.includes(id));
-      if (updated.length !== prev.length) {
-        saveCompletedQuests(updated);
-        return updated;
-      }
-      return prev;
+    updateData((prev) => {
+      const next: UserData = {
+        ...prev,
+        customQuests: validQuests,
+        completedQuestIds: prev.completedQuestIds.filter((id) => !removedQuestIds.includes(id)),
+        conversations: prev.conversations.map((conversation) => {
+          if (conversation.questId && removedQuestIds.includes(conversation.questId)) {
+            const { questId: _questId, questTitle: _questTitle, ...rest } = conversation;
+            return {
+              ...rest,
+            } as SavedConversation;
+          }
+          return conversation;
+        }),
+        activeQuestId:
+          prev.activeQuestId && removedQuestIds.includes(prev.activeQuestId)
+            ? null
+            : prev.activeQuestId,
+      };
+      return next;
     });
 
     setInProgressQuestIds((prev) => prev.filter((id) => !removedQuestIds.includes(id)));
-
-    setActiveQuest((current) => {
-      if (current && removedQuestIds.includes(current.id)) {
-        saveActiveQuestId(null);
-        return null;
-      }
-      return current;
-    });
-  }, [customQuests, customCharacters]);
+    setActiveQuest((current) => (current && removedQuestIds.includes(current.id) ? null : current));
+  }, [customQuests, customCharacters, updateData]);
 
   const syncQuestProgress = useCallback(() => {
-    const history = loadConversations();
     const inProgress = new Set<string>();
-    history.forEach((conversation) => {
+    conversationHistory.forEach((conversation) => {
       if (!conversation.questId) return;
       if (conversation.questAssessment?.passed) return;
       if (conversation.transcript && conversation.transcript.length > 1) {
@@ -245,90 +173,95 @@ const App: React.FC = () => {
       }
     });
     setInProgressQuestIds(Array.from(inProgress));
-  }, []);
+  }, [conversationHistory]);
 
   // On mount: load saved characters, url param character, and progress
   useEffect(() => {
-    let loadedCustomCharacters: Character[] = [];
-    let loadedCustomQuests: Quest[] = [];
-    try {
-      const storedCharacters = localStorage.getItem(CUSTOM_CHARACTERS_KEY);
-      if (storedCharacters) {
-        loadedCustomCharacters = JSON.parse(storedCharacters);
-        setCustomCharacters(loadedCustomCharacters);
+    if (isAppLoading) {
+      return;
+    }
+
+    const allCharacters = [...customCharacters, ...CHARACTERS];
+    const availableQuests = [...customQuests, ...QUESTS];
+
+    let nextActiveQuest: Quest | null = null;
+    if (userData.activeQuestId) {
+      nextActiveQuest = availableQuests.find((quest) => quest.id === userData.activeQuestId) ?? null;
+    }
+
+    setActiveQuest(nextActiveQuest);
+
+    if (!selectedCharacter) {
+      let characterToSelect: Character | null = null;
+
+      if (nextActiveQuest) {
+        characterToSelect = allCharacters.find((c) => c.id === nextActiveQuest?.characterId) ?? null;
       }
-    } catch (e) {
-      console.error('Failed to load custom characters:', e);
-    }
 
-    loadedCustomQuests = loadCustomQuests();
-    if (loadedCustomQuests.length > 0) {
-      setCustomQuests(loadedCustomQuests);
-    }
-
-    const allCharacters = [...loadedCustomCharacters, ...CHARACTERS];
-    const availableQuests = [...loadedCustomQuests, ...QUESTS];
-
-    let characterToSelect: Character | null = null;
-
-    const storedActiveQuestId = loadActiveQuestId();
-    if (storedActiveQuestId) {
-      const storedQuest = availableQuests.find((quest) => quest.id === storedActiveQuestId) || null;
-      if (storedQuest) {
-        setActiveQuest(storedQuest);
-        const questCharacter = allCharacters.find((c) => c.id === storedQuest.characterId) || null;
-        if (questCharacter) {
-          characterToSelect = questCharacter;
-        } else {
-          console.warn(`Character with ID ${storedQuest.characterId} not found for stored active quest.`);
-          saveActiveQuestId(null);
+      if (!characterToSelect) {
+        const urlParams = new URLSearchParams(window.location.search);
+        const characterId = urlParams.get('character');
+        if (characterId) {
+          characterToSelect = allCharacters.find((c) => c.id === characterId) ?? null;
         }
-      } else {
-        saveActiveQuestId(null);
+      }
+
+      if (characterToSelect) {
+        setSelectedCharacter(characterToSelect);
+        setView('conversation');
+        updateCharacterQueryParam(characterToSelect.id, 'replace');
       }
     }
 
-    const urlParams = new URLSearchParams(window.location.search);
-    const characterId = urlParams.get('character');
-    if (!characterToSelect && characterId) {
-      const characterFromUrl = allCharacters.find((c) => c.id === characterId);
-      if (characterFromUrl) {
-        characterToSelect = characterFromUrl;
-      }
-    }
-
-    if (characterToSelect) {
-      setSelectedCharacter(characterToSelect);
-      setView('conversation');
-      updateCharacterQueryParam(characterToSelect.id, 'replace');
-    }
-
-    setCompletedQuests(loadCompletedQuests());
-    const storedQuizResult = loadLastQuizResult();
-    if (storedQuizResult) {
-      setLastQuizResult(storedQuizResult);
-    }
     syncQuestProgress();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [syncQuestProgress]);
+  }, [
+    customCharacters,
+    customQuests,
+    isAppLoading,
+    selectedCharacter,
+    syncQuestProgress,
+    userData.activeQuestId,
+  ]);
+
+  useEffect(() => {
+    if (!isAuthenticated) {
+      setSelectedCharacter(null);
+      setActiveQuest(null);
+      setView('selector');
+      setResumeConversationId(null);
+      setEnvironmentImageUrl(null);
+    }
+  }, [isAuthenticated]);
 
   // ---- Navigation helpers ----
 
   const handleSelectCharacter = (character: Character) => {
+    if (!requireAuth('Sign in to start a new conversation.')) {
+      return;
+    }
     setSelectedCharacter(character);
     setView('conversation');
     setActiveQuest(null); // clear any quest when directly picking a character
-    saveActiveQuestId(null);
+    updateData((prev) => ({
+      ...prev,
+      activeQuestId: null,
+    }));
     setResumeConversationId(null);
     updateCharacterQueryParam(character.id, 'push');
   };
 
   const handleSelectQuest = (quest: Quest) => {
+    if (!requireAuth('Sign in to embark on a quest.')) {
+      return;
+    }
     const allCharacters = [...customCharacters, ...CHARACTERS];
     const characterForQuest = allCharacters.find((c) => c.id === quest.characterId);
     if (characterForQuest) {
       setActiveQuest(quest);
-      saveActiveQuestId(quest.id);
+      updateData((prev) => ({
+        ...prev,
+        activeQuestId: quest.id,
+      }));
       setSelectedCharacter(characterForQuest);
       setView('conversation');
       setResumeConversationId(null);
@@ -339,6 +272,9 @@ const App: React.FC = () => {
   };
 
   const handleContinueQuest = (questId: string | undefined) => {
+    if (!requireAuth('Sign in to resume your quest.')) {
+      return;
+    }
     if (!questId) {
       return;
     }
@@ -351,6 +287,9 @@ const App: React.FC = () => {
   };
 
   const handleResumeConversation = (conversation: SavedConversation) => {
+    if (!requireAuth('Sign in to view your saved conversations.')) {
+      return;
+    }
     const allCharacters = [...customCharacters, ...CHARACTERS];
     const characterToResume = allCharacters.find((c) => c.id === conversation.characterId);
 
@@ -367,15 +306,24 @@ const App: React.FC = () => {
       const questToResume = allQuests.find((quest) => quest.id === conversation.questId);
       if (questToResume) {
         setActiveQuest(questToResume);
-        saveActiveQuestId(questToResume.id);
+        updateData((prev) => ({
+          ...prev,
+          activeQuestId: questToResume.id,
+        }));
       } else {
         console.warn(`Quest with ID ${conversation.questId} not found while resuming conversation.`);
         setActiveQuest(null);
-        saveActiveQuestId(null);
+        updateData((prev) => ({
+          ...prev,
+          activeQuestId: null,
+        }));
       }
     } else {
       setActiveQuest(null);
-      saveActiveQuestId(null);
+      updateData((prev) => ({
+        ...prev,
+        activeQuestId: null,
+      }));
     }
 
     setView('conversation');
@@ -383,30 +331,88 @@ const App: React.FC = () => {
     updateCharacterQueryParam(characterToResume.id, 'push');
   };
 
+  const handleConversationUpdate = useCallback(
+    (conversation: SavedConversation) => {
+      updateData((prev) => {
+        const existingIndex = prev.conversations.findIndex((item) => item.id === conversation.id);
+        const nextHistory = [...prev.conversations];
+        if (existingIndex > -1) {
+          nextHistory[existingIndex] = conversation;
+        } else {
+          nextHistory.unshift(conversation);
+        }
+
+        return {
+          ...prev,
+          conversations: nextHistory,
+        };
+      });
+    },
+    [updateData]
+  );
+
+  const handleDeleteConversation = useCallback(
+    (conversationId: string) => {
+      updateData((prev) => ({
+        ...prev,
+        conversations: prev.conversations.filter((conversation) => conversation.id !== conversationId),
+      }));
+    },
+    [updateData]
+  );
+
   const handleCharacterCreated = (newCharacter: Character) => {
-    const updatedCharacters = [newCharacter, ...customCharacters];
-    setCustomCharacters(updatedCharacters);
-    try {
-      localStorage.setItem(CUSTOM_CHARACTERS_KEY, JSON.stringify(updatedCharacters));
-    } catch (e) {
-      console.error('Failed to save custom character:', e);
+    if (!requireAuth('Sign in to save your custom ancient.')) {
+      return;
     }
-    handleSelectCharacter(newCharacter);
+    updateData((prev) => ({
+      ...prev,
+      customCharacters: [newCharacter, ...prev.customCharacters],
+      activeQuestId: null,
+    }));
+    setSelectedCharacter(newCharacter);
+    setView('conversation');
+    setActiveQuest(null);
+    setResumeConversationId(null);
+    updateCharacterQueryParam(newCharacter.id, 'push');
   };
 
   const handleDeleteCharacter = (characterId: string) => {
-    if (window.confirm('Are you sure you want to permanently delete this ancient?')) {
-      const updatedCharacters = customCharacters.filter((c) => c.id !== characterId);
-      setCustomCharacters(updatedCharacters);
-      try {
-        localStorage.setItem(CUSTOM_CHARACTERS_KEY, JSON.stringify(updatedCharacters));
-      } catch (e) {
-        console.error('Failed to delete custom character:', e);
-      }
+    if (!requireAuth('Sign in to manage your roster of ancients.')) {
+      return;
     }
+    if (!window.confirm('Are you sure you want to permanently delete this ancient?')) {
+      return;
+    }
+
+    const questsToRemove = customQuests.filter((quest) => quest.characterId === characterId).map((quest) => quest.id);
+
+    updateData((prev) => {
+      const remainingCharacters = prev.customCharacters.filter((c) => c.id !== characterId);
+      const remainingQuests = prev.customQuests.filter((quest) => quest.characterId !== characterId);
+      const remainingConversations = prev.conversations.filter((conversation) => conversation.characterId !== characterId);
+      const remainingCompleted = prev.completedQuestIds.filter((id) => !questsToRemove.includes(id));
+      const nextActiveQuestId =
+        prev.activeQuestId && questsToRemove.includes(prev.activeQuestId) ? null : prev.activeQuestId;
+
+      return {
+        ...prev,
+        customCharacters: remainingCharacters,
+        customQuests: remainingQuests,
+        completedQuestIds: remainingCompleted,
+        conversations: remainingConversations,
+        activeQuestId: nextActiveQuestId,
+      };
+    });
+
+    setSelectedCharacter((current) => (current?.id === characterId ? null : current));
+    setActiveQuest((current) => (current && current.characterId === characterId ? null : current));
   };
 
   const handleDeleteQuest = (questId: string) => {
+    if (!requireAuth('Sign in to update your quest log.')) {
+      return;
+    }
     const questToDelete = customQuests.find((quest) => quest.id === questId);
     if (!questToDelete) {
       return;
@@ -417,26 +423,29 @@ const App: React.FC = () => {
       return;
     }
 
-    setCustomQuests((prev) => {
-      const updated = prev.filter((quest) => quest.id !== questId);
-      saveCustomQuests(updated);
-      return updated;
-    });
-
-    setCompletedQuests((prev) => {
-      if (!prev.includes(questId)) {
-        return prev;
-      }
-      const updated = prev.filter((id) => id !== questId);
-      saveCompletedQuests(updated);
-      return updated;
-    });
+    updateData((prev) => ({
+      ...prev,
+      customQuests: prev.customQuests.filter((quest) => quest.id !== questId),
+      completedQuestIds: prev.completedQuestIds.filter((id) => id !== questId),
+      conversations: prev.conversations.map((conversation) => {
+        if (conversation.questId !== questId) {
+          return conversation;
+        }
+        const { questAssessment: _questAssessment, ...rest } = conversation;
+        return {
+          ...rest,
+          questId: undefined,
+          questTitle: undefined,
+          questAssessment: undefined,
+        };
+      }),
+      activeQuestId: prev.activeQuestId === questId ? null : prev.activeQuestId,
+    }));
 
     setInProgressQuestIds((prev) => prev.filter((id) => id !== questId));
 
     setActiveQuest((current) => {
       if (current?.id === questId) {
-        saveActiveQuestId(null);
         return null;
       }
       return current;
@@ -444,11 +453,24 @@ const App: React.FC = () => {
   };
 
   const openQuestCreator = (goal?: string | null) => {
+    if (!requireAuth('Sign in to design new quests.')) {
+      return;
+    }
     setQuestCreatorPrefill(goal ?? null);
     setView('questCreator');
   };
 
+  const openCharacterCreatorView = useCallback(() => {
+    if (!requireAuth('Sign in to create a new ancient.')) {
+      return;
+    }
+    setView('creator');
+  }, [requireAuth]);
+
   const handleCreateQuestFromNextSteps = (steps: string[], questTitle?: string) => {
+    if (!requireAuth('Sign in to turn feedback into new quests.')) {
+      return;
+    }
     const trimmedSteps = steps.map((step) => step.trim()).filter(Boolean);
     if (trimmedSteps.length === 0) {
       openQuestCreator();
@@ -466,21 +488,26 @@ const App: React.FC = () => {
 
   // NEW: handle a freshly-generated quest & mentor from QuestCreator
   const startGeneratedQuest = (quest: Quest, mentor: Character) => {
+    if (!requireAuth('Sign in to embark on your generated quest.')) {
+      return;
+    }
     setQuestCreatorPrefill(null);
-    setCustomQuests((prev) => {
-      const existingIndex = prev.findIndex((q) => q.id === quest.id);
-      let updated: Quest[];
+    updateData((prev) => {
+      const existingIndex = prev.customQuests.findIndex((q) => q.id === quest.id);
+      let updatedCustomQuests: Quest[];
       if (existingIndex > -1) {
-        updated = [...prev];
-        updated[existingIndex] = quest;
+        updatedCustomQuests = [...prev.customQuests];
+        updatedCustomQuests[existingIndex] = quest;
       } else {
-        updated = [quest, ...prev];
+        updatedCustomQuests = [quest, ...prev.customQuests];
       }
-      saveCustomQuests(updated);
-      return updated;
+      return {
+        ...prev,
+        customQuests: updatedCustomQuests,
+        activeQuestId: quest.id,
+      };
     });
     setActiveQuest(quest);
-    saveActiveQuestId(quest.id);
     setSelectedCharacter(mentor);
     setView('conversation');
     setResumeConversationId(null);
@@ -494,33 +521,31 @@ const App: React.FC = () => {
   };
 
   const handleQuizComplete = (result: QuizResult) => {
-    const quest = quizQuest;
-    if (quest) {
-      if (result.passed) {
-        setCompletedQuests((prev) => {
-          if (prev.includes(quest.id)) {
-            saveCompletedQuests(prev);
-            return prev;
-          }
-          const updated = [...prev, quest.id];
-          saveCompletedQuests(updated);
-          return updated;
-        });
-      } else {
-        setCompletedQuests((prev) => {
-          if (!prev.includes(quest.id)) {
-            saveCompletedQuests(prev);
-            return prev;
-          }
-          const updated = prev.filter((id) => id !== quest.id);
-          saveCompletedQuests(updated);
-          return updated;
-        });
-      }
+    if (!requireAuth('Sign in to track quiz results.')) {
+      setQuizQuest(null);
+      setQuizAssessment(null);
+      setView('selector');
+      return;
     }
+    const quest = quizQuest;
+    updateData((prev) => {
+      let updatedCompleted = [...prev.completedQuestIds];
+      if (quest) {
+        const alreadyCompleted = updatedCompleted.includes(quest.id);
+        if (result.passed && !alreadyCompleted) {
+          updatedCompleted = [...updatedCompleted, quest.id];
+        }
+        if (!result.passed && alreadyCompleted) {
+          updatedCompleted = updatedCompleted.filter((id) => id !== quest.id);
+        }
+      }
 
-    setLastQuizResult(result);
-    saveLastQuizResult(result);
+      return {
+        ...prev,
+        completedQuestIds: updatedCompleted,
+        lastQuizResult: result,
+      };
+    });
     setQuizQuest(null);
     setQuizAssessment(null);
     setView('selector');
@@ -544,9 +569,12 @@ const App: React.FC = () => {
   };
 
   // ---- End conversation: summarize & (if quest) evaluate mastery ----
-  const handleEndConversation = async (transcript: ConversationTurn[], sessionId: string) => {
+    const handleEndConversation = async (transcript: ConversationTurn[], sessionId: string) => {
     if (!selectedCharacter) return;
-    setIsSaving(true);
+    if (!requireAuth('Sign in to save your conversation.')) {
+      return;
+    }
+    setIsSavingConversation(true);
     let questAssessment: QuestAssessment | null = null;
     const questForSession = activeQuest;
 
@@ -556,7 +584,6 @@ const App: React.FC = () => {
     }
 
     try {
-      const conversationHistory = loadConversations();
       const existingConversation = conversationHistory.find((c) => c.id === sessionId);
 
       let updatedConversation: SavedConversation =
@@ -593,7 +620,6 @@ const App: React.FC = () => {
         ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       }
 
-      // Conversation summary (skip first system/greeting turn)
       if (ai && transcript.length > 1) {
         const transcriptText = transcript
           .slice(1)
@@ -601,10 +627,7 @@ const App: React.FC = () => {
           .join('\n\n');
 
         if (transcriptText.trim()) {
-          const prompt = `Please summarize the following educational dialogue with ${selectedCharacter.name}. Provide a concise one-paragraph overview of the key topics discussed, and then list 3-5 of the most important takeaways or concepts as bullet points.
-
-Dialogue:
-${transcriptText}`;
+          const prompt = `Please summarize the following educational dialogue with ${selectedCharacter.name}. Provide a concise one-paragraph overview of the key topics discussed, and then list 3-5 of the most important takeaways or concepts as bullet points.\n\nDialogue:\n${transcriptText}`;
 
           const response = await ai.models.generateContent({
             model: 'gemini-2.5-flash',
@@ -635,22 +658,11 @@ ${transcriptText}`;
         }
       }
 
-      // If this was a quest session, evaluate mastery
       if (ai && questForSession) {
         const questTranscriptText = transcript.map((turn) => `${turn.speakerName}: ${turn.text}`).join('\n\n');
 
         if (questTranscriptText.trim()) {
-          const evaluationPrompt = `You are a meticulous mentor evaluating whether a student has mastered the quest "${questForSession.title}". Review the conversation transcript between the mentor and student. Determine if the student demonstrates a working understanding of the quest objective: "${questForSession.objective}".
-
-Return a JSON object with this structure:
-{
-  "passed": boolean,
-  "summary": string,          // one or two sentences explaining your verdict in plain language
-  "evidence": string[],       // bullet-friendly phrases citing what the student said that shows understanding
-  "improvements": string[]    // actionable suggestions if the student has gaps (empty if passed)
-}
-
-Focus only on the student's contributions. Mark passed=true only if the learner clearly articulates key ideas from the objective.`;
+          const evaluationPrompt = `You are a meticulous mentor evaluating whether a student has mastered the quest "${questForSession.title}". Review the conversation transcript between the mentor and student. Determine if the student demonstrates a working understanding of the quest objective: "${questForSession.objective}".\n\nReturn a JSON object with this structure:\n{\n  "passed": boolean,\n  "summary": string,          // one or two sentences explaining your verdict in plain language\n  "evidence": string[],       // bullet-friendly phrases citing what the student said that shows understanding\n  "improvements": string[]    // actionable suggestions if the student has gaps (empty if passed)\n}\n\nFocus only on the student's contributions. Mark passed=true only if the learner clearly articulates key ideas from the objective.`;
 
           const evaluationResponse = await ai.models.generateContent({
             model: 'gemini-2.5-flash',
@@ -684,23 +696,8 @@ Focus only on the student's contributions. Mark passed=true only if the learner 
             ...updatedConversation,
             questAssessment,
           };
-
-          if (questAssessment.passed) {
-            // Quiz will finalize completion status.
-          } else {
-            setCompletedQuests((prev) => {
-              if (!prev.includes(questForSession.id)) {
-                saveCompletedQuests(prev);
-                return prev;
-              }
-              const updated = prev.filter((id) => id !== questForSession.id);
-              saveCompletedQuests(updated);
-              return updated;
-            });
-          }
         }
       } else if (questForSession) {
-        // Ensure quest metadata is retained even without AI assistance.
         updatedConversation = {
           ...updatedConversation,
           questId: questForSession.id,
@@ -708,14 +705,46 @@ Focus only on the student's contributions. Mark passed=true only if the learner 
         };
       }
 
-      saveConversationToLocalStorage(updatedConversation);
+      updateData((prev) => {
+        const existingIndex = prev.conversations.findIndex((conversation) => conversation.id === updatedConversation.id);
+        const nextHistory = [...prev.conversations];
+        if (existingIndex > -1) {
+          nextHistory[existingIndex] = updatedConversation;
+        } else {
+          nextHistory.unshift(updatedConversation);
+        }
+
+        let nextCompleted = [...prev.completedQuestIds];
+        if (questForSession) {
+          const alreadyCompleted = nextCompleted.includes(questForSession.id);
+          if (questAssessment?.passed) {
+            if (!alreadyCompleted) {
+              nextCompleted.push(questForSession.id);
+            }
+          } else if (alreadyCompleted) {
+            nextCompleted = nextCompleted.filter((id) => id !== questForSession.id);
+          }
+        }
+
+        return {
+          ...prev,
+          conversations: nextHistory,
+          completedQuestIds: nextCompleted,
+        };
+      });
+
+      if (questAssessment) {
+        setLastQuestOutcome(questAssessment);
+      } else {
+        setLastQuestOutcome(null);
+      }
+
       syncQuestProgress();
     } catch (error) {
       console.error('Failed to finalize conversation:', error);
     } finally {
-      setIsSaving(false);
+      setIsSavingConversation(false);
       if (questAssessment) {
-        setLastQuestOutcome(questAssessment);
         if (questAssessment.passed && questForSession) {
           setQuizQuest(questForSession);
           setQuizAssessment(questAssessment);
@@ -723,16 +752,16 @@ Focus only on the student's contributions. Mark passed=true only if the learner 
         } else {
           setView('selector');
         }
-      } else if (questForSession) {
-        setLastQuestOutcome(null);
-        setView('selector');
       } else {
         setView('selector');
       }
       setSelectedCharacter(null);
       setEnvironmentImageUrl(null);
       setActiveQuest(null);
-      saveActiveQuestId(null);
+      updateData((prev) => ({
+        ...prev,
+        activeQuestId: null,
+      }));
       setResumeConversationId(null);
       window.history.pushState({}, '', window.location.pathname);
     }
@@ -752,6 +781,8 @@ Focus only on the student's contributions. Mark passed=true only if the learner 
             activeQuest={activeQuest}
             isSaving={isSaving} // pass saving state
             resumeConversationId={resumeConversationId}
+            conversationHistory={conversationHistory}
+            onConversationUpdate={handleConversationUpdate}
           />
         ) : null;
       case 'history':
@@ -760,6 +791,8 @@ Focus only on the student's contributions. Mark passed=true only if the learner 
             onBack={() => setView('selector')}
             onResumeConversation={handleResumeConversation}
             onCreateQuestFromNextSteps={handleCreateQuestFromNextSteps}
+            history={conversationHistory}
+            onDeleteConversation={handleDeleteConversation}
           />
         );
       case 'creator':
@@ -796,11 +829,13 @@ Focus only on the student's contributions. Mark passed=true only if the learner 
             onBack={handleBack}
             onQuestReady={handleQuestReady}
             onCharacterCreated={(newChar) => {
-              const updated = [newChar, ...customCharacters];
-              setCustomCharacters(updated);
-              try {
-                localStorage.setItem(CUSTOM_CHARACTERS_KEY, JSON.stringify(updated));
-              } catch {}
+              if (!requireAuth('Sign in to save your custom ancient.')) {
+                return;
+              }
+              updateData((prev) => ({
+                ...prev,
+                customCharacters: [newChar, ...prev.customCharacters],
+              }));
             }}
             initialGoal={questCreatorPrefill ?? undefined}
           />
@@ -982,7 +1017,7 @@ Focus only on the student's contributions. Mark passed=true only if the learner 
 
             <div className="flex flex-col sm:flex-row justify-center items-center gap-4 mb-12">
               <button
-                onClick={() => setView('quests')}
+                onClick={openQuestsView}
                 className="flex items-center gap-3 bg-amber-600 hover:bg-amber-500 text-black font-bold py-3 px-8 rounded-lg transition-colors duration-300 text-lg w-full sm:w-auto"
               >
                 <QuestIcon className="w-6 h-6" />
@@ -990,7 +1025,7 @@ Focus only on the student's contributions. Mark passed=true only if the learner 
               </button>
 
               <button
-                onClick={() => setView('history')}
+                onClick={openHistoryView}
                 className="bg-gray-700 hover:bg-gray-600 text-amber-300 font-bold py-3 px-8 rounded-lg transition-colors duration-300 border border-gray-600 w-full sm:w-auto"
               >
                 View Conversation History
@@ -1010,13 +1045,42 @@ Focus only on the student's contributions. Mark passed=true only if the learner 
             <CharacterSelector
               characters={[...customCharacters, ...CHARACTERS]}
               onSelectCharacter={handleSelectCharacter}
-              onStartCreation={() => setView('creator')}
+              onStartCreation={openCharacterCreatorView}
               onDeleteCharacter={handleDeleteCharacter}
             />
           </div>
         );
     }
   };
+
+  const handleSignInClick = useCallback(() => {
+    if (isAuthenticated) {
+      signOut().catch((error) => {
+        console.error('Sign out failed', error);
+        setAuthPrompt(error instanceof Error ? error.message : 'Unable to sign out.');
+      });
+      return;
+    }
+
+    setAuthPrompt('Sign in to personalize your ancient studies.');
+    requireAuth();
+  }, [isAuthenticated, requireAuth, signOut]);
+
+  const userEmail = user?.email ?? (user?.user_metadata as { email?: string })?.email;
+
+  const openHistoryView = useCallback(() => {
+    if (!requireAuth('Sign in to review your past conversations.')) {
+      return;
+    }
+    setView('history');
+  }, [requireAuth]);
+
+  const openQuestsView = useCallback(() => {
+    if (!requireAuth('Sign in to manage your quests.')) {
+      return;
+    }
+    setView('quests');
+  }, [requireAuth]);
 
   return (
     <div className="relative min-h-screen bg-[#1a1a1a]">
@@ -1030,14 +1094,33 @@ Focus only on the student's contributions. Mark passed=true only if the learner 
         className="relative z-10 min-h-screen flex flex-col text-gray-200 font-serif p-4 sm:p-6 lg:p-8"
         style={{ background: environmentImageUrl ? 'transparent' : 'linear-gradient(to bottom right, #1a1a1a, #2b2b2b)' }}
       >
-        <header className="text-center mb-8">
-          <h1
-            className="text-4xl sm:text-5xl md:text-6xl font-bold text-amber-300 tracking-wider"
-            style={{ textShadow: '0 0 10px rgba(252, 211, 77, 0.5)' }}
-          >
-            School of the Ancients
-          </h1>
-          <p className="text-gray-400 mt-2 text-lg">Old world wisdom. New world classroom.</p>
+        <header className="mb-8">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div className="text-center sm:text-left">
+              <h1
+                className="text-4xl sm:text-5xl md:text-6xl font-bold text-amber-300 tracking-wider"
+                style={{ textShadow: '0 0 10px rgba(252, 211, 77, 0.5)' }}
+              >
+                School of the Ancients
+              </h1>
+              <p className="text-gray-400 mt-2 text-lg">Old world wisdom. New world classroom.</p>
+            </div>
+            <div className="flex flex-col sm:items-end gap-2">
+              {userEmail && (
+                <span className="text-sm text-gray-300">Signed in as {userEmail}</span>
+              )}
+              <button
+                type="button"
+                onClick={handleSignInClick}
+                className="self-center sm:self-end inline-flex items-center gap-2 rounded-md border border-amber-400/60 px-4 py-2 text-sm font-semibold text-amber-200 hover:bg-amber-500/10"
+              >
+                {isAuthenticated ? 'Sign out' : 'Sign in'}
+              </button>
+              {!isAuthenticated && authPrompt && (
+                <p className="text-xs text-amber-300 max-w-xs text-center sm:text-right">{authPrompt}</p>
+              )}
+            </div>
+          </div>
         </header>
 
         <main className="max-w-7xl w-full mx-auto flex-grow flex flex-col">{renderContent()}</main>

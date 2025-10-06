@@ -1,8 +1,9 @@
+import React from 'react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, act, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import ConversationView from '../../components/ConversationView';
-import { ConnectionState, Character } from '../../types';
+import { ConnectionState, Character, SavedConversation } from '../../types';
 
 // Mocks
 vi.mock('../../constants', () => ({
@@ -66,12 +67,20 @@ const mockCharacter: Character = {
 
 const mockOnEndConversation = vi.fn();
 const mockOnEnvironmentUpdate = vi.fn();
+const mockOnConversationUpdate = vi.fn();
 
-const renderComponent = (props = {}) => {
+const renderComponent = (props: Partial<React.ComponentProps<typeof ConversationView>> = {}) => {
+    const baseHistory: SavedConversation[] = props.conversationHistory ?? [];
     return render(
         <ConversationView
-            character={mockCharacter} onEndConversation={mockOnEndConversation}
-            onEnvironmentUpdate={mockOnEnvironmentUpdate} activeQuest={null} isSaving={false} {...props}
+            character={mockCharacter}
+            onEndConversation={mockOnEndConversation}
+            onEnvironmentUpdate={mockOnEnvironmentUpdate}
+            activeQuest={null}
+            isSaving={false}
+            {...props}
+            conversationHistory={baseHistory}
+            onConversationUpdate={mockOnConversationUpdate}
         />
     );
 };
@@ -79,7 +88,6 @@ const renderComponent = (props = {}) => {
 describe('ConversationView', () => {
     beforeEach(() => {
         vi.clearAllMocks();
-        localStorage.clear();
         vi.spyOn(global, 'setInterval').mockImplementation(vi.fn() as any);
         vi.spyOn(global, 'clearInterval').mockImplementation(vi.fn());
 

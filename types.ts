@@ -119,3 +119,13 @@ export interface Quest {
   duration: string;
   focusPoints: string[];
 }
+
+export interface UserData {
+  customCharacters: Character[];
+  customQuests: Quest[];
+  conversations: SavedConversation[];
+  completedQuestIds: string[];
+  activeQuestId: string | null;
+  lastQuizResult: QuizResult | null;
+  migratedAt?: string | null;
+}

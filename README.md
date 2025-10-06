@@ -53,7 +53,7 @@ School of the Ancients is a modern web application that pairs immersive visuals 
 - **Curated quest board** &mdash; Pick from ready-to-run quests, each linking a legendary mentor with a focused learning objective and estimated duration.
 - **Quest-aware conversations** &mdash; When a quest is active, the mentor keeps you on track, surfaces scene changes, and captures artifacts tied to the objective.
 - **Automatic mastery reviews** &mdash; Ending a quest triggers an AI assessment of your transcript, summarizing what you grasped, what evidence proves it, and what to revisit.
-- **Progress tracking** &mdash; Completed quest IDs persist in `localStorage`, powering progress meters and keeping your accomplishments pinned between sessions.
+- **Progress tracking** &mdash; Completed quest IDs persist in your Supabase user profile, powering progress meters and keeping accomplishments pinned between sessions on any device.
 
 ### Custom Mentors & Quest Builder
 
@@ -63,7 +63,7 @@ School of the Ancients is a modern web application that pairs immersive visuals 
 
 ### Progression & Reflection
 
-- **Conversation history** &mdash; Sessions, transcripts, artifacts, and environments are stored in browser `localStorage` for later review or resuming quests.
+- **Conversation history** &mdash; Sessions, transcripts, artifacts, and environments are stored with your Supabase account for later review or resuming quests on any signed-in browser.
 - **Quest dossiers** &mdash; Each AI review summarizes mastery, highlights evidence, and recommends improvements so you can iterate on your learning plan.
 - **Responsive design** &mdash; Tailwind CSS keeps the UI beautiful and accessible on mobile, tablet, and desktop displays.
 
@@ -114,6 +114,24 @@ School of the Ancients is a modern web application that pairs immersive visuals 
    GEMINI_API_KEY=your_api_key_here
    ```
 
+4. Configure Supabase authentication and persistence by adding the following Vite environment variables to `.env`:
+   ```bash
+   VITE_SUPABASE_URL=https://your-project-id.supabase.co
+   VITE_SUPABASE_ANON_KEY=your_public_anon_key
+   ```
+
+   In Supabase, create a `user_data` table with the following schema to store per-user state:
+
+   ```sql
+   create table public.user_data (
+     user_id uuid primary key references auth.users(id) on delete cascade,
+     data jsonb not null default '{}'::jsonb,
+     migrated_at timestamptz
+   );
+   ```
+
+   The application writes the entire profile (custom characters, quests, conversations, quest progress, and quiz history) into the `data` column. The optional `migrated_at` timestamp marks when a user first migrated from local storage.
+
 ### Running Locally
 
 Start the Vite development server:
@@ -121,6 +139,8 @@ Start the Vite development server:
 ```bash
 npm run dev
 ```
+
+When the app loads, use the **Sign in** button in the top right corner to authenticate with Supabase. Authenticated sessions unlock quest progress syncing, history, and custom content across browsers.
 
 Visit the printed URL (defaults to http://localhost:3000) and grant the browser microphone access when prompted.
 
@@ -146,6 +166,7 @@ Deploy the contents of `dist/` to your static hosting platform of choice.
 ## Project Resources
 
 - [`implementation.md`](implementation.md) &mdash; Deep-dive notes about system design choices and future ideas.
+- [`docs/ACCOUNT_PERSISTENCE_FOUNDATION.md`](docs/ACCOUNT_PERSISTENCE_FOUNDATION.md) &mdash; Supabase auth/persistence architecture, security policies, and migration playbook for Phase 1.
 - [`docs/`](docs/) &mdash; Additional reference material and design explorations.
 - [`audio/`](audio/) &mdash; Placeholder directory for local experimentation (do not commit generated artifacts).
 
