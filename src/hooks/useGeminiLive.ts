@@ -120,13 +120,13 @@ const changeEnvironmentFunctionDeclaration: FunctionDeclaration = {
   };
 
 export const useGeminiLive = (
-    systemInstruction: string,
-    voiceName: string,
-    voiceAccent?: string,
-    onTurnComplete: (turn: { user: string; model: string }) => void,
-    onEnvironmentChangeRequest: (description: string) => void,
-    onArtifactDisplayRequest: (name: string, description: string) => void,
-    activeQuest: Quest | null,
+  systemInstruction: string,
+  voiceName: string,
+  onTurnComplete: (turn: { user: string; model: string }) => void,
+  onEnvironmentChangeRequest: (description: string) => void,
+  onArtifactDisplayRequest: (name: string, description: string) => void,
+  activeQuest: Quest | null,
+  voiceAccent?: string,
 ) => {
     const [connectionState, setConnectionState] = useState<ConnectionState>(ConnectionState.IDLE);
     const [userTranscription, setUserTranscription] = useState<string>('');

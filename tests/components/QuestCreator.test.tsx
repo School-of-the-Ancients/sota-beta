@@ -1,8 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import QuestCreator from '../../components/QuestCreator';
-import { Character } from '../../types';
+import QuestCreator from '@/components/QuestCreator';
+import { Character } from '@/types';
 
 // Mock @google/genai
 const mockGenerateContent = vi.fn();

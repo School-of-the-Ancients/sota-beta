@@ -9,6 +9,7 @@
       "DOM",
       "DOM.Iterable"
     ],
+    "composite": true,
     "skipLibCheck": true,
     "types": [
       "node"
@@ -20,7 +21,7 @@
     "jsx": "react-jsx",
     "paths": {
       "@/*": [
-        "./*"
+        "./src/*"
       ]
     },
     "allowImportingTsExtensions": true,

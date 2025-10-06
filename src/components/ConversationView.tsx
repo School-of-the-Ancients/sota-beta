@@ -5,6 +5,7 @@ import { useGeminiLive } from '../hooks/useGeminiLive';
 import { useAmbientAudio } from '../hooks/useAmbientAudio';
 import { ConnectionState } from '../types';
 import { AMBIENCE_LIBRARY } from '../constants';
+import { loadConversations, saveConversation } from '../lib/storage';
 import MicrophoneIcon from './icons/MicrophoneIcon';
 import MicrophoneOffIcon from './icons/MicrophoneOffIcon';
 import WaveformIcon from './icons/WaveformIcon';
@@ -13,42 +14,15 @@ import SendIcon from './icons/SendIcon';
 import MuteIcon from './icons/MuteIcon';
 import UnmuteIcon from './icons/UnmuteIcon';
 
-const HISTORY_KEY = 'school-of-the-ancients-history';
-
 interface ConversationViewProps {
   character: Character;
-  onEndConversation: (transcript: ConversationTurn[], sessionId: string) => void;
+  onEndConversation: (transcript: ConversationTurn[], sessionId: string) => void | Promise<void>;
   environmentImageUrl: string | null;
   onEnvironmentUpdate: (url: string | null) => void;
   activeQuest: Quest | null;
   isSaving: boolean;
   resumeConversationId?: string | null;
 }
-
-const loadConversations = (): SavedConversation[] => {
-  try {
-    const rawHistory = localStorage.getItem(HISTORY_KEY);
-    return rawHistory ? JSON.parse(rawHistory) : [];
-  } catch (error) {
-    console.error("Failed to load conversation history:", error);
-    return [];
-  }
-};
-
-const saveConversationToLocalStorage = (conversation: SavedConversation) => {
-  try {
-    const history = loadConversations();
-    const existingIndex = history.findIndex(c => c.id === conversation.id);
-    if (existingIndex > -1) {
-      history[existingIndex] = conversation;
-    } else {
-      history.unshift(conversation);
-    }
-    localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
-  } catch (error) {
-    console.error("Failed to save conversation:", error);
-  }
-};
 
 const StatusIndicator: React.FC<{ state: ConnectionState; isMicActive: boolean }> = ({ state, isMicActive }) => {
   let statusText = 'Ready';
@@ -421,11 +395,11 @@ const ConversationView: React.FC<ConversationViewProps> = ({
   } = useGeminiLive(
     character.systemInstruction,
     character.voiceName,
-    character.voiceAccent,
     handleTurnComplete,
     handleEnvironmentChange,
     handleArtifactDisplay,
     activeQuest,
+    character.voiceAccent,
   );
 
   const updateDynamicSuggestions = useCallback(async (currentTranscript: ConversationTurn[]) => {
@@ -502,7 +476,7 @@ ${contextTranscript}
           }
         : {}),
     };
-    saveConversationToLocalStorage(conversation);
+    saveConversation(conversation);
   }, [transcript, character, environmentImageUrl, activeQuest]);
 
   const handleReset = () => {
@@ -537,7 +511,7 @@ ${contextTranscript}
                 }
               : {}),
         };
-        saveConversationToLocalStorage(clearedConversation);
+        saveConversation(clearedConversation);
     }
   };
 

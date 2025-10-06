@@ -1,11 +1,11 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, act, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import ConversationView from '../../components/ConversationView';
-import { ConnectionState, Character } from '../../types';
+import ConversationView from '@/components/ConversationView';
+import { ConnectionState, Character } from '@/types';
 
 // Mocks
-vi.mock('../../constants', () => ({
+vi.mock('@/constants', () => ({
     AMBIENCE_LIBRARY: [
         { tag: 'agora', audioSrc: 'agora.mp3' },
         { tag: 'forest', audioSrc: 'forest.mp3' },
@@ -35,7 +35,7 @@ const mockToggleMicrophone = vi.fn();
 const mockSendTextMessage = vi.fn();
 const useGeminiLiveMock = vi.fn();
 
-vi.mock('../../hooks/useGeminiLive', () => ({
+vi.mock('@/hooks/useGeminiLive', () => ({
   useGeminiLive: vi.fn((
     sysInstruction, voice, accent,
     onTurnComplete, onEnvironmentChange, onArtifactDisplay
@@ -49,7 +49,7 @@ vi.mock('../../hooks/useGeminiLive', () => ({
 
 const mockToggleAmbienceMute = vi.fn();
 const mockChangeAmbienceTrack = vi.fn();
-vi.mock('../../hooks/useAmbientAudio', () => ({
+vi.mock('@/hooks/useAmbientAudio', () => ({
   useAmbientAudio: () => ({
     isMuted: false,
     toggleMute: mockToggleAmbienceMute,
@@ -58,10 +58,20 @@ vi.mock('../../hooks/useAmbientAudio', () => ({
 }));
 
 const mockCharacter: Character = {
-    id: 'char-1', name: 'Socrates', title: 'The Gadfly of Athens',
-    greeting: 'What is it you seek to understand?', systemInstruction: 'You are Socrates.',
-    voiceName: 'socrates-voice', portraitUrl: 'socrates.png',
-    suggestedPrompts: ['What is justice?', 'What is courage?'], ambienceTag: 'agora',
+    id: 'char-1',
+    name: 'Socrates',
+    title: 'The Gadfly of Athens',
+    greeting: 'What is it you seek to understand?',
+    systemInstruction: 'You are Socrates.',
+    voiceName: 'socrates-voice',
+    voiceAccent: 'en-GR',
+    portraitUrl: 'socrates.png',
+    suggestedPrompts: ['What is justice?', 'What is courage?'],
+    ambienceTag: 'agora',
+    bio: 'A classical philosopher known for questioning.',
+    timeframe: '5th century BCE',
+    expertise: 'Philosophy',
+    passion: 'Seeking truth',
 };
 
 const mockOnEndConversation = vi.fn();

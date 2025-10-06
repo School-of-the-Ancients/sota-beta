@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import CharacterCreator from '../../components/CharacterCreator';
+import CharacterCreator from '@/components/CharacterCreator';
 
 // Mock @google/genai
 const mockGenerateContent = vi.fn();
@@ -23,7 +23,7 @@ vi.mock('@google/genai', () => ({
 }));
 
 // Mock constants
-vi.mock('../../suggestions', () => ({
+vi.mock('@/suggestions', () => ({
     HISTORICAL_FIGURES_SUGGESTIONS: ['Socrates', 'Plato', 'Aristotle'],
 }));
 

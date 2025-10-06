@@ -1,5 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
+
 import App from './App';
 import { ConnectionState, Character } from './types';
 import { QUESTS } from './constants';
@@ -68,6 +70,13 @@ Object.defineProperty(window, 'history', {
   writable: true
 });
 
+const renderWithRouter = (initialEntries: string[] = ['/']) =>
+  render(
+    <MemoryRouter initialEntries={initialEntries}>
+      <App />
+    </MemoryRouter>,
+  );
+
 describe('App', () => {
   beforeEach(() => {
     mockLocalStorage.clear();
@@ -82,14 +91,13 @@ describe('App', () => {
     });
     window.IntersectionObserver = mockIntersectionObserver;
 
-    // @ts-expect-error
     window.AudioContext = vi.fn().mockImplementation(() => ({
-        createGain: vi.fn(() => ({ gain: { setValueAtTime: vi.fn() }, connect: vi.fn() })),
-        createBufferSource: vi.fn(() => ({ connect: vi.fn(), start: vi.fn(), stop: vi.fn() })),
-        decodeAudioData: vi.fn(),
-        resume: vi.fn(),
-        suspend: vi.fn(),
-    }));
+      createGain: vi.fn(() => ({ gain: { setValueAtTime: vi.fn() }, connect: vi.fn() })),
+      createBufferSource: vi.fn(() => ({ connect: vi.fn(), start: vi.fn(), stop: vi.fn() })),
+      decodeAudioData: vi.fn(),
+      resume: vi.fn(),
+      suspend: vi.fn(),
+    })) as unknown as typeof AudioContext;
 
     window.HTMLMediaElement.prototype.play = vi.fn(() => Promise.resolve());
     window.HTMLMediaElement.prototype.pause = vi.fn();
@@ -101,6 +109,10 @@ describe('App', () => {
       name: 'Custom Character',
       title: 'A Test Persona',
       greeting: 'Hello from the test suite.',
+      bio: 'A synthetic persona for testing.',
+      timeframe: '21st century',
+      expertise: 'Testing',
+      passion: 'Quality assurance',
       voiceName: 'test-voice',
       voiceAccent: 'en-US',
       systemInstruction: 'You are a test character.',
@@ -116,14 +128,7 @@ describe('App', () => {
     );
 
     // Set up the URL search parameter
-    Object.defineProperty(window, 'location', {
-        value: {
-            search: `?character=${customCharacter.id}`
-        },
-        writable: true
-    });
-
-    render(<App />);
+    renderWithRouter([`/conversation?character=${customCharacter.id}`]);
 
     // The app should switch to the conversation view and display the character's name
     await waitFor(() => {
@@ -153,16 +158,9 @@ describe('App', () => {
     mockLocalStorage.setItem('school-of-the-ancients-completed-quests', JSON.stringify([]));
     mockLocalStorage.setItem('school-of-the-ancients-custom-characters', JSON.stringify([]));
 
-    Object.defineProperty(window, 'location', {
-      value: {
-        search: '',
-      },
-      writable: true,
-    });
-
     const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
 
-    render(<App />);
+    renderWithRouter();
 
     await waitFor(() => {
       expect(
@@ -217,7 +215,7 @@ describe('App', () => {
       writable: true,
     });
 
-    render(<App />);
+    renderWithRouter();
 
     await waitFor(() => {
       expect(
