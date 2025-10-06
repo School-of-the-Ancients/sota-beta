@@ -109,7 +109,7 @@ School of the Ancients is a modern web application that pairs immersive visuals 
    ```bash
    npm install
    ```
-3. Create a `.env` file in the project root and add your Gemini credentials:
+3. (Optional) Create a `.env` file in the project root and add your Gemini credentials. The dev server will preload this value into your browser, but production visitors will paste their own key in the UI prompt:
    ```bash
    GEMINI_API_KEY=your_api_key_here
    ```
@@ -137,7 +137,7 @@ Deploy the contents of `dist/` to your static hosting platform of choice.
 
 ## Development Tips
 
-- Vite exposes `process.env.API_KEY` and `process.env.GEMINI_API_KEY` based on the `GEMINI_API_KEY` entry in your `.env` file. Be sure not to commit this file.
+- Use the **Add API Key** button in the top-right corner of the app to manage credentials. Keys are stored only in your browser's local storage. Supplying `GEMINI_API_KEY` in a local `.env` file seeds that storage for convenience during development.
 - Shared UI components live in `components/`, while feature views are registered in `App.tsx`.
 - Hooks such as `useGeminiLive` encapsulate audio capture, streaming, and playback logic.
 - Tailwind utility classes handle layout; extend the Tailwind config before introducing custom CSS.
@@ -151,7 +151,7 @@ Deploy the contents of `dist/` to your static hosting platform of choice.
 
 ## Troubleshooting
 
-- **"API_KEY not set" errors**: Ensure your `.env` file is present and you restarted `npm run dev` after adding it.
+- **API key prompts keep appearing**: Click **Add API Key** and paste a valid Gemini key. The modal stays open until one is saved; you can also remove or update the stored key from the same dialog.
 - **Microphone permissions**: Clear browser permissions if you accidentally deny access; audio capture is required for real-time chat.
 - **Slow or missing visuals**: Imagen requests can take a few seconds. Watch the developer console for network errors if images do not appear.
 

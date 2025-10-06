@@ -127,6 +127,7 @@ export const useGeminiLive = (
     onEnvironmentChangeRequest: (description: string) => void,
     onArtifactDisplayRequest: (name: string, description: string) => void,
     activeQuest: Quest | null,
+    apiKey: string | null,
 ) => {
     const [connectionState, setConnectionState] = useState<ConnectionState>(ConnectionState.IDLE);
     const [userTranscription, setUserTranscription] = useState<string>('');
@@ -301,14 +302,14 @@ export const useGeminiLive = (
     const connect = useCallback(async () => {
         setConnectionState(ConnectionState.CONNECTING);
 
-        if (!process.env.API_KEY) {
-            console.error("API_KEY environment variable not set.");
-            setConnectionState(ConnectionState.ERROR);
+        if (!apiKey) {
+            console.warn('API key not set. Skipping Gemini Live connection attempt.');
+            setConnectionState(ConnectionState.IDLE);
             return;
         }
 
         try {
-            const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+            const ai = new GoogleGenAI({ apiKey });
 
             const sanitizedAccent = voiceAccent?.trim();
             let baseInstruction = systemInstruction.trim();
@@ -584,7 +585,7 @@ export const useGeminiLive = (
             console.error('Failed to connect to Gemini Live:', error);
             setConnectionState(ConnectionState.ERROR);
         }
-    }, [systemInstruction, voiceName, voiceAccent, activeQuest, disconnect]);
+    }, [systemInstruction, voiceName, voiceAccent, activeQuest, disconnect, apiKey]);
 
     useEffect(() => {
         connect();

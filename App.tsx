@@ -20,8 +20,10 @@ import Instructions from './components/Instructions';
 import QuestIcon from './components/icons/QuestIcon';
 import QuestCreator from './components/QuestCreator'; // NEW
 import QuestQuiz from './components/QuestQuiz';
+import ApiKeyModal from './components/ApiKeyModal';
 
 import { CHARACTERS, QUESTS } from './constants';
+import { useApiKey } from './hooks/useApiKey';
 
 const CUSTOM_CHARACTERS_KEY = 'school-of-the-ancients-custom-characters';
 const HISTORY_KEY = 'school-of-the-ancients-history';
@@ -158,6 +160,7 @@ const updateCharacterQueryParam = (characterId: string, mode: 'push' | 'replace'
 // ---- App -------------------------------------------------------------------
 
 const App: React.FC = () => {
+  const { apiKey, setApiKey, clearApiKey } = useApiKey();
   const [selectedCharacter, setSelectedCharacter] = useState<Character | null>(null);
   const [view, setView] = useState<
     'selector' | 'conversation' | 'history' | 'creator' | 'quests' | 'questCreator' | 'quiz'
@@ -179,6 +182,13 @@ const App: React.FC = () => {
   const [quizQuest, setQuizQuest] = useState<Quest | null>(null);
   const [quizAssessment, setQuizAssessment] = useState<QuestAssessment | null>(null);
   const [lastQuizResult, setLastQuizResult] = useState<QuizResult | null>(null);
+  const [isApiKeyModalOpen, setIsApiKeyModalOpen] = useState(!apiKey);
+
+  useEffect(() => {
+    if (!apiKey) {
+      setIsApiKeyModalOpen(true);
+    }
+  }, [apiKey]);
 
   const allQuests = useMemo(() => [...customQuests, ...QUESTS], [customQuests]);
   const lastQuizQuest = useMemo(() => {
@@ -587,10 +597,10 @@ const App: React.FC = () => {
       }
 
       let ai: GoogleGenAI | null = null;
-      if (!process.env.API_KEY) {
-        console.error('API_KEY not set, skipping summary and quest assessment.');
+      if (!apiKey) {
+        console.error('API key not set, skipping summary and quest assessment.');
       } else {
-        ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+        ai = new GoogleGenAI({ apiKey });
       }
 
       // Conversation summary (skip first system/greeting turn)
@@ -1030,6 +1040,15 @@ Focus only on the student's contributions. Mark passed=true only if the learner 
         className="relative z-10 min-h-screen flex flex-col text-gray-200 font-serif p-4 sm:p-6 lg:p-8"
         style={{ background: environmentImageUrl ? 'transparent' : 'linear-gradient(to bottom right, #1a1a1a, #2b2b2b)' }}
       >
+        <div className="absolute right-4 top-4 flex gap-2">
+          <button
+            type="button"
+            onClick={() => setIsApiKeyModalOpen(true)}
+            className="rounded-lg border border-amber-400/60 px-3 py-1.5 text-xs font-semibold uppercase tracking-wide text-amber-200 transition hover:bg-amber-500/10"
+          >
+            {apiKey ? 'Update API Key' : 'Add API Key'}
+          </button>
+        </div>
         <header className="text-center mb-8">
           <h1
             className="text-4xl sm:text-5xl md:text-6xl font-bold text-amber-300 tracking-wider"
@@ -1042,6 +1061,23 @@ Focus only on the student's contributions. Mark passed=true only if the learner 
 
         <main className="max-w-7xl w-full mx-auto flex-grow flex flex-col">{renderContent()}</main>
       </div>
+      <ApiKeyModal
+        isOpen={isApiKeyModalOpen}
+        onClose={() => {
+          if (apiKey) {
+            setIsApiKeyModalOpen(false);
+          }
+        }}
+        onSave={(key) => {
+          setApiKey(key);
+          setIsApiKeyModalOpen(false);
+        }}
+        onClear={() => {
+          clearApiKey();
+          setIsApiKeyModalOpen(true);
+        }}
+        existingKey={apiKey}
+      />
     </div>
   );
 };

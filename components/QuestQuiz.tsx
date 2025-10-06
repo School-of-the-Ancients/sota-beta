@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { GoogleGenAI, Type } from '@google/genai';
 import type { Quest, QuizQuestion, QuizResult, QuestAssessment } from '../types';
+import { useApiKey } from '../hooks/useApiKey';
 
 interface QuestQuizProps {
   quest: Quest;
@@ -51,6 +52,7 @@ const validateQuestions = (data: unknown): QuizQuestion[] => {
 };
 
 const QuestQuiz: React.FC<QuestQuizProps> = ({ quest, assessment, onExit, onComplete }) => {
+  const { apiKey } = useApiKey();
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [questions, setQuestions] = useState<QuizQuestion[]>([]);
@@ -138,14 +140,15 @@ const QuestQuiz: React.FC<QuestQuizProps> = ({ quest, assessment, onExit, onComp
       setIsLoading(true);
       resetState();
 
-      if (!process.env.API_KEY) {
+      if (!apiKey) {
         setQuestions(buildFallbackQuestions());
+        setError('Add your Gemini API key to generate adaptive quiz questions. Showing defaults instead.');
         setIsLoading(false);
         return;
       }
 
       try {
-        const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+        const ai = new GoogleGenAI({ apiKey });
         const prompt = `You are an expert tutor creating a short mastery quiz. Design ${questionCount} multiple-choice questions (3-4 answer choices each) to evaluate whether a learner has mastered the quest "${quest.title}". The quest objective is: "${quest.objective}". Focus on these key learning points: ${quest.focusPoints.join('; ')}. Each question must test one learning point.
 
 Return JSON with this schema:
@@ -213,7 +216,7 @@ Ensure questions are rigorous but clear, avoid trick questions, and keep the ans
     return () => {
       isCancelled = true;
     };
-  }, [buildFallbackQuestions, questionCount, quest.focusPoints, quest.objective, quest.title, refreshToken, resetState]);
+  }, [apiKey, buildFallbackQuestions, questionCount, quest.focusPoints, quest.objective, quest.title, refreshToken, resetState]);
 
   const handleSelect = (questionId: string, optionIndex: number) => {
     setAnswers((prev) => ({ ...prev, [questionId]: optionIndex }));

@@ -109,6 +109,7 @@ const ConversationView: React.FC<ConversationViewProps> = ({
   isSaving,
   resumeConversationId,
 }) => {
+  const { apiKey } = useApiKey();
   const [transcript, setTranscript] = useState<ConversationTurn[]>([]);
   const [textInput, setTextInput] = useState('');
   const [dynamicSuggestions, setDynamicSuggestions] = useState<string[]>([]);
@@ -288,8 +289,8 @@ const ConversationView: React.FC<ConversationViewProps> = ({
     setIsGeneratingVisual(true);
     setGenerationMessage(`Entering ${description}...`);
     try {
-      if (!process.env.API_KEY) throw new Error("API_KEY not set.");
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+      if (!apiKey) throw new Error('API key not set.');
+      const ai = new GoogleGenAI({ apiKey });
       
       const imagePromise = ai.models.generateImages({
         model: 'imagen-4.0-generate-001',
@@ -350,7 +351,7 @@ const ConversationView: React.FC<ConversationViewProps> = ({
     } finally {
       setIsGeneratingVisual(false);
     }
-  }, [onEnvironmentUpdate, character, changeAmbienceTrack]);
+  }, [onEnvironmentUpdate, character, changeAmbienceTrack, apiKey]);
 
   const handleArtifactDisplay = useCallback(async (name: string, description: string) => {
     const artifactId = `artifact_${Date.now()}`;
@@ -366,8 +367,8 @@ const ConversationView: React.FC<ConversationViewProps> = ({
     setGenerationMessage(`Creating ${name}...`);
 
     try {
-        if (!process.env.API_KEY) throw new Error("API_KEY not set.");
-        const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+        if (!apiKey) throw new Error('API key not set.');
+        const ai = new GoogleGenAI({ apiKey });
         const response = await ai.models.generateImages({
             model: 'imagen-4.0-generate-001',
             prompt: `A detailed, clear image of: a "${name}". ${description}. The artifact should be rendered in a style authentic to ${character.name}'s era and work (e.g., a da Vinci sketch, a 19th-century diagram, a classical Greek sculpture). Present it on a simple, non-distracting background like aged parchment or a museum display.`,
@@ -408,7 +409,7 @@ const ConversationView: React.FC<ConversationViewProps> = ({
     } finally {
         setIsGeneratingVisual(false);
     }
-  }, [character]);
+  }, [character, apiKey]);
 
 
   const {
@@ -426,14 +427,15 @@ const ConversationView: React.FC<ConversationViewProps> = ({
     handleEnvironmentChange,
     handleArtifactDisplay,
     activeQuest,
+    apiKey,
   );
 
   const updateDynamicSuggestions = useCallback(async (currentTranscript: ConversationTurn[]) => {
     if (currentTranscript.length === 0) return;
     setIsFetchingSuggestions(true);
     try {
-        if (!process.env.API_KEY) throw new Error("API_KEY not set.");
-        const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+        if (!apiKey) throw new Error('API key not set.');
+        const ai = new GoogleGenAI({ apiKey });
 
         const contextTranscript = currentTranscript.slice(-4).map(turn => `${turn.speakerName}: ${turn.text}`).join('\n');
 
@@ -475,7 +477,7 @@ ${contextTranscript}
     } finally {
         setIsFetchingSuggestions(false);
     }
-  }, [character.name]);
+  }, [character.name, apiKey]);
 
   const requestDynamicSuggestions = useCallback(() => {
     updateDynamicSuggestions(transcript);
@@ -755,3 +757,4 @@ ${contextTranscript}
 };
 
 export default ConversationView;
+import { useApiKey } from '../hooks/useApiKey';
