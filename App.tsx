@@ -29,6 +29,7 @@ const COMPLETED_QUESTS_KEY = 'school-of-the-ancients-completed-quests';
 const CUSTOM_QUESTS_KEY = 'school-of-the-ancients-custom-quests';
 const ACTIVE_QUEST_KEY = 'school-of-the-ancients-active-quest-id';
 const LAST_QUIZ_RESULT_KEY = 'school-of-the-ancients-last-quiz-result';
+const API_KEY_STORAGE_KEY = 'school-of-the-ancients-api-key';
 
 // ---- Local storage helpers -------------------------------------------------
 
@@ -136,6 +137,15 @@ const saveActiveQuestId = (questId: string | null) => {
   }
 };
 
+const loadStoredApiKey = (): string => {
+  try {
+    return localStorage.getItem(API_KEY_STORAGE_KEY) ?? '';
+  } catch (error) {
+    console.error('Failed to load stored API key:', error);
+    return '';
+  }
+};
+
 const updateCharacterQueryParam = (characterId: string, mode: 'push' | 'replace') => {
   try {
     const params = new URLSearchParams(window.location.search);
@@ -163,6 +173,10 @@ const App: React.FC = () => {
     'selector' | 'conversation' | 'history' | 'creator' | 'quests' | 'questCreator' | 'quiz'
   >('selector');
 
+  const [apiKey, setApiKey] = useState<string>('');
+  const [apiKeyInput, setApiKeyInput] = useState('');
+  const [apiKeyStatus, setApiKeyStatus] = useState<'idle' | 'saved' | 'cleared' | 'error'>('idle');
+
   const [customCharacters, setCustomCharacters] = useState<Character[]>([]);
   const [customQuests, setCustomQuests] = useState<Quest[]>([]);
   const [environmentImageUrl, setEnvironmentImageUrl] = useState<string | null>(null);
@@ -180,6 +194,57 @@ const App: React.FC = () => {
   const [quizAssessment, setQuizAssessment] = useState<QuestAssessment | null>(null);
   const [lastQuizResult, setLastQuizResult] = useState<QuizResult | null>(null);
 
+  useEffect(() => {
+    const storedKey = loadStoredApiKey();
+    setApiKey(storedKey);
+    setApiKeyInput(storedKey);
+  }, []);
+
+  useEffect(() => {
+    if (apiKeyStatus === 'idle') {
+      return;
+    }
+    const timeout = window.setTimeout(() => setApiKeyStatus('idle'), 3500);
+    return () => window.clearTimeout(timeout);
+  }, [apiKeyStatus]);
+
+  const handleApiKeySubmit = useCallback(
+    (event: React.FormEvent<HTMLFormElement>) => {
+      event.preventDefault();
+      const trimmed = apiKeyInput.trim();
+
+      try {
+        if (trimmed) {
+          localStorage.setItem(API_KEY_STORAGE_KEY, trimmed);
+          setApiKey(trimmed);
+          setApiKeyInput(trimmed);
+          setApiKeyStatus('saved');
+        } else {
+          localStorage.removeItem(API_KEY_STORAGE_KEY);
+          setApiKey('');
+          setApiKeyInput('');
+          setApiKeyStatus('cleared');
+        }
+      } catch (error) {
+        console.error('Failed to persist API key:', error);
+        setApiKeyStatus('error');
+      }
+    },
+    [apiKeyInput]
+  );
+
+  const handleApiKeyClear = useCallback(() => {
+    try {
+      localStorage.removeItem(API_KEY_STORAGE_KEY);
+      setApiKey('');
+      setApiKeyInput('');
+      setApiKeyStatus('cleared');
+    } catch (error) {
+      console.error('Failed to remove API key:', error);
+      setApiKeyStatus('error');
+    }
+  }, []);
+
   const allQuests = useMemo(() => [...customQuests, ...QUESTS], [customQuests]);
   const lastQuizQuest = useMemo(() => {
     if (!lastQuizResult) {
@@ -187,6 +252,8 @@ const App: React.FC = () => {
     }
     return allQuests.find((quest) => quest.id === lastQuizResult.questId) ?? null;
   }, [allQuests, lastQuizResult]);
+
+  const isApiKeySet = Boolean(apiKey);
 
   useEffect(() => {
     if (customQuests.length === 0) {
@@ -587,10 +654,10 @@ const App: React.FC = () => {
       }
 
       let ai: GoogleGenAI | null = null;
-      if (!process.env.API_KEY) {
-        console.error('API_KEY not set, skipping summary and quest assessment.');
+      if (!apiKey) {
+        console.warn('Gemini API key not set, skipping summary and quest assessment.');
       } else {
-        ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+        ai = new GoogleGenAI({ apiKey });
       }
 
       // Conversation summary (skip first system/greeting turn)
@@ -743,17 +810,31 @@ Focus only on the student's contributions. Mark passed=true only if the learner 
   const renderContent = () => {
     switch (view) {
       case 'conversation':
-        return selectedCharacter ? (
+        if (!selectedCharacter) {
+          return null;
+        }
+        if (!isApiKeySet) {
+          return (
+            <div className="mx-auto max-w-3xl text-center text-gray-300">
+              <h2 className="text-2xl font-semibold text-amber-200 mb-3">Gemini API key required</h2>
+              <p className="text-lg">
+                Paste your Gemini API key above to start speaking with {selectedCharacter.name}.
+              </p>
+            </div>
+          );
+        }
+        return (
           <ConversationView
             character={selectedCharacter}
             onEndConversation={handleEndConversation}
             environmentImageUrl={environmentImageUrl}
             onEnvironmentUpdate={setEnvironmentImageUrl}
             activeQuest={activeQuest}
-            isSaving={isSaving} // pass saving state
+            isSaving={isSaving}
             resumeConversationId={resumeConversationId}
+            apiKey={apiKey}
           />
-        ) : null;
+        );
       case 'history':
         return (
           <HistoryView
@@ -763,7 +844,13 @@ Focus only on the student's contributions. Mark passed=true only if the learner 
           />
         );
       case 'creator':
-        return <CharacterCreator onCharacterCreated={handleCharacterCreated} onBack={() => setView('selector')} />;
+        return (
+          <CharacterCreator
+            onCharacterCreated={handleCharacterCreated}
+            onBack={() => setView('selector')}
+            apiKey={apiKey}
+          />
+        );
       case 'quests': {
         const allCharacters = [...customCharacters, ...CHARACTERS];
         return (
@@ -803,6 +890,7 @@ Focus only on the student's contributions. Mark passed=true only if the learner 
               } catch {}
             }}
             initialGoal={questCreatorPrefill ?? undefined}
+            apiKey={apiKey}
           />
         );
       }
@@ -813,6 +901,7 @@ Focus only on the student's contributions. Mark passed=true only if the learner 
             assessment={quizAssessment}
             onExit={handleQuizExit}
             onComplete={handleQuizComplete}
+            apiKey={apiKey}
           />
         ) : (
           <div className="text-center text-gray-300">
@@ -1038,6 +1127,61 @@ Focus only on the student's contributions. Mark passed=true only if the learner 
             School of the Ancients
           </h1>
           <p className="text-gray-400 mt-2 text-lg">Old world wisdom. New world classroom.</p>
+          <div className="max-w-3xl mx-auto mt-6 text-left">
+            <form
+              onSubmit={handleApiKeySubmit}
+              className="bg-gray-800/60 border border-gray-700 rounded-lg p-4 shadow-lg"
+            >
+              <label
+                htmlFor="gemini-api-key"
+                className="block text-sm font-semibold text-gray-200 mb-2 tracking-wide"
+              >
+                Gemini API key
+              </label>
+              <div className="flex flex-col sm:flex-row gap-3">
+                <input
+                  id="gemini-api-key"
+                  type="password"
+                  value={apiKeyInput}
+                  onChange={(event) => setApiKeyInput(event.target.value)}
+                  placeholder="Paste your Google AI Studio key"
+                  autoComplete="off"
+                  className="flex-1 rounded-md border border-gray-600 bg-gray-900 px-3 py-2 text-sm text-amber-200 focus:outline-none focus:ring-2 focus:ring-amber-400"
+                />
+                <button
+                  type="submit"
+                  className="inline-flex items-center justify-center rounded-md bg-amber-600 px-4 py-2 text-sm font-semibold text-black transition-colors hover:bg-amber-500"
+                >
+                  Save key
+                </button>
+                {isApiKeySet && (
+                  <button
+                    type="button"
+                    onClick={handleApiKeyClear}
+                    className="inline-flex items-center justify-center rounded-md border border-gray-600 px-4 py-2 text-sm font-semibold text-gray-200 transition-colors hover:bg-gray-700"
+                  >
+                    Remove
+                  </button>
+                )}
+              </div>
+              <p className="mt-2 text-xs text-gray-400">
+                Keys stay in your browser only. They are never sent to our servers.
+              </p>
+              {apiKeyStatus === 'saved' && (
+                <p className="mt-2 text-xs text-emerald-300">API key saved for this device.</p>
+              )}
+              {apiKeyStatus === 'cleared' && (
+                <p className="mt-2 text-xs text-amber-300">
+                  API key removed. Add one to re-enable Gemini features.
+                </p>
+              )}
+              {apiKeyStatus === 'error' && (
+                <p className="mt-2 text-xs text-red-400">
+                  We could not update your API key. Check your browser storage settings.
+                </p>
+              )}
+            </form>
+          </div>
         </header>
 
         <main className="max-w-7xl w-full mx-auto flex-grow flex flex-col">{renderContent()}</main>

@@ -1,3 +1,4 @@
+import type { ComponentProps } from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -30,13 +31,24 @@ vi.mock('../../suggestions', () => ({
 const mockOnCharacterCreated = vi.fn();
 const mockOnBack = vi.fn();
 
+const renderCharacterCreator = (props: Partial<ComponentProps<typeof CharacterCreator>> = {}) => {
+    return render(
+        <CharacterCreator
+            onCharacterCreated={mockOnCharacterCreated}
+            onBack={mockOnBack}
+            apiKey="test-key"
+            {...props}
+        />
+    );
+};
+
 describe('CharacterCreator', () => {
     beforeEach(() => {
         vi.clearAllMocks();
     });
 
     it('should render the form and allow typing a name', () => {
-        render(<CharacterCreator onCharacterCreated={mockOnCharacterCreated} onBack={mockOnBack} />);
+        renderCharacterCreator();
 
         const input = screen.getByPlaceholderText('Begin typing a historical figure…');
         fireEvent.change(input, { target: { value: 'Socrates' } });
@@ -45,7 +57,7 @@ describe('CharacterCreator', () => {
     });
 
     it('should show suggestions on input focus and filter them', async () => {
-        render(<CharacterCreator onCharacterCreated={mockOnCharacterCreated} onBack={mockOnBack} />);
+        renderCharacterCreator();
         const user = userEvent.setup();
 
         const input = screen.getByPlaceholderText('Begin typing a historical figure…');
@@ -62,7 +74,7 @@ describe('CharacterCreator', () => {
     });
 
     it('should fill input when a suggestion is clicked', async () => {
-        render(<CharacterCreator onCharacterCreated={mockOnCharacterCreated} onBack={mockOnBack} />);
+        renderCharacterCreator();
         const user = userEvent.setup();
 
         const input = screen.getByPlaceholderText('Begin typing a historical figure…');
@@ -75,13 +87,13 @@ describe('CharacterCreator', () => {
     });
 
     it('should call onBack when the back button is clicked', () => {
-        render(<CharacterCreator onCharacterCreated={mockOnCharacterCreated} onBack={mockOnBack} />);
+        renderCharacterCreator();
         fireEvent.click(screen.getByRole('button', { name: 'Back' }));
         expect(mockOnBack).toHaveBeenCalled();
     });
 
     it('should show an error if the name is empty on creation', async () => {
-        render(<CharacterCreator onCharacterCreated={mockOnCharacterCreated} onBack={mockOnBack} />);
+        renderCharacterCreator();
         fireEvent.click(screen.getByRole('button', { name: 'Create Ancient' }));
 
         expect(await screen.findByText('Enter a historical figure’s name.')).toBeInTheDocument();
@@ -109,7 +121,7 @@ describe('CharacterCreator', () => {
 
         mockGenerateImages.mockImplementationOnce(() => new Promise(res => setTimeout(() => res({ generatedImages: [{ image: { imageBytes: 'fake-portrait-data' } }] }), 10)));
 
-        render(<CharacterCreator onCharacterCreated={mockOnCharacterCreated} onBack={mockOnBack} />);
+        renderCharacterCreator();
 
         const input = screen.getByPlaceholderText('Begin typing a historical figure…');
         await user.type(input, 'Socrates');
@@ -137,7 +149,7 @@ describe('CharacterCreator', () => {
             text: JSON.stringify({ verified: false, summary: 'Could not verify', era: '' }),
         });
 
-        render(<CharacterCreator onCharacterCreated={mockOnCharacterCreated} onBack={mockOnBack} />);
+        renderCharacterCreator();
         const user = userEvent.setup();
 
         const input = screen.getByPlaceholderText('Begin typing a historical figure…');
@@ -155,7 +167,7 @@ describe('CharacterCreator', () => {
     it('should handle API errors during creation', async () => {
         mockGenerateContent.mockRejectedValue(new Error('API is down'));
 
-        render(<CharacterCreator onCharacterCreated={mockOnCharacterCreated} onBack={mockOnBack} />);
+        renderCharacterCreator();
         const user = userEvent.setup();
 
         const input = screen.getByPlaceholderText('Begin typing a historical figure…');

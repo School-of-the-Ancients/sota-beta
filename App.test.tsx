@@ -71,6 +71,7 @@ Object.defineProperty(window, 'history', {
 describe('App', () => {
   beforeEach(() => {
     mockLocalStorage.clear();
+    mockLocalStorage.setItem('school-of-the-ancients-api-key', 'test-key');
     vi.clearAllMocks();
 
     // Mock browser APIs

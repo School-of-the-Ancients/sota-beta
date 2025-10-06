@@ -23,6 +23,7 @@ interface ConversationViewProps {
   activeQuest: Quest | null;
   isSaving: boolean;
   resumeConversationId?: string | null;
+  apiKey: string;
 }
 
 const loadConversations = (): SavedConversation[] => {
@@ -108,6 +109,7 @@ const ConversationView: React.FC<ConversationViewProps> = ({
   activeQuest,
   isSaving,
   resumeConversationId,
+  apiKey,
 }) => {
   const [transcript, setTranscript] = useState<ConversationTurn[]>([]);
   const [textInput, setTextInput] = useState('');
@@ -271,8 +273,28 @@ const ConversationView: React.FC<ConversationViewProps> = ({
   }, [character.name]);
 
   const handleEnvironmentChange = useCallback(async (description: string) => {
+    if (!apiKey) {
+      const warningText = 'Visual environments require your Gemini API key. Paste it above to continue.';
+      setTranscript((prev) => {
+        const lastTurn = prev[prev.length - 1];
+        if (lastTurn?.text === warningText && lastTurn.speakerName === 'Matrix Operator') {
+          return prev;
+        }
+        return [
+          ...prev,
+          {
+            speaker: 'model',
+            speakerName: 'Matrix Operator',
+            text: warningText,
+          },
+        ];
+      });
+      setGenerationMessage('Add your Gemini API key to generate environments.');
+      return;
+    }
+
     const environmentArtifactId = `env_${Date.now()}`;
-    
+
     setTranscript(prev => [...prev, {
       speaker: 'model',
       speakerName: 'Matrix Operator',
@@ -288,9 +310,8 @@ const ConversationView: React.FC<ConversationViewProps> = ({
     setIsGeneratingVisual(true);
     setGenerationMessage(`Entering ${description}...`);
     try {
-      if (!process.env.API_KEY) throw new Error("API_KEY not set.");
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-      
+      const ai = new GoogleGenAI({ apiKey });
+
       const imagePromise = ai.models.generateImages({
         model: 'imagen-4.0-generate-001',
         prompt: `A photorealistic, atmospheric, wide-angle background of: ${description}, depicted authentically for the era of ${character.name} (${character.timeframe}). Cinematic and dramatic lighting. The scene should be evocative and immersive, without people or text.`,
@@ -350,11 +371,31 @@ const ConversationView: React.FC<ConversationViewProps> = ({
     } finally {
       setIsGeneratingVisual(false);
     }
-  }, [onEnvironmentUpdate, character, changeAmbienceTrack]);
+  }, [apiKey, onEnvironmentUpdate, character, changeAmbienceTrack]);
 
   const handleArtifactDisplay = useCallback(async (name: string, description: string) => {
+    if (!apiKey) {
+      const warningText = `Visual artifacts like "${name}" require your Gemini API key.`;
+      setTranscript((prev) => {
+        const lastTurn = prev[prev.length - 1];
+        if (lastTurn?.text === warningText && lastTurn.speakerName === 'Matrix Operator') {
+          return prev;
+        }
+        return [
+          ...prev,
+          {
+            speaker: 'model',
+            speakerName: 'Matrix Operator',
+            text: warningText,
+          },
+        ];
+      });
+      setGenerationMessage('Add your Gemini API key to create artifacts.');
+      return;
+    }
+
     const artifactId = `artifact_${Date.now()}`;
-    
+
     setTranscript(prev => [...prev, {
         speaker: 'model',
         speakerName: 'Matrix Operator',
@@ -366,8 +407,7 @@ const ConversationView: React.FC<ConversationViewProps> = ({
     setGenerationMessage(`Creating ${name}...`);
 
     try {
-        if (!process.env.API_KEY) throw new Error("API_KEY not set.");
-        const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+        const ai = new GoogleGenAI({ apiKey });
         const response = await ai.models.generateImages({
             model: 'imagen-4.0-generate-001',
             prompt: `A detailed, clear image of: a "${name}". ${description}. The artifact should be rendered in a style authentic to ${character.name}'s era and work (e.g., a da Vinci sketch, a 19th-century diagram, a classical Greek sculpture). Present it on a simple, non-distracting background like aged parchment or a museum display.`,
@@ -408,7 +448,7 @@ const ConversationView: React.FC<ConversationViewProps> = ({
     } finally {
         setIsGeneratingVisual(false);
     }
-  }, [character]);
+  }, [apiKey, character]);
 
 
   const {
@@ -426,14 +466,18 @@ const ConversationView: React.FC<ConversationViewProps> = ({
     handleEnvironmentChange,
     handleArtifactDisplay,
     activeQuest,
+    apiKey,
   );
 
   const updateDynamicSuggestions = useCallback(async (currentTranscript: ConversationTurn[]) => {
     if (currentTranscript.length === 0) return;
+    if (!apiKey) {
+      setDynamicSuggestions([]);
+      return;
+    }
     setIsFetchingSuggestions(true);
     try {
-        if (!process.env.API_KEY) throw new Error("API_KEY not set.");
-        const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+        const ai = new GoogleGenAI({ apiKey });
 
         const contextTranscript = currentTranscript.slice(-4).map(turn => `${turn.speakerName}: ${turn.text}`).join('\n');
 
@@ -475,7 +519,7 @@ ${contextTranscript}
     } finally {
         setIsFetchingSuggestions(false);
     }
-  }, [character.name]);
+  }, [apiKey, character.name]);
 
   const requestDynamicSuggestions = useCallback(() => {
     updateDynamicSuggestions(transcript);

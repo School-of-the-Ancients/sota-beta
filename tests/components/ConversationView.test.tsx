@@ -37,8 +37,14 @@ const useGeminiLiveMock = vi.fn();
 
 vi.mock('../../hooks/useGeminiLive', () => ({
   useGeminiLive: vi.fn((
-    sysInstruction, voice, accent,
-    onTurnComplete, onEnvironmentChange, onArtifactDisplay
+    sysInstruction,
+    voice,
+    accent,
+    onTurnComplete,
+    onEnvironmentChange,
+    onArtifactDisplay,
+    _activeQuest,
+    _apiKey
   ) => {
     onTurnCompleteCallback = onTurnComplete;
     onEnvironmentChangeRequestCallback = onEnvironmentChange;
@@ -71,7 +77,7 @@ const renderComponent = (props = {}) => {
     return render(
         <ConversationView
             character={mockCharacter} onEndConversation={mockOnEndConversation}
-            onEnvironmentUpdate={mockOnEnvironmentUpdate} activeQuest={null} isSaving={false} {...props}
+            onEnvironmentUpdate={mockOnEnvironmentUpdate} activeQuest={null} isSaving={false} apiKey="test-key" {...props}
         />
     );
 };
