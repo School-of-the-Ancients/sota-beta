@@ -2,12 +2,19 @@ import React, { createContext, useCallback, useContext, useEffect, useMemo, useS
 import type { Session, User } from '@supabase/supabase-js';
 import { supabase } from '../supabaseClient';
 
+interface EmailAuthResult {
+  user: User | null;
+  session: Session | null;
+}
+
 interface SupabaseAuthContextValue {
   user: User | null;
   session: Session | null;
   loading: boolean;
   isConfigured: boolean;
-  signIn: () => Promise<void>;
+  signInWithGoogle: () => Promise<void>;
+  signInWithPassword: (email: string, password: string) => Promise<EmailAuthResult>;
+  signUpWithPassword: (email: string, password: string) => Promise<EmailAuthResult>;
   signOut: () => Promise<void>;
 }
 
@@ -50,7 +57,7 @@ export const SupabaseAuthProvider: React.FC<{ children: React.ReactNode }> = ({ 
     };
   }, []);
 
-  const signIn = useCallback(async () => {
+  const signInWithGoogle = useCallback(async () => {
     if (!supabase) {
       throw new Error('Supabase is not configured. Provide VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY to enable authentication.');
     }
@@ -65,6 +72,46 @@ export const SupabaseAuthProvider: React.FC<{ children: React.ReactNode }> = ({ 
     if (error) {
       throw error;
     }
+  }, []);
+
+  const signInWithPassword = useCallback(async (email: string, password: string): Promise<EmailAuthResult> => {
+    if (!supabase) {
+      throw new Error('Supabase is not configured. Provide VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY to enable authentication.');
+    }
+
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
+
+    if (error) {
+      throw error;
+    }
+
+    return {
+      user: data.user,
+      session: data.session,
+    };
+  }, []);
+
+  const signUpWithPassword = useCallback(async (email: string, password: string): Promise<EmailAuthResult> => {
+    if (!supabase) {
+      throw new Error('Supabase is not configured. Provide VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY to enable authentication.');
+    }
+
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password,
+    });
+
+    if (error) {
+      throw error;
+    }
+
+    return {
+      user: data.user,
+      session: data.session,
+    };
   }, []);
 
   const signOut = useCallback(async () => {
@@ -84,10 +131,12 @@ export const SupabaseAuthProvider: React.FC<{ children: React.ReactNode }> = ({ 
       session,
       loading,
       isConfigured,
-      signIn,
+      signInWithGoogle,
+      signInWithPassword,
+      signUpWithPassword,
       signOut,
     }),
-    [session, loading, isConfigured, signIn, signOut]
+    [session, loading, isConfigured, signInWithGoogle, signInWithPassword, signUpWithPassword, signOut]
   );
 
   return <SupabaseAuthContext.Provider value={value}>{children}</SupabaseAuthContext.Provider>;
