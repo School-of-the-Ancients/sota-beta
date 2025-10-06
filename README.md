@@ -53,7 +53,7 @@ School of the Ancients is a modern web application that pairs immersive visuals 
 - **Curated quest board** &mdash; Pick from ready-to-run quests, each linking a legendary mentor with a focused learning objective and estimated duration.
 - **Quest-aware conversations** &mdash; When a quest is active, the mentor keeps you on track, surfaces scene changes, and captures artifacts tied to the objective.
 - **Automatic mastery reviews** &mdash; Ending a quest triggers an AI assessment of your transcript, summarizing what you grasped, what evidence proves it, and what to revisit.
-- **Progress tracking** &mdash; Completed quest IDs persist in `localStorage`, powering progress meters and keeping your accomplishments pinned between sessions.
+- **Progress tracking** &mdash; Completed quest IDs persist in Supabase for signed-in users (with `localStorage` fallback when auth is unavailable), powering progress meters and keeping your accomplishments pinned between sessions.
 
 ### Custom Mentors & Quest Builder
 
@@ -63,7 +63,7 @@ School of the Ancients is a modern web application that pairs immersive visuals 
 
 ### Progression & Reflection
 
-- **Conversation history** &mdash; Sessions, transcripts, artifacts, and environments are stored in browser `localStorage` for later review or resuming quests.
+- **Conversation history** &mdash; Sessions, transcripts, artifacts, and environments are stored per-user in Supabase when authenticated, with transparent fallback to browser `localStorage` for offline/local-only play.
 - **Quest dossiers** &mdash; Each AI review summarizes mastery, highlights evidence, and recommends improvements so you can iterate on your learning plan.
 - **Responsive design** &mdash; Tailwind CSS keeps the UI beautiful and accessible on mobile, tablet, and desktop displays.
 
@@ -101,6 +101,7 @@ School of the Ancients is a modern web application that pairs immersive visuals 
 - **Node.js** 20 or later
 - **npm** 10 or later (ships with modern Node releases)
 - A Google Gemini API key with access to the realtime and Imagen models
+- (Recommended) A Supabase project for authentication and cloud persistence
 
 ### Installation
 
@@ -123,6 +124,41 @@ npm run dev
 ```
 
 Visit the printed URL (defaults to http://localhost:3000) and grant the browser microphone access when prompted.
+
+### Supabase configuration
+
+Authentication and cloud persistence are powered by Supabase. Configure it once per environment:
+
+1. [Create a Supabase project](https://supabase.com/dashboard/projects) and enable **Email OTP** sign-in under **Authentication → Providers**.
+2. Add the following environment variables to your local `.env` (and deployment pipeline). They are read at build time by Vite:
+
+   ```bash
+   VITE_SUPABASE_URL=your-project-url
+   VITE_SUPABASE_ANON_KEY=your-public-anon-key
+   ```
+
+3. In the Supabase SQL editor, create the persistence table (Row Level Security should remain enabled):
+
+   ```sql
+   create table if not exists public.user_states (
+     user_id uuid primary key references auth.users on delete cascade,
+     state jsonb not null default '{}'::jsonb,
+     updated_at timestamptz not null default timezone('utc', now())
+   );
+
+   alter table public.user_states enable row level security;
+
+   create policy "Users can manage their own state"
+     on public.user_states
+     for all
+     using (auth.uid() = user_id)
+     with check (auth.uid() = user_id);
+   ```
+
+4. (Optional) Add a Postgres trigger to refresh `updated_at` automatically if you prefer server-side timestamps.
+5. Deploy the [Supabase client credentials](#prerequisites) alongside your Gemini key when hosting the production build.
+
+> **Migration note:** On first sign-in, the app migrates any existing `localStorage` data (conversation history, quests, quiz results) into Supabase and clears the local copy. Subsequent saves write directly to Supabase.
 
 ### Building for Production
 
@@ -147,6 +183,7 @@ Deploy the contents of `dist/` to your static hosting platform of choice.
 
 - [`implementation.md`](implementation.md) &mdash; Deep-dive notes about system design choices and future ideas.
 - [`docs/`](docs/) &mdash; Additional reference material and design explorations.
+- [`docs/SUPABASE_IMPLEMENTATION.md`](docs/SUPABASE_IMPLEMENTATION.md) &mdash; Supabase auth + persistence architecture, schema, and migration steps.
 - [`audio/`](audio/) &mdash; Placeholder directory for local experimentation (do not commit generated artifacts).
 
 ## Troubleshooting
