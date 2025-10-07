@@ -150,6 +150,7 @@ export const useGeminiLive = (
     const pendingResumptionHandleRef = useRef<string | null>(null);
     const sessionRenewalTimeoutRef = useRef<number | null>(null);
     const isRenewingSessionRef = useRef(false);
+    const processedFunctionCallIdsRef = useRef<Set<string>>(new Set());
     useEffect(() => {
         isMicActiveRef.current = isMicActive;
     }, [isMicActive]);
@@ -437,23 +438,37 @@ export const useGeminiLive = (
 
                             if (message.toolCall) {
                                 for (const fc of message.toolCall.functionCalls) {
-                                  if (fc.name === 'changeEnvironment' && fc.args && typeof fc.args.description === 'string') {
-                                    onEnvironmentChangeRequestRef.current(fc.args.description);
-                                  } else if (fc.name === 'displayArtifact' && fc.args && typeof fc.args.name === 'string' && typeof fc.args.description === 'string') {
-                                    onArtifactDisplayRequestRef.current(fc.args.name, fc.args.description);
-                                  }
-                        
-                                  sessionPromiseRef.current?.then((session) => {
-                                    session.sendToolResponse({
-                                      functionResponses: {
-                                        id: fc.id,
-                                        name: fc.name,
-                                        response: { result: "ok, action started" },
-                                      }
+                                    const callId = typeof fc.id === 'string' ? fc.id : undefined;
+                                    if (callId && processedFunctionCallIdsRef.current.has(callId)) {
+                                        continue;
+                                    }
+
+                                    if (fc.name === 'changeEnvironment' && fc.args && typeof fc.args.description === 'string') {
+                                        onEnvironmentChangeRequestRef.current(fc.args.description);
+                                    } else if (
+                                        fc.name === 'displayArtifact' &&
+                                        fc.args &&
+                                        typeof fc.args.name === 'string' &&
+                                        typeof fc.args.description === 'string'
+                                    ) {
+                                        onArtifactDisplayRequestRef.current(fc.args.name, fc.args.description);
+                                    }
+
+                                    if (callId) {
+                                        processedFunctionCallIdsRef.current.add(callId);
+                                    }
+
+                                    sessionPromiseRef.current?.then((session) => {
+                                        session.sendToolResponse({
+                                            functionResponses: {
+                                                id: fc.id,
+                                                name: fc.name,
+                                                response: { result: 'ok, action started' },
+                                            }
+                                        });
                                     });
-                                  });
                                 }
-                              }
+                            }
 
                             if (message.serverContent?.turnComplete) {
                                 if (userTranscriptionRef.current.trim() || modelTranscriptionRef.current.trim()) {
@@ -578,6 +593,7 @@ export const useGeminiLive = (
                 setConnectionState(ConnectionState.ERROR);
             });
 
+            processedFunctionCallIdsRef.current.clear();
             sessionPromiseRef.current = sessionPromise;
 
         } catch (error) {
