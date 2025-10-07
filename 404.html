@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="refresh" content="0; url=/" />
+    <title>School of the Ancients</title>
+    <script>
+      (function () {
+        try {
+          var redirectPath = window.location.pathname + window.location.search + window.location.hash;
+          if (redirectPath && redirectPath !== '/') {
+            sessionStorage.setItem('sota:redirect-path', redirectPath);
+          }
+        } catch (error) {
+          console.error('Failed to persist redirect path', error);
+        }
+      })();
+    </script>
+  </head>
+  <body></body>
+</html>

@@ -66,6 +66,14 @@ const App: React.FC = () => {
   const isAuthenticated = Boolean(user);
   const isAppLoading = authLoading || dataLoading;
 
+  useEffect(() => {
+    const pendingPath = sessionStorage.getItem('sota:redirect-path');
+    if (pendingPath) {
+      sessionStorage.removeItem('sota:redirect-path');
+      navigate(pendingPath, { replace: true });
+    }
+  }, [navigate]);
+
   const ensureConversationComplete = useCallback(
     (options?: { allowSessionId?: string; message?: string }) => {
       const hasActiveSession = Boolean(activeConversationSession || selectedCharacter);
