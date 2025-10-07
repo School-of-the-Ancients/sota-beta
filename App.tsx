@@ -1419,6 +1419,16 @@ const App: React.FC = () => {
                             </label>
                             <p className="text-xs text-gray-400 mt-1">
                               Paste the key from Google AI Studio. It is encrypted locally before syncing to Supabase.
+                            
+                            Need a key? Create one from{' '}
+                            <a
+                              href="https://aistudio.google.com/app/apikey"
+                              target="_blank"
+                              rel="noreferrer"
+                              className="text-amber-300 underline-offset-2 hover:text-amber-200 hover:underline"
+                            >
+                              Google AI Studio
+                            </a>
                             </p>
                           </div>
                           <input
