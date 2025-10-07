@@ -1021,7 +1021,7 @@ const App: React.FC = () => {
                   Menu
                 </button>
                 <span className="flex-1 text-center text-sm font-semibold uppercase tracking-[0.35em] text-amber-200">
-                  SoTA
+                  School of the Ancients
                 </span>
               </div>
             </div>
