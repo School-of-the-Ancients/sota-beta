@@ -150,6 +150,7 @@ export const useGeminiLive = (
     const pendingResumptionHandleRef = useRef<string | null>(null);
     const sessionRenewalTimeoutRef = useRef<number | null>(null);
     const isRenewingSessionRef = useRef(false);
+    const handledToolCallIdsRef = useRef<Set<string>>(new Set());
     useEffect(() => {
         isMicActiveRef.current = isMicActive;
     }, [isMicActive]);
@@ -335,6 +336,7 @@ export const useGeminiLive = (
                 callbacks: {
                     onopen: async () => {
                         setConnectionState(ConnectionState.CONNECTED);
+                        handledToolCallIdsRef.current = new Set();
 
                         inputAudioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 16000 });
                         outputAudioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
@@ -437,23 +439,38 @@ export const useGeminiLive = (
 
                             if (message.toolCall) {
                                 for (const fc of message.toolCall.functionCalls) {
-                                  if (fc.name === 'changeEnvironment' && fc.args && typeof fc.args.description === 'string') {
-                                    onEnvironmentChangeRequestRef.current(fc.args.description);
-                                  } else if (fc.name === 'displayArtifact' && fc.args && typeof fc.args.name === 'string' && typeof fc.args.description === 'string') {
-                                    onArtifactDisplayRequestRef.current(fc.args.name, fc.args.description);
-                                  }
-                        
-                                  sessionPromiseRef.current?.then((session) => {
-                                    session.sendToolResponse({
-                                      functionResponses: {
-                                        id: fc.id,
-                                        name: fc.name,
-                                        response: { result: "ok, action started" },
-                                      }
-                                    });
-                                  });
+                                    const functionId = typeof fc.id === 'string' ? fc.id : null;
+                                    const hasHandledId = functionId ? handledToolCallIdsRef.current.has(functionId) : false;
+
+                                    if (!hasHandledId) {
+                                        if (functionId) {
+                                            handledToolCallIdsRef.current.add(functionId);
+                                        }
+
+                                        if (fc.name === 'changeEnvironment' && fc.args && typeof fc.args.description === 'string') {
+                                            onEnvironmentChangeRequestRef.current(fc.args.description);
+                                        } else if (fc.name === 'displayArtifact' && fc.args && typeof fc.args.name === 'string' && typeof fc.args.description === 'string') {
+                                            onArtifactDisplayRequestRef.current(fc.args.name, fc.args.description);
+                                        }
+                                    }
+
+                                    if (functionId) {
+                                        sessionPromiseRef.current?.then((session) => {
+                                            session.sendToolResponse({
+                                                functionResponses: [
+                                                    {
+                                                        id: functionId,
+                                                        name: fc.name,
+                                                        response: { result: 'ok, action started' },
+                                                    },
+                                                ],
+                                            });
+                                        }).catch(err => {
+                                            console.warn('Failed to acknowledge tool call:', err);
+                                        });
+                                    }
                                 }
-                              }
+                            }
 
                             if (message.serverContent?.turnComplete) {
                                 if (userTranscriptionRef.current.trim() || modelTranscriptionRef.current.trim()) {
