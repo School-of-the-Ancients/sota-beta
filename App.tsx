@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { GoogleGenAI, Type } from '@google/genai';
-import { Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
+import { Navigate, Route, Routes, useBlocker, useBeforeUnload, useLocation, useNavigate } from 'react-router-dom';
 
 import type {
   Character,
@@ -29,6 +29,9 @@ import ConversationRoute from './src/routes/Conversation';
 import HistoryRoute from './src/routes/History';
 import CharacterCreatorRoute from './src/routes/CharacterCreator';
 import { links } from './src/lib/links';
+
+const CONVERSATION_GUARD_MESSAGE =
+  'Finish your current conversation to generate a summary. Tap End to wrap up before leaving.';
 
 const App: React.FC = () => {
   const navigate = useNavigate();
@@ -357,7 +360,51 @@ const App: React.FC = () => {
     syncQuestProgress();
   }, [conversationHistory, isAppLoading, syncQuestProgress]);
 
+  const isConversationLocked = Boolean(
+    selectedCharacter &&
+      location.pathname.startsWith('/conversation') &&
+      !isSaving
+  );
+
+  const ensureConversationClosed = useCallback(() => {
+    if (!isConversationLocked) {
+      return true;
+    }
+
+    window.alert(CONVERSATION_GUARD_MESSAGE);
+    return false;
+  }, [isConversationLocked]);
+
+  const navigationBlocker = useBlocker(isConversationLocked);
+
+  useEffect(() => {
+    if (navigationBlocker.state !== 'blocked') {
+      return;
+    }
+
+    window.alert(CONVERSATION_GUARD_MESSAGE);
+    navigationBlocker.reset?.();
+  }, [navigationBlocker]);
+
+  useBeforeUnload(
+    useCallback(
+      (event: BeforeUnloadEvent) => {
+        if (!isConversationLocked) {
+          return;
+        }
+
+        event.preventDefault();
+        event.returnValue = CONVERSATION_GUARD_MESSAGE;
+      },
+      [isConversationLocked]
+    ),
+    { capture: true }
+  );
+
   const handleSelectCharacter = (character: Character) => {
+    if (!ensureConversationClosed()) {
+      return;
+    }
     if (!requireAuth('Sign in to start a new conversation.')) {
       return;
     }
@@ -366,6 +413,9 @@ const App: React.FC = () => {
   };
 
   const handleSelectQuest = (quest: Quest) => {
+    if (!ensureConversationClosed()) {
+      return;
+    }
     if (!requireAuth('Sign in to embark on a quest.')) {
       return;
     }
@@ -394,6 +444,9 @@ const App: React.FC = () => {
   };
 
   const handleResumeConversation = (conversation: SavedConversation) => {
+    if (!ensureConversationClosed()) {
+      return;
+    }
     if (!requireAuth('Sign in to view your saved conversations.')) {
       return;
     }
@@ -437,6 +490,9 @@ const App: React.FC = () => {
   );
 
   const handleCharacterCreated = (newCharacter: Character) => {
+    if (!ensureConversationClosed()) {
+      return;
+    }
     if (!requireAuth('Sign in to save your custom ancient.')) {
       return;
     }
@@ -525,6 +581,9 @@ const App: React.FC = () => {
   };
 
   const openQuestCreator = (goal?: string | null) => {
+    if (!ensureConversationClosed()) {
+      return;
+    }
     if (!requireAuth('Sign in to design new quests.')) {
       return;
     }
@@ -533,11 +592,14 @@ const App: React.FC = () => {
   };
 
   const openCharacterCreatorView = useCallback(() => {
+    if (!ensureConversationClosed()) {
+      return;
+    }
     if (!requireAuth('Sign in to create a new ancient.')) {
       return;
     }
     navigate('/character/new');
-  }, [navigate, requireAuth]);
+  }, [ensureConversationClosed, navigate, requireAuth]);
 
   const handleCreateQuestFromNextSteps = (steps: string[], questTitle?: string) => {
     if (!requireAuth('Sign in to turn feedback into new quests.')) {
@@ -559,6 +621,9 @@ const App: React.FC = () => {
   };
 
   const startGeneratedQuest = (quest: Quest, mentor: Character) => {
+    if (!ensureConversationClosed()) {
+      return;
+    }
     if (!requireAuth('Sign in to embark on your generated quest.')) {
       return;
     }
@@ -614,6 +679,9 @@ const App: React.FC = () => {
   };
 
   const launchQuizForQuest = (questId: string) => {
+    if (!ensureConversationClosed()) {
+      return;
+    }
     const quest = allQuests.find((q) => q.id === questId);
     if (!quest) {
       console.warn(`Unable to launch quiz: quest with ID ${questId} not found.`);
@@ -765,6 +833,9 @@ const App: React.FC = () => {
   };
 
   const handleSignInClick = useCallback(() => {
+    if (!ensureConversationClosed()) {
+      return;
+    }
     if (isAuthenticated) {
       signOut().catch((error) => {
         console.error('Sign out failed', error);
@@ -775,37 +846,49 @@ const App: React.FC = () => {
 
     setAuthPrompt('Sign in to personalize your ancient studies.');
     setIsAuthModalOpen(true);
-  }, [isAuthenticated, signOut]);
+  }, [ensureConversationClosed, isAuthenticated, signOut]);
 
   const userEmail = user?.email ?? (user?.user_metadata as { email?: string })?.email;
 
   const openHistoryView = useCallback(() => {
+    if (!ensureConversationClosed()) {
+      return;
+    }
     if (!requireAuth('Sign in to review your past conversations.')) {
       return;
     }
     navigate('/history');
-  }, [navigate, requireAuth]);
+  }, [ensureConversationClosed, navigate, requireAuth]);
 
   const openQuestsView = useCallback(() => {
+    if (!ensureConversationClosed()) {
+      return;
+    }
     if (!requireAuth('Sign in to manage your quests.')) {
       return;
     }
     navigate('/quests');
-  }, [navigate, requireAuth]);
+  }, [ensureConversationClosed, navigate, requireAuth]);
 
   const openProfileView = useCallback(() => {
+    if (!ensureConversationClosed()) {
+      return;
+    }
     if (!requireAuth('Sign in to view your explorer profile.')) {
       return;
     }
     navigate('/profile');
-  }, [navigate, requireAuth]);
+  }, [ensureConversationClosed, navigate, requireAuth]);
 
   const openSettingsView = useCallback(() => {
+    if (!ensureConversationClosed()) {
+      return;
+    }
     if (!requireAuth('Sign in to update your settings.')) {
       return;
     }
     navigate('/settings');
-  }, [navigate, requireAuth]);
+  }, [ensureConversationClosed, navigate, requireAuth]);
 
   const currentView = useMemo(() => {
     if (location.pathname.startsWith('/conversation')) return 'conversation';
@@ -877,6 +960,8 @@ const App: React.FC = () => {
             currentView={currentView}
             isAuthenticated={isAuthenticated}
             userEmail={userEmail}
+            isNavigationLocked={isConversationLocked}
+            navigationLockMessage={CONVERSATION_GUARD_MESSAGE}
           />
           <div className="flex-1 flex flex-col">
             <ScrollToTop />

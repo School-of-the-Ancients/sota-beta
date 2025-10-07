@@ -13,6 +13,8 @@ type SidebarProps = {
   currentView: string;
   isAuthenticated: boolean;
   userEmail?: string | null;
+  isNavigationLocked?: boolean;
+  navigationLockMessage?: string;
 };
 
 const Sidebar: React.FC<SidebarProps> = ({
@@ -26,6 +28,8 @@ const Sidebar: React.FC<SidebarProps> = ({
   currentView,
   isAuthenticated,
   userEmail,
+  isNavigationLocked = false,
+  navigationLockMessage,
 }) => {
   const navigationItems = [
     {
@@ -66,6 +70,11 @@ const Sidebar: React.FC<SidebarProps> = ({
                 : 'Signed in traveller'
               : 'Sign in to unlock personalized features.'}
           </p>
+          {isNavigationLocked && navigationLockMessage && (
+            <p className="mt-3 text-xs text-amber-200 bg-amber-500/10 border border-amber-500/30 rounded-lg px-3 py-2">
+              {navigationLockMessage}
+            </p>
+          )}
         </div>
 
         <div className="space-y-4">
@@ -80,12 +89,18 @@ const Sidebar: React.FC<SidebarProps> = ({
                   <button
                     key={item.key}
                     type="button"
-                    onClick={item.onClick}
+                    disabled={isNavigationLocked}
+                    onClick={() => {
+                      if (isNavigationLocked) {
+                        return;
+                      }
+                      item.onClick();
+                    }}
                     className={`w-full text-left px-3 py-2 rounded-lg transition-all duration-200 border flex flex-col gap-1 ${
                       isActive
                         ? 'border-amber-500/80 bg-amber-500/10 text-amber-200'
                         : 'border-gray-800 hover:border-amber-500/40 hover:bg-gray-800/60 text-gray-200'
-                    }`}
+                    } ${isNavigationLocked ? 'opacity-60 cursor-not-allowed' : ''}`}
                   >
                     <span className="text-sm font-semibold">{item.label}</span>
                     <span className="text-xs text-gray-400">{item.description}</span>
@@ -100,8 +115,16 @@ const Sidebar: React.FC<SidebarProps> = ({
               <h3 className="text-sm font-semibold uppercase tracking-wide text-gray-300">Recent Chats</h3>
               <button
                 type="button"
-                onClick={onOpenHistory}
-                className="text-xs text-amber-300 hover:text-amber-200"
+                disabled={isNavigationLocked}
+                onClick={() => {
+                  if (isNavigationLocked) {
+                    return;
+                  }
+                  onOpenHistory();
+                }}
+                className={`text-xs text-amber-300 hover:text-amber-200 ${
+                  isNavigationLocked ? 'opacity-60 cursor-not-allowed hover:text-amber-300' : ''
+                }`}
               >
                 View all
               </button>
@@ -119,8 +142,18 @@ const Sidebar: React.FC<SidebarProps> = ({
                   <li key={conversation.id}>
                     <button
                       type="button"
-                      onClick={() => onSelectConversation(conversation)}
-                      className="w-full text-left px-3 py-2 rounded-lg border border-gray-800 hover:border-amber-500/40 hover:bg-gray-800/70 transition-all duration-200"
+                      disabled={isNavigationLocked}
+                      onClick={() => {
+                        if (isNavigationLocked) {
+                          return;
+                        }
+                        onSelectConversation(conversation);
+                      }}
+                      className={`w-full text-left px-3 py-2 rounded-lg border border-gray-800 transition-all duration-200 ${
+                        isNavigationLocked
+                          ? 'opacity-60 cursor-not-allowed'
+                          : 'hover:border-amber-500/40 hover:bg-gray-800/70'
+                      }`}
                     >
                       <p className="text-sm font-semibold text-gray-100 truncate">
                         {conversation.title ?? conversation.characterName ?? 'Conversation'}
