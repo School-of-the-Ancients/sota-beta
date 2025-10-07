@@ -1000,7 +1000,9 @@ const App: React.FC = () => {
         style={{ background: environmentImageUrl ? 'transparent' : 'linear-gradient(to bottom right, #1a1a1a, #232323)' }}
       >
         <div className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-8">
-          <header className="space-y-4">
+          <header
+            className="sticky top-0 z-30 -mx-4 space-y-4 bg-[#1a1a1a]/90 px-4 pb-4 pt-2 backdrop-blur-sm sm:static sm:mx-0 sm:bg-transparent sm:px-0 sm:pb-0 sm:pt-0 sm:backdrop-blur-none"
+          >
             <div className="flex items-center justify-between gap-3 sm:hidden">
               <button
                 type="button"
@@ -1048,7 +1050,10 @@ const App: React.FC = () => {
             <div className="flex-1">
               <div className="flex h-full flex-col overflow-hidden rounded-3xl border border-gray-800/80 bg-gray-900/70 shadow-2xl backdrop-blur-sm">
                 <ScrollToTop />
-                <div className="h-full overflow-y-auto p-4 sm:p-6 lg:p-8">
+                <div
+                  className="h-full overflow-y-auto p-4 sm:p-6 lg:p-8"
+                  data-app-scroll-container
+                >
                   <Routes>
               <Route
                 path="/"
