@@ -22,6 +22,7 @@ import QuestIcon from './components/icons/QuestIcon';
 import QuestCreator from './components/QuestCreator';
 import QuestQuiz from './components/QuestQuiz';
 import AuthModal from './components/AuthModal';
+import Sidebar from './components/Sidebar';
 
 import { CHARACTERS, QUESTS } from './constants';
 import { useSupabaseAuth } from './hooks/useSupabaseAuth';
@@ -456,6 +457,13 @@ const App: React.FC = () => {
     setQuestCreatorPrefill(goal ?? null);
     setView('questCreator');
   };
+
+  const handleOpenSettings = useCallback(() => {
+    if (!requireAuth('Sign in to update your settings.')) {
+      return;
+    }
+    window.alert('Personal settings are coming soon.');
+  }, [requireAuth]);
 
   const openCharacterCreatorView = useCallback(() => {
     if (!requireAuth('Sign in to create a new ancient.')) {
@@ -1125,7 +1133,26 @@ const App: React.FC = () => {
           </div>
         </header>
 
-        <main className="max-w-7xl w-full mx-auto flex-grow flex flex-col">{renderContent()}</main>
+        <main className="max-w-7xl w-full mx-auto flex-grow flex flex-col lg:flex-row gap-6">
+          <div className="w-full lg:w-80 xl:w-96">
+            <Sidebar
+              isAuthenticated={isAuthenticated}
+              userEmail={userEmail}
+              completedQuestCount={completedQuests.length}
+              totalQuestCount={[...customQuests, ...QUESTS].length}
+              recentConversations={conversationHistory}
+              onResumeConversation={handleResumeConversation}
+              onOpenHistory={openHistoryView}
+              onCreateAncient={openCharacterCreatorView}
+              onOpenQuestCreator={() => openQuestCreator()}
+              onOpenQuests={openQuestsView}
+              onOpenSettings={handleOpenSettings}
+            />
+          </div>
+          <section className="flex-1 min-w-0">
+            {renderContent()}
+          </section>
+        </main>
       </div>
     </div>
   );
