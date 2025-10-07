@@ -56,6 +56,7 @@ const App: React.FC = () => {
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const [autoSaveEnabled, setAutoSaveEnabled] = useState(true);
   const [preferredTheme, setPreferredTheme] = useState<'system' | 'light' | 'dark'>('dark');
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   const customCharacters = userData.customCharacters;
   const customQuests = userData.customQuests;
@@ -113,6 +114,35 @@ const App: React.FC = () => {
       setIsAuthModalOpen(false);
     }
   }, [isAuthenticated]);
+
+  const closeSidebar = useCallback(() => {
+    setIsSidebarOpen(false);
+  }, []);
+
+  const openSidebar = useCallback(() => {
+    setIsSidebarOpen(true);
+  }, []);
+
+  useEffect(() => {
+    closeSidebar();
+  }, [closeSidebar, location.pathname]);
+
+  useEffect(() => {
+    if (!isSidebarOpen) {
+      return;
+    }
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        closeSidebar();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [closeSidebar, isSidebarOpen]);
 
   const combinedCharacters = useMemo(() => [...customCharacters, ...CHARACTERS], [customCharacters]);
   const allQuests = useMemo(() => [...customQuests, ...QUESTS], [customQuests]);
@@ -448,6 +478,14 @@ const App: React.FC = () => {
 
     navigate(links.conversation(conversation.characterId, { resumeId: conversation.id }));
   };
+
+  const handleSidebarResumeConversation = useCallback(
+    (conversation: SavedConversation) => {
+      closeSidebar();
+      handleResumeConversation(conversation);
+    },
+    [closeSidebar, handleResumeConversation]
+  );
 
   const handleConversationUpdate = useCallback(
     (conversation: SavedConversation) => {
@@ -898,6 +936,31 @@ const App: React.FC = () => {
     navigate('/settings');
   }, [ensureConversationComplete, navigate, requireAuth]);
 
+  const handleSidebarCreateAncient = useCallback(() => {
+    closeSidebar();
+    openCharacterCreatorView();
+  }, [closeSidebar, openCharacterCreatorView]);
+
+  const handleSidebarOpenHistory = useCallback(() => {
+    closeSidebar();
+    openHistoryView();
+  }, [closeSidebar, openHistoryView]);
+
+  const handleSidebarOpenProfile = useCallback(() => {
+    closeSidebar();
+    openProfileView();
+  }, [closeSidebar, openProfileView]);
+
+  const handleSidebarOpenSettings = useCallback(() => {
+    closeSidebar();
+    openSettingsView();
+  }, [closeSidebar, openSettingsView]);
+
+  const handleSidebarOpenQuests = useCallback(() => {
+    closeSidebar();
+    openQuestsView();
+  }, [closeSidebar, openQuestsView]);
+
   const currentView = useMemo(() => {
     if (location.pathname.startsWith('/conversation')) return 'conversation';
     if (location.pathname.startsWith('/history')) return 'history';
@@ -910,6 +973,36 @@ const App: React.FC = () => {
     return 'selector';
   }, [location.pathname]);
 
+  const mobileNavigationItems = useMemo(
+    () => [
+      {
+        key: 'quests',
+        label: 'Quest Library',
+        description: 'Continue or launch new missions.',
+        action: openQuestsView,
+      },
+      {
+        key: 'creator',
+        label: 'Create Ancient',
+        description: 'Design a new mentor persona.',
+        action: openCharacterCreatorView,
+      },
+      {
+        key: 'history',
+        label: 'Conversation Archive',
+        description: 'Revisit recent dialogues.',
+        action: openHistoryView,
+      },
+      {
+        key: 'profile',
+        label: 'Explorer Profile',
+        description: 'View achievements and preferences.',
+        action: openProfileView,
+      },
+    ],
+    [openCharacterCreatorView, openHistoryView, openProfileView, openQuestsView]
+  );
+
   return (
     <div className="relative min-h-screen bg-[#1a1a1a]">
       <AuthModal
@@ -917,6 +1010,38 @@ const App: React.FC = () => {
         prompt={authPrompt}
         onClose={() => setIsAuthModalOpen(false)}
       />
+      <div
+        className={`fixed inset-0 z-40 bg-black/60 backdrop-blur-sm transition-opacity duration-300 sm:hidden ${
+          isSidebarOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
+        }`}
+        aria-hidden="true"
+        onClick={closeSidebar}
+      />
+      <div
+        id="mobile-sidebar"
+        className={`fixed inset-y-0 left-0 z-50 w-full max-w-xs transform bg-transparent transition-transform duration-300 sm:hidden ${
+          isSidebarOpen ? 'translate-x-0' : '-translate-x-full'
+        }`}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Navigation"
+      >
+        <Sidebar
+          recentConversations={recentConversations}
+          onSelectConversation={handleSidebarResumeConversation}
+          onCreateAncient={handleSidebarCreateAncient}
+          onOpenHistory={handleSidebarOpenHistory}
+          onOpenProfile={handleSidebarOpenProfile}
+          onOpenSettings={handleSidebarOpenSettings}
+          onOpenQuests={handleSidebarOpenQuests}
+          currentView={currentView}
+          isAuthenticated={isAuthenticated}
+          userEmail={userEmail}
+          onClose={closeSidebar}
+          isMobileOverlay
+          className="h-full"
+        />
+      </div>
       <div
         className="absolute inset-0 bg-cover bg-center transition-opacity duration-1000 z-0"
         style={{ backgroundImage: environmentImageUrl ? `url(${environmentImageUrl})` : 'none' }}
@@ -938,17 +1063,42 @@ const App: React.FC = () => {
               </h1>
               <p className="text-gray-400 mt-2 text-lg">Old world wisdom. New world classroom.</p>
             </div>
-            <div className="flex flex-col sm:items-end gap-2">
+            <div className="flex flex-col sm:items-end gap-2 w-full sm:w-auto">
               {userEmail && (
-                <span className="text-sm text-gray-300">Signed in as {userEmail}</span>
+                <span className="text-sm text-gray-300 text-center sm:text-right">Signed in as {userEmail}</span>
               )}
-              <button
-                type="button"
-                onClick={handleSignInClick}
-                className="self-center sm:self-end inline-flex items-center gap-2 rounded-md border border-amber-400/60 px-4 py-2 text-sm font-semibold text-amber-200 hover:bg-amber-500/10"
-              >
-                {isAuthenticated ? 'Sign out' : 'Sign in'}
-              </button>
+              <div className="flex items-center justify-between sm:justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={openSidebar}
+                  className="inline-flex items-center gap-2 rounded-md border border-gray-700 bg-gray-900/60 px-3 py-2 text-sm font-semibold text-gray-200 hover:border-amber-400 hover:text-amber-200 transition sm:hidden"
+                  aria-controls="mobile-sidebar"
+                  aria-expanded={isSidebarOpen}
+                >
+                  <svg
+                    className="h-4 w-4"
+                    viewBox="0 0 20 20"
+                    fill="none"
+                    xmlns="http://www.w3.org/2000/svg"
+                    aria-hidden="true"
+                  >
+                    <path
+                      d="M3 6h14M3 10h14M3 14h14"
+                      stroke="currentColor"
+                      strokeWidth={1.5}
+                      strokeLinecap="round"
+                    />
+                  </svg>
+                  Menu
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSignInClick}
+                  className="inline-flex items-center gap-2 rounded-md border border-amber-400/60 px-4 py-2 text-sm font-semibold text-amber-200 hover:bg-amber-500/10"
+                >
+                  {isAuthenticated ? 'Sign out' : 'Sign in'}
+                </button>
+              </div>
               {!isAuthenticated && authPrompt && (
                 <p className="text-xs text-amber-300 max-w-xs text-center sm:text-right">{authPrompt}</p>
               )}
@@ -956,19 +1106,38 @@ const App: React.FC = () => {
           </div>
         </header>
 
+        <nav className="sm:hidden grid grid-cols-2 gap-3 mb-6" aria-label="Quick navigation">
+          {mobileNavigationItems.map((item) => (
+            <button
+              key={item.key}
+              type="button"
+              onClick={() => {
+                closeSidebar();
+                item.action();
+              }}
+              className="rounded-xl border border-gray-800 bg-gray-900/70 px-3 py-3 text-left shadow-sm transition hover:border-amber-400/70 hover:bg-gray-800/70"
+            >
+              <span className="text-sm font-semibold text-gray-100">{item.label}</span>
+              <span className="text-xs text-gray-400">{item.description}</span>
+            </button>
+          ))}
+        </nav>
+
         <main className="max-w-7xl w-full mx-auto flex-grow flex flex-col lg:flex-row gap-6">
-          <Sidebar
-            recentConversations={recentConversations}
-            onSelectConversation={handleResumeConversation}
-            onCreateAncient={openCharacterCreatorView}
-            onOpenHistory={openHistoryView}
-            onOpenProfile={openProfileView}
-            onOpenSettings={openSettingsView}
-            onOpenQuests={openQuestsView}
-            currentView={currentView}
-            isAuthenticated={isAuthenticated}
-            userEmail={userEmail}
-          />
+          <div className="hidden lg:block lg:sticky lg:top-8 lg:self-start lg:max-h-[calc(100vh-4rem)]">
+            <Sidebar
+              recentConversations={recentConversations}
+              onSelectConversation={handleSidebarResumeConversation}
+              onCreateAncient={handleSidebarCreateAncient}
+              onOpenHistory={handleSidebarOpenHistory}
+              onOpenProfile={handleSidebarOpenProfile}
+              onOpenSettings={handleSidebarOpenSettings}
+              onOpenQuests={handleSidebarOpenQuests}
+              currentView={currentView}
+              isAuthenticated={isAuthenticated}
+              userEmail={userEmail}
+            />
+          </div>
           <div className="flex-1 flex flex-col">
             <ScrollToTop />
             <Routes>

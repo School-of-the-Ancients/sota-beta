@@ -13,6 +13,9 @@ type SidebarProps = {
   currentView: string;
   isAuthenticated: boolean;
   userEmail?: string | null;
+  className?: string;
+  onClose?: () => void;
+  isMobileOverlay?: boolean;
 };
 
 const Sidebar: React.FC<SidebarProps> = ({
@@ -26,6 +29,9 @@ const Sidebar: React.FC<SidebarProps> = ({
   currentView,
   isAuthenticated,
   userEmail,
+  className,
+  onClose,
+  isMobileOverlay = false,
 }) => {
   const navigationItems = [
     {
@@ -54,10 +60,29 @@ const Sidebar: React.FC<SidebarProps> = ({
     },
   ];
 
+  const containerClassName = [
+    'flex-shrink-0',
+    'w-full',
+    isMobileOverlay ? 'max-w-xs sm:max-w-sm h-full' : 'lg:w-72 xl:w-80',
+    className,
+  ]
+    .filter(Boolean)
+    .join(' ');
+
   return (
-    <aside className="w-full lg:w-72 xl:w-80 flex-shrink-0">
-      <div className="bg-gray-900/70 border border-gray-800 rounded-2xl p-5 shadow-xl backdrop-blur-sm">
-        <div className="mb-6">
+    <aside className={containerClassName}>
+      <div className="relative h-full bg-gray-900/70 border border-gray-800 rounded-2xl p-5 shadow-xl backdrop-blur-sm flex flex-col">
+        {onClose && (
+          <button
+            type="button"
+            onClick={onClose}
+            className="absolute right-4 top-4 text-gray-400 hover:text-amber-200 transition"
+            aria-label="Close navigation"
+          >
+            <span aria-hidden="true">&times;</span>
+          </button>
+        )}
+        <div className="mb-6 pr-6">
           <h2 className="text-lg font-semibold text-amber-300 tracking-wide">Explorer Hub</h2>
           <p className="text-sm text-gray-400">
             {isAuthenticated
@@ -95,7 +120,7 @@ const Sidebar: React.FC<SidebarProps> = ({
             </div>
           </div>
 
-          <div>
+          <div className="flex-1 overflow-y-auto pr-1">
             <div className="flex items-center justify-between mb-2">
               <h3 className="text-sm font-semibold uppercase tracking-wide text-gray-300">Recent Chats</h3>
               <button
