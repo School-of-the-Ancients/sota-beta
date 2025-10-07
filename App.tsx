@@ -22,6 +22,7 @@ import QuestIcon from './components/icons/QuestIcon';
 import QuestCreator from './components/QuestCreator';
 import QuestQuiz from './components/QuestQuiz';
 import AuthModal from './components/AuthModal';
+import Sidebar from './components/Sidebar';
 
 import { CHARACTERS, QUESTS } from './constants';
 import { useSupabaseAuth } from './hooks/useSupabaseAuth';
@@ -55,7 +56,15 @@ const App: React.FC = () => {
 
   const [selectedCharacter, setSelectedCharacter] = useState<Character | null>(null);
   const [view, setView] = useState<
-    'selector' | 'conversation' | 'history' | 'creator' | 'quests' | 'questCreator' | 'quiz'
+    | 'selector'
+    | 'conversation'
+    | 'history'
+    | 'creator'
+    | 'quests'
+    | 'questCreator'
+    | 'quiz'
+    | 'profile'
+    | 'settings'
   >('selector');
 
   const [environmentImageUrl, setEnvironmentImageUrl] = useState<string | null>(null);
@@ -71,6 +80,9 @@ const App: React.FC = () => {
   const [quizAssessment, setQuizAssessment] = useState<QuestAssessment | null>(null);
   const [authPrompt, setAuthPrompt] = useState<string | null>(null);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [notificationsEnabled, setNotificationsEnabled] = useState(true);
+  const [autoSaveEnabled, setAutoSaveEnabled] = useState(true);
+  const [preferredTheme, setPreferredTheme] = useState<'system' | 'light' | 'dark'>('dark');
 
   const customCharacters = userData.customCharacters;
   const customQuests = userData.customQuests;
@@ -110,6 +122,10 @@ const App: React.FC = () => {
     }
     return allQuests.find((quest) => quest.id === lastQuizResult.questId) ?? null;
   }, [allQuests, lastQuizResult]);
+  const recentConversations = useMemo(
+    () => conversationHistory.slice(0, 5),
+    [conversationHistory]
+  );
 
   useEffect(() => {
     if (customQuests.length === 0) {
@@ -858,6 +874,124 @@ const App: React.FC = () => {
             </button>
           </div>
         );
+      case 'profile':
+        return (
+          <div className="bg-gray-900/60 border border-gray-800 rounded-2xl p-6 text-left space-y-6 animate-fade-in">
+            <div>
+              <h2 className="text-3xl font-bold text-amber-200">Explorer Profile</h2>
+              <p className="text-sm text-gray-400 mt-1">
+                Chronicle your journey with the ancients and track your learning legacy.
+              </p>
+            </div>
+            {isAuthenticated ? (
+              <div className="space-y-6">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  <div className="bg-gray-800/60 border border-gray-700 rounded-xl p-4">
+                    <p className="text-xs uppercase tracking-wide text-gray-400">Custom Ancients</p>
+                    <p className="text-2xl font-semibold text-amber-200 mt-1">{customCharacters.length}</p>
+                  </div>
+                  <div className="bg-gray-800/60 border border-gray-700 rounded-xl p-4">
+                    <p className="text-xs uppercase tracking-wide text-gray-400">Conversations</p>
+                    <p className="text-2xl font-semibold text-amber-200 mt-1">{conversationHistory.length}</p>
+                  </div>
+                  <div className="bg-gray-800/60 border border-gray-700 rounded-xl p-4">
+                    <p className="text-xs uppercase tracking-wide text-gray-400">Quests Complete</p>
+                    <p className="text-2xl font-semibold text-amber-200 mt-1">{completedQuests.length}</p>
+                  </div>
+                </div>
+
+                <div className="bg-gray-800/50 border border-gray-700 rounded-xl p-5 space-y-2">
+                  <p className="text-xs uppercase tracking-wide text-gray-400">Account Email</p>
+                  <p className="text-lg text-gray-100">{userEmail ?? 'Unknown adventurer'}</p>
+                </div>
+
+                <div className="bg-gray-800/50 border border-gray-700 rounded-xl p-5">
+                  <p className="text-sm text-gray-200 leading-relaxed">
+                    Keep creating ancients and embarking on quests to expand your mastery. Each conversation strengthens your
+                    connection to the eras you study.
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <div className="bg-gray-800/60 border border-gray-700 rounded-xl p-6 text-center">
+                <p className="text-lg text-amber-200 font-semibold mb-2">Traveler, you must sign in.</p>
+                <p className="text-sm text-gray-300">
+                  Access your profile, track achievements, and synchronize progress across devices once you are authenticated.
+                </p>
+              </div>
+            )}
+          </div>
+        );
+      case 'settings':
+        return (
+          <div className="bg-gray-900/60 border border-gray-800 rounded-2xl p-6 text-left space-y-6 animate-fade-in">
+            <div>
+              <h2 className="text-3xl font-bold text-amber-200">User Settings</h2>
+              <p className="text-sm text-gray-400 mt-1">
+                Customize how you experience conversations with history&apos;s greatest minds.
+              </p>
+            </div>
+            {isAuthenticated ? (
+              <div className="space-y-5">
+                <label className="flex items-center justify-between gap-4 bg-gray-800/50 border border-gray-700 rounded-xl p-4">
+                  <div>
+                    <span className="text-sm font-semibold text-gray-200">Journey Notifications</span>
+                    <p className="text-xs text-gray-400">Receive alerts when a quest assessment is ready.</p>
+                  </div>
+                  <input
+                    type="checkbox"
+                    className="h-5 w-5 rounded border-gray-600 bg-gray-900 text-amber-500 focus:ring-amber-400"
+                    checked={notificationsEnabled}
+                    onChange={(event) => setNotificationsEnabled(event.target.checked)}
+                  />
+                </label>
+
+                <label className="flex items-center justify-between gap-4 bg-gray-800/50 border border-gray-700 rounded-xl p-4">
+                  <div>
+                    <span className="text-sm font-semibold text-gray-200">Auto-save Transcripts</span>
+                    <p className="text-xs text-gray-400">Keep every exchange stored in your history automatically.</p>
+                  </div>
+                  <input
+                    type="checkbox"
+                    className="h-5 w-5 rounded border-gray-600 bg-gray-900 text-amber-500 focus:ring-amber-400"
+                    checked={autoSaveEnabled}
+                    onChange={(event) => setAutoSaveEnabled(event.target.checked)}
+                  />
+                </label>
+
+                <div className="bg-gray-800/50 border border-gray-700 rounded-xl p-4 space-y-2">
+                  <label htmlFor="theme-select" className="text-sm font-semibold text-gray-200">
+                    Interface Theme
+                  </label>
+                  <p className="text-xs text-gray-400">
+                    Choose the ambiance that best matches your study ritual.
+                  </p>
+                  <select
+                    id="theme-select"
+                    className="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-200 focus:border-amber-400 focus:ring-amber-400"
+                    value={preferredTheme}
+                    onChange={(event) => setPreferredTheme(event.target.value as 'system' | 'light' | 'dark')}
+                  >
+                    <option value="dark">Dark</option>
+                    <option value="light">Light</option>
+                    <option value="system">System</option>
+                  </select>
+                </div>
+
+                <p className="text-xs text-gray-400">
+                  Settings are stored locally for now. Cloud sync will arrive in a future update of School of the Ancients.
+                </p>
+              </div>
+            ) : (
+              <div className="bg-gray-800/60 border border-gray-700 rounded-xl p-6 text-center">
+                <p className="text-lg text-amber-200 font-semibold mb-2">Sign in to tailor your experience.</p>
+                <p className="text-sm text-gray-300">
+                  Manage notifications, transcripts, and appearance preferences once you&apos;re authenticated.
+                </p>
+              </div>
+            )}
+          </div>
+        );
       case 'selector':
       default:
         return (
@@ -1079,6 +1213,20 @@ const App: React.FC = () => {
     setView('quests');
   }, [requireAuth]);
 
+  const openProfileView = useCallback(() => {
+    if (!requireAuth('Sign in to view your explorer profile.')) {
+      return;
+    }
+    setView('profile');
+  }, [requireAuth]);
+
+  const openSettingsView = useCallback(() => {
+    if (!requireAuth('Sign in to update your settings.')) {
+      return;
+    }
+    setView('settings');
+  }, [requireAuth]);
+
   return (
     <div className="relative min-h-screen bg-[#1a1a1a]">
       <AuthModal
@@ -1125,7 +1273,21 @@ const App: React.FC = () => {
           </div>
         </header>
 
-        <main className="max-w-7xl w-full mx-auto flex-grow flex flex-col">{renderContent()}</main>
+        <main className="max-w-7xl w-full mx-auto flex-grow flex flex-col lg:flex-row gap-6">
+          <Sidebar
+            recentConversations={recentConversations}
+            onSelectConversation={handleResumeConversation}
+            onCreateAncient={openCharacterCreatorView}
+            onOpenHistory={openHistoryView}
+            onOpenProfile={openProfileView}
+            onOpenSettings={openSettingsView}
+            onOpenQuests={openQuestsView}
+            currentView={view}
+            isAuthenticated={isAuthenticated}
+            userEmail={userEmail}
+          />
+          <div className="flex-1 flex flex-col">{renderContent()}</div>
+        </main>
       </div>
     </div>
   );
