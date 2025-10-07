@@ -7,6 +7,7 @@ interface QuestQuizProps {
   assessment?: QuestAssessment | null;
   onExit: () => void;
   onComplete: (result: QuizResult) => void;
+  apiKey: string | null;
 }
 
 const PASS_THRESHOLD = 0.6;
@@ -50,7 +51,7 @@ const validateQuestions = (data: unknown): QuizQuestion[] => {
     .slice(0, MAX_QUESTIONS);
 };
 
-const QuestQuiz: React.FC<QuestQuizProps> = ({ quest, assessment, onExit, onComplete }) => {
+const QuestQuiz: React.FC<QuestQuizProps> = ({ quest, assessment, onExit, onComplete, apiKey }) => {
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [questions, setQuestions] = useState<QuizQuestion[]>([]);
@@ -138,14 +139,14 @@ const QuestQuiz: React.FC<QuestQuizProps> = ({ quest, assessment, onExit, onComp
       setIsLoading(true);
       resetState();
 
-      if (!process.env.API_KEY) {
+      if (!apiKey) {
         setQuestions(buildFallbackQuestions());
         setIsLoading(false);
         return;
       }
 
       try {
-        const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+        const ai = new GoogleGenAI({ apiKey });
         const prompt = `You are an expert tutor creating a short mastery quiz. Design ${questionCount} multiple-choice questions (3-4 answer choices each) to evaluate whether a learner has mastered the quest "${quest.title}". The quest objective is: "${quest.objective}". Focus on these key learning points: ${quest.focusPoints.join('; ')}. Each question must test one learning point.
 
 Return JSON with this schema:
@@ -213,7 +214,7 @@ Ensure questions are rigorous but clear, avoid trick questions, and keep the ans
     return () => {
       isCancelled = true;
     };
-  }, [buildFallbackQuestions, questionCount, quest.focusPoints, quest.objective, quest.title, refreshToken, resetState]);
+  }, [apiKey, buildFallbackQuestions, questionCount, quest.focusPoints, quest.objective, quest.title, refreshToken, resetState]);
 
   const handleSelect = (questionId: string, optionIndex: number) => {
     setAnswers((prev) => ({ ...prev, [questionId]: optionIndex }));

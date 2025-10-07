@@ -48,9 +48,8 @@ describe('App', () => {
     );
 
     // Wait for the app to finish loading data
-    await waitFor(() => {
-      expect(screen.getByText('School of the Ancients')).toBeInTheDocument();
-    });
+    const titleInstances = await screen.findAllByText('School of the Ancients');
+    expect(titleInstances[0]).toBeInTheDocument();
   });
 
   it('renders the History view when navigating to /history', async () => {

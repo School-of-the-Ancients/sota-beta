@@ -8,9 +8,10 @@ interface QuizRouteProps {
   assessment: QuestAssessment | null;
   onExit: () => void;
   onComplete: (quest: Quest, result: QuizResult) => void;
+  apiKey: string | null;
 }
 
-const QuizRoute: React.FC<QuizRouteProps> = ({ quests, assessment, onExit, onComplete }) => {
+const QuizRoute: React.FC<QuizRouteProps> = ({ quests, assessment, onExit, onComplete, apiKey }) => {
   const { questId } = useParams<{ questId: string }>();
   const navigate = useNavigate();
 
@@ -36,6 +37,7 @@ const QuizRoute: React.FC<QuizRouteProps> = ({ quests, assessment, onExit, onCom
       assessment={assessment && assessment.questId === quest.id ? assessment : null}
       onExit={onExit}
       onComplete={(result) => onComplete(quest, result)}
+      apiKey={apiKey}
     />
   );
 };

@@ -1,4 +1,5 @@
 import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
+import { Link } from 'react-router-dom';
 import { GoogleGenAI, Type } from '@google/genai';
 import type { Character, ConversationTurn, SavedConversation, Quest } from '../types';
 import { useGeminiLive } from '../hooks/useGeminiLive';
@@ -23,6 +24,7 @@ interface ConversationViewProps {
   resumeConversationId?: string | null;
   conversationHistory: SavedConversation[];
   onConversationUpdate: (conversation: SavedConversation) => void;
+  apiKey: string | null;
 }
 
 const StatusIndicator: React.FC<{ state: ConnectionState; isMicActive: boolean }> = ({ state, isMicActive }) => {
@@ -85,6 +87,7 @@ const ConversationView: React.FC<ConversationViewProps> = ({
   resumeConversationId,
   conversationHistory,
   onConversationUpdate,
+  apiKey,
 }) => {
   const [transcript, setTranscript] = useState<ConversationTurn[]>([]);
   const [textInput, setTextInput] = useState('');
@@ -92,6 +95,7 @@ const ConversationView: React.FC<ConversationViewProps> = ({
   const [isFetchingSuggestions, setIsFetchingSuggestions] = useState(false);
   const [isGeneratingVisual, setIsGeneratingVisual] = useState(false);
   const [generationMessage, setGenerationMessage] = useState('');
+  const isApiKeyConfigured = Boolean(apiKey);
 
   const initialAudioSrc = AMBIENCE_LIBRARY.find(a => a.tag === character.ambienceTag)?.audioSrc ?? null;
   const { isMuted: isAmbienceMuted, toggleMute: toggleAmbienceMute, changeTrack: changeAmbienceTrack } = useAmbientAudio(initialAudioSrc);
@@ -265,8 +269,10 @@ const ConversationView: React.FC<ConversationViewProps> = ({
     setIsGeneratingVisual(true);
     setGenerationMessage(`Entering ${description}...`);
     try {
-      if (!process.env.API_KEY) throw new Error("API_KEY not set.");
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+      if (!apiKey) {
+        throw new Error('API key not set.');
+      }
+      const ai = new GoogleGenAI({ apiKey });
       
       const imagePromise = ai.models.generateImages({
         model: 'imagen-4.0-generate-001',
@@ -314,12 +320,20 @@ const ConversationView: React.FC<ConversationViewProps> = ({
         }));
       }
     } catch (err) {
-      console.error("Failed to generate environment:", err);
+      const missingKey = err instanceof Error && err.message === 'API key not set.';
+      if (missingKey) {
+        console.warn('Environment generation skipped: Gemini API key not configured.');
+      } else {
+        console.error('Failed to generate environment:', err);
+      }
+      const failureMessage = missingKey
+        ? 'Add your Gemini API key in Settings to change the environment.'
+        : `Error loading environment: ${description}`;
       setTranscript(prev => prev.map(turn => {
         if (turn.artifact?.id === environmentArtifactId) {
             const newTurn = { ...turn };
             delete newTurn.artifact;
-            newTurn.text = `Error loading environment: ${description}`;
+            newTurn.text = failureMessage;
             return newTurn;
         }
         return turn;
@@ -327,7 +341,7 @@ const ConversationView: React.FC<ConversationViewProps> = ({
     } finally {
       setIsGeneratingVisual(false);
     }
-  }, [onEnvironmentUpdate, character, changeAmbienceTrack]);
+  }, [apiKey, onEnvironmentUpdate, character, changeAmbienceTrack]);
 
   const handleArtifactDisplay = useCallback(async (name: string, description: string) => {
     const artifactId = `artifact_${Date.now()}`;
@@ -343,8 +357,8 @@ const ConversationView: React.FC<ConversationViewProps> = ({
     setGenerationMessage(`Creating ${name}...`);
 
     try {
-        if (!process.env.API_KEY) throw new Error("API_KEY not set.");
-        const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+        if (!apiKey) throw new Error('API key not set.');
+        const ai = new GoogleGenAI({ apiKey });
         const response = await ai.models.generateImages({
             model: 'imagen-4.0-generate-001',
             prompt: `A detailed, clear image of: a "${name}". ${description}. The artifact should be rendered in a style authentic to ${character.name}'s era and work (e.g., a da Vinci sketch, a 19th-century diagram, a classical Greek sculpture). Present it on a simple, non-distracting background like aged parchment or a museum display.`,
@@ -372,12 +386,20 @@ const ConversationView: React.FC<ConversationViewProps> = ({
             }));
         }
     } catch (err) {
-      console.error("Failed to generate artifact:", err);
+      const missingKey = err instanceof Error && err.message === 'API key not set.';
+      if (missingKey) {
+        console.warn('Artifact generation skipped: Gemini API key not configured.');
+      } else {
+        console.error('Failed to generate artifact:', err);
+      }
+      const failureMessage = missingKey
+        ? 'Save your Gemini API key in Settings to generate artifacts.'
+        : `Error creating visual for ${name}`;
       setTranscript(prev => prev.map(turn => {
         if (turn.artifact?.id === artifactId) {
           const newTurn = { ...turn };
           delete newTurn.artifact;
-          newTurn.text = `Error creating visual for ${name}`;
+          newTurn.text = failureMessage;
           return newTurn;
         }
         return turn;
@@ -385,7 +407,7 @@ const ConversationView: React.FC<ConversationViewProps> = ({
     } finally {
         setIsGeneratingVisual(false);
     }
-  }, [character]);
+  }, [apiKey, character]);
 
 
   const {
@@ -396,6 +418,7 @@ const ConversationView: React.FC<ConversationViewProps> = ({
     toggleMicrophone,
     sendTextMessage
   } = useGeminiLive(
+    apiKey,
     character.systemInstruction,
     character.voiceName,
     character.voiceAccent,
@@ -409,8 +432,8 @@ const ConversationView: React.FC<ConversationViewProps> = ({
     if (currentTranscript.length === 0) return;
     setIsFetchingSuggestions(true);
     try {
-        if (!process.env.API_KEY) throw new Error("API_KEY not set.");
-        const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+        if (!apiKey) throw new Error('API key not set.');
+        const ai = new GoogleGenAI({ apiKey });
 
         const contextTranscript = currentTranscript.slice(-4).map(turn => `${turn.speakerName}: ${turn.text}`).join('\n');
 
@@ -452,7 +475,7 @@ ${contextTranscript}
     } finally {
         setIsFetchingSuggestions(false);
     }
-  }, [character.name]);
+  }, [apiKey, character.name]);
 
   const requestDynamicSuggestions = useCallback(() => {
     updateDynamicSuggestions(transcript);
@@ -536,7 +559,24 @@ ${contextTranscript}
             <p className="mt-4 text-amber-200 text-lg">{generationMessage}</p>
         </div>
       )}
-      
+
+      {!isApiKeyConfigured && (
+        <div className="absolute inset-0 z-40 flex items-center justify-center bg-black/75 px-4">
+          <div className="max-w-sm space-y-3 rounded-2xl border border-amber-500/40 bg-gray-900/90 p-6 text-center shadow-xl">
+            <h3 className="text-xl font-semibold text-amber-200">Add your Gemini API key</h3>
+            <p className="text-sm text-gray-200">
+              Save your key in Settings to start live mentorship, generate visuals, and unlock full conversation features.
+            </p>
+            <Link
+              to="/settings"
+              className="inline-flex items-center justify-center rounded-lg bg-amber-500 px-4 py-2 text-sm font-semibold text-gray-900 shadow transition hover:bg-amber-400"
+            >
+              Open Settings
+            </Link>
+          </div>
+        </div>
+      )}
+
       <div className="relative z-10 flex flex-col md:flex-row gap-4 md:gap-8 w-full p-2 sm:p-4 md:p-6">
         <div className="w-full md:w-1/3 md:max-w-sm flex flex-col items-center text-center">
             <div className="relative w-40 h-40 sm:w-48 sm:h-48 md:w-64 md:h-64 flex-shrink-0">
@@ -584,7 +624,7 @@ ${contextTranscript}
                         key={i}
                         onClick={() => sendTextMessage(prompt)}
                         className="w-full text-sm text-left bg-gray-800/60 hover:bg-gray-700/80 p-3 rounded-lg transition-colors duration-200 border border-gray-700 text-gray-300 disabled:opacity-50"
-                        disabled={connectionState !== ConnectionState.LISTENING && connectionState !== ConnectionState.CONNECTED}
+                        disabled={!isApiKeyConfigured || (connectionState !== ConnectionState.LISTENING && connectionState !== ConnectionState.CONNECTED)}
                     >
                         <span className="text-amber-300 mr-2">»</span>
                         {prompt}
@@ -599,7 +639,7 @@ ${contextTranscript}
                     <button
                     type="button"
                     onClick={requestDynamicSuggestions}
-                    disabled={isFetchingSuggestions}
+                    disabled={isFetchingSuggestions || !isApiKeyConfigured}
                     className="w-full text-sm font-semibold bg-amber-800/70 hover:bg-amber-700 text-amber-100 py-2 px-3 rounded-lg transition-colors duration-200 border border-amber-700 disabled:opacity-60 disabled:cursor-not-allowed"
                     >
                     {isFetchingSuggestions ? 'Generating suggestions...' : 'Suggest prompts'}
@@ -617,7 +657,7 @@ ${contextTranscript}
                             key={i}
                             onClick={() => sendTextMessage(prompt)}
                             className="w-full text-sm text-left bg-gray-800/60 hover:bg-gray-700/80 p-3 rounded-lg transition-colors duration-200 border border-gray-700 text-gray-300 disabled:opacity-50"
-                            disabled={connectionState !== ConnectionState.LISTENING && connectionState !== ConnectionState.CONNECTED}
+                            disabled={!isApiKeyConfigured || (connectionState !== ConnectionState.LISTENING && connectionState !== ConnectionState.CONNECTED)}
                         >
                             <span className="text-amber-300 mr-2">»</span>
                             {prompt}
@@ -714,12 +754,12 @@ ${contextTranscript}
                     onChange={(e) => setTextInput(e.target.value)}
                     placeholder={isMicActive ? placeholder : "Type a message..."}
                     className="flex-grow bg-gray-800 border border-gray-600 rounded-lg px-4 py-2 text-white focus:outline-none focus:ring-2 focus:ring-amber-400 disabled:opacity-50"
-                    disabled={connectionState === ConnectionState.CONNECTING || connectionState === ConnectionState.SPEAKING || connectionState === ConnectionState.THINKING }
+                    disabled={!isApiKeyConfigured || connectionState === ConnectionState.CONNECTING || connectionState === ConnectionState.SPEAKING || connectionState === ConnectionState.THINKING }
                 />
                 <button
                     type="submit"
                     className="bg-amber-600 hover:bg-amber-500 text-black font-bold p-3 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                    disabled={!textInput.trim() || connectionState === ConnectionState.CONNECTING || connectionState === ConnectionState.SPEAKING || connectionState === ConnectionState.THINKING }
+                    disabled={!isApiKeyConfigured || !textInput.trim() || connectionState === ConnectionState.CONNECTING || connectionState === ConnectionState.SPEAKING || connectionState === ConnectionState.THINKING }
                     aria-label="Send message"
                 >
                     <SendIcon className="w-5 h-5" />

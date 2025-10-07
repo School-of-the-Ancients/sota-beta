@@ -28,6 +28,7 @@ import ConversationRoute from './src/routes/Conversation';
 import HistoryRoute from './src/routes/History';
 import CharacterCreatorRoute from './src/routes/CharacterCreator';
 import { links } from './src/lib/links';
+import { encryptSecretForUser, decryptSecretForUser } from './src/lib/encryption';
 
 const App: React.FC = () => {
   const navigate = useNavigate();
@@ -52,10 +53,13 @@ const App: React.FC = () => {
   const [quizAssessment, setQuizAssessment] = useState<QuestAssessment | null>(null);
   const [authPrompt, setAuthPrompt] = useState<string | null>(null);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
-  const [notificationsEnabled, setNotificationsEnabled] = useState(true);
-  const [autoSaveEnabled, setAutoSaveEnabled] = useState(true);
-  const [preferredTheme, setPreferredTheme] = useState<'system' | 'light' | 'dark'>('dark');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [apiKey, setApiKey] = useState<string | null>(null);
+  const [isDecryptingApiKey, setIsDecryptingApiKey] = useState(false);
+  const [apiKeyError, setApiKeyError] = useState<string | null>(null);
+  const [apiKeyInput, setApiKeyInput] = useState('');
+  const [isSavingApiKey, setIsSavingApiKey] = useState(false);
+  const [apiKeySuccessMessage, setApiKeySuccessMessage] = useState<string | null>(null);
 
   const customCharacters = userData.customCharacters;
   const customQuests = userData.customQuests;
@@ -65,6 +69,48 @@ const App: React.FC = () => {
   const isSaving = isSavingConversation || dataSaving;
   const isAuthenticated = Boolean(user);
   const isAppLoading = authLoading || dataLoading;
+  const hasStoredApiKey = Boolean(userData.apiKeySecret);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    if (!user || !userData.apiKeySecret) {
+      setApiKey(null);
+      setApiKeyError(null);
+      setIsDecryptingApiKey(false);
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    setIsDecryptingApiKey(true);
+
+    const run = async () => {
+      try {
+        const decrypted = await decryptSecretForUser(user.id, userData.apiKeySecret);
+        if (!cancelled) {
+          setApiKey(decrypted);
+          setApiKeyError(null);
+        }
+      } catch (error) {
+        console.error('Failed to decrypt stored API key', error);
+        if (!cancelled) {
+          setApiKey(null);
+          setApiKeyError('We could not decrypt your stored API key. Save it again in Settings to continue.');
+        }
+      } finally {
+        if (!cancelled) {
+          setIsDecryptingApiKey(false);
+        }
+      }
+    };
+
+    void run();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [user, userData.apiKeySecret]);
 
   const ensureConversationComplete = useCallback(
     (options?: { allowSessionId?: string; message?: string }) => {
@@ -106,6 +152,70 @@ const App: React.FC = () => {
     },
     [isAuthenticated]
   );
+
+  const saveApiKeySetting = useCallback(
+    async (nextKey: string | null) => {
+      if (!user) {
+        setApiKeyError('Sign in to store your API key.');
+        setApiKeySuccessMessage(null);
+        return false;
+      }
+
+      setIsSavingApiKey(true);
+      setApiKeyError(null);
+      setApiKeySuccessMessage(null);
+
+      try {
+        if (!nextKey) {
+          updateData((prev) => ({
+            ...prev,
+            apiKeySecret: null,
+          }));
+          setApiKey(null);
+          setApiKeySuccessMessage('Removed your stored API key.');
+          return true;
+        }
+
+        const encrypted = await encryptSecretForUser(user.id, nextKey);
+        updateData((prev) => ({
+          ...prev,
+          apiKeySecret: encrypted,
+        }));
+        setApiKey(nextKey);
+        setApiKeySuccessMessage('API key saved successfully.');
+        return true;
+      } catch (error) {
+        console.error('Failed to persist API key', error);
+        setApiKeyError('Unable to save your API key. Please ensure your browser supports secure storage and try again.');
+        return false;
+      } finally {
+        setIsSavingApiKey(false);
+      }
+    },
+    [updateData, user]
+  );
+
+  const handleApiKeySubmit = useCallback(
+    async (event: React.FormEvent<HTMLFormElement>) => {
+      event.preventDefault();
+      const trimmed = apiKeyInput.trim();
+      if (!trimmed) {
+        setApiKeyError('Enter your Gemini API key before saving.');
+        setApiKeySuccessMessage(null);
+        return;
+      }
+
+      const saved = await saveApiKeySetting(trimmed);
+      if (saved) {
+        setApiKeyInput('');
+      }
+    },
+    [apiKeyInput, saveApiKeySetting]
+  );
+
+  const handleRemoveStoredApiKey = useCallback(async () => {
+    await saveApiKeySetting(null);
+  }, [saveApiKeySetting]);
 
   useEffect(() => {
     if (isAuthenticated) {
@@ -757,51 +867,55 @@ const App: React.FC = () => {
       };
 
       if (questForSession) {
-        const ai = new GoogleGenAI({ apiKey: process.env.API_KEY ?? '' });
-        const questTranscriptText = transcript
-          .map((turn) => `${turn.speakerName || turn.speaker}: ${turn.text}`)
-          .join('\n');
+        updatedConversation = {
+          ...updatedConversation,
+          questId: questForSession.id,
+          questTitle: questForSession.title,
+        };
 
-        const evaluationPrompt = `You are a precise mentor at the School of the Ancients. Assess whether the learner has mastered the quest goal. Respond as JSON with:\n{\n  \\"passed\\": boolean, // true if the learner clearly demonstrates mastery, false otherwise\n  \\"summary\\": string, // 2-3 sentence summary of the learner's performance\n  \\"evidence\\": string[], // key quotes or reasoning that show understanding\n  \\"improvements\\": string[], // actionable suggestions if the student has gaps (empty if passed)\n}\n\nFocus only on the student's contributions. Mark passed=true only if the learner clearly articulates key ideas from the objective.`;
+        if (apiKey) {
+          const ai = new GoogleGenAI({ apiKey });
+          const questTranscriptText = transcript
+            .map((turn) => `${turn.speakerName || turn.speaker}: ${turn.text}`)
+            .join('\n');
 
-        const evaluationResponse = await ai.models.generateContent({
-          model: 'gemini-2.5-flash',
-          contents: evaluationPrompt + `\n\nTranscript:\n${questTranscriptText}`,
-          config: {
-            responseMimeType: 'application/json',
-            responseSchema: {
-              type: Type.OBJECT,
-              properties: {
-                passed: { type: Type.BOOLEAN },
-                summary: { type: Type.STRING },
-                evidence: { type: Type.ARRAY, items: { type: Type.STRING } },
-                improvements: { type: Type.ARRAY, items: { type: Type.STRING } },
+          const evaluationPrompt = `You are a precise mentor at the School of the Ancients. Assess whether the learner has mastered the quest goal. Respond as JSON with:\n{\n  \\"passed\\": boolean, // true if the learner clearly demonstrates mastery, false otherwise\n  \\"summary\\": string, // 2-3 sentence summary of the learner's performance\n  \\"evidence\\": string[], // key quotes or reasoning that show understanding\n  \\"improvements\\": string[], // actionable suggestions if the student has gaps (empty if passed)\n}\n\nFocus only on the student's contributions. Mark passed=true only if the learner clearly articulates key ideas from the objective.`;
+
+          const evaluationResponse = await ai.models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: evaluationPrompt + `\n\nTranscript:\n${questTranscriptText}`,
+            config: {
+              responseMimeType: 'application/json',
+              responseSchema: {
+                type: Type.OBJECT,
+                properties: {
+                  passed: { type: Type.BOOLEAN },
+                  summary: { type: Type.STRING },
+                  evidence: { type: Type.ARRAY, items: { type: Type.STRING } },
+                  improvements: { type: Type.ARRAY, items: { type: Type.STRING } },
+                },
+                required: ['passed', 'summary', 'evidence', 'improvements'],
               },
-              required: ['passed', 'summary', 'evidence', 'improvements'],
             },
-          },
-        });
+          });
 
-        const evaluation = JSON.parse(evaluationResponse.text);
-        questAssessment = {
-          questId: questForSession.id,
-          questTitle: questForSession.title,
-          passed: Boolean(evaluation.passed),
-          summary: evaluation.summary || '',
-          evidence: Array.isArray(evaluation.evidence) ? evaluation.evidence : [],
-          improvements: Array.isArray(evaluation.improvements) ? evaluation.improvements : [],
-        };
+          const evaluation = JSON.parse(evaluationResponse.text);
+          questAssessment = {
+            questId: questForSession.id,
+            questTitle: questForSession.title,
+            passed: Boolean(evaluation.passed),
+            summary: evaluation.summary || '',
+            evidence: Array.isArray(evaluation.evidence) ? evaluation.evidence : [],
+            improvements: Array.isArray(evaluation.improvements) ? evaluation.improvements : [],
+          };
 
-        updatedConversation = {
-          ...updatedConversation,
-          questAssessment,
-        };
-      } else if (questForSession) {
-        updatedConversation = {
-          ...updatedConversation,
-          questId: questForSession.id,
-          questTitle: questForSession.title,
-        };
+          updatedConversation = {
+            ...updatedConversation,
+            questAssessment,
+          };
+        } else {
+          console.warn('Gemini API key missing; skipping quest assessment generation.');
+        }
       }
 
       updateData((prev) => {
@@ -1140,6 +1254,7 @@ const App: React.FC = () => {
                         customCharacters: [newChar, ...prev.customCharacters],
                       }));
                     }}
+                    apiKey={apiKey}
                   />
                 }
               />
@@ -1151,6 +1266,7 @@ const App: React.FC = () => {
                     assessment={quizAssessment}
                     onExit={handleQuizExit}
                     onComplete={handleQuizComplete}
+                    apiKey={apiKey}
                   />
                 }
               />
@@ -1169,6 +1285,7 @@ const App: React.FC = () => {
                     onEndConversation={handleEndConversation}
                     onHydrateFromParams={hydrateConversationFromParams}
                     isAppLoading={isAppLoading}
+                    apiKey={apiKey}
                   />
                 }
               />
@@ -1190,6 +1307,7 @@ const App: React.FC = () => {
                   <CharacterCreatorRoute
                     onCharacterCreated={handleCharacterCreated}
                     onBack={() => navigate('/')}
+                    apiKey={apiKey}
                   />
                 }
               />
@@ -1255,56 +1373,93 @@ const App: React.FC = () => {
                       </p>
                     </div>
                     {isAuthenticated ? (
-                      <div className="space-y-5">
-                        <label className="flex items-center justify-between gap-4 bg-gray-800/50 border border-gray-700 rounded-xl p-4">
+                      <div className="space-y-6">
+                        <div className="bg-gray-800/50 border border-gray-700 rounded-xl p-5 space-y-4">
                           <div>
-                            <span className="text-sm font-semibold text-gray-200">Journey Notifications</span>
-                            <p className="text-xs text-gray-400">Receive alerts when a quest assessment is ready.</p>
+                            <span className="text-sm font-semibold text-gray-200">Gemini API Key</span>
+                            <p className="text-xs text-gray-400 mt-1">
+                              Store your personal Gemini API key securely. It is encrypted before being synced to Supabase so only your account can decrypt it.
+                            </p>
                           </div>
-                          <input
-                            type="checkbox"
-                            className="h-5 w-5 rounded border-gray-600 bg-gray-900 text-amber-500 focus:ring-amber-400"
-                            checked={notificationsEnabled}
-                            onChange={(event) => setNotificationsEnabled(event.target.checked)}
-                          />
-                        </label>
 
-                        <label className="flex items-center justify-between gap-4 bg-gray-800/50 border border-gray-700 rounded-xl p-4">
-                          <div>
-                            <span className="text-sm font-semibold text-gray-200">Auto-save Transcripts</span>
-                            <p className="text-xs text-gray-400">Keep every exchange stored in your history automatically.</p>
+                          <div className="rounded-lg border border-gray-700/60 bg-gray-900/60 p-4 space-y-2">
+                            <p className="text-xs uppercase tracking-wide text-gray-400">Status</p>
+                            <p className="text-sm text-gray-200">
+                              {isDecryptingApiKey
+                                ? 'Decrypting your stored key…'
+                                : hasStoredApiKey
+                                ? 'Key stored securely.'
+                                : 'No key saved yet.'}
+                            </p>
+                            {apiKeyError && <p className="text-sm text-red-400">{apiKeyError}</p>}
+                            {!apiKeyError && apiKeySuccessMessage && (
+                              <p className="text-sm text-emerald-300">{apiKeySuccessMessage}</p>
+                            )}
                           </div>
-                          <input
-                            type="checkbox"
-                            className="h-5 w-5 rounded border-gray-600 bg-gray-900 text-amber-500 focus:ring-amber-400"
-                            checked={autoSaveEnabled}
-                            onChange={(event) => setAutoSaveEnabled(event.target.checked)}
-                          />
-                        </label>
 
-                        <div className="bg-gray-800/50 border border-gray-700 rounded-xl p-4 space-y-2">
-                          <label htmlFor="theme-select" className="text-sm font-semibold text-gray-200">
-                            Interface Theme
-                          </label>
+                          <form onSubmit={handleApiKeySubmit} className="space-y-3">
+                            <div className="space-y-2">
+                              <label
+                                htmlFor="api-key-input"
+                                className="text-xs font-semibold uppercase tracking-wide text-gray-400"
+                              >
+                                Add or update key
+                              </label>
+                              <input
+                                id="api-key-input"
+                                type="password"
+                                autoComplete="off"
+                                className="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-200 focus:border-amber-400 focus:ring-amber-400"
+                                placeholder="Paste your Google Gemini API key"
+                                value={apiKeyInput}
+                                onChange={(event) => {
+                                  setApiKeyInput(event.target.value);
+                                  setApiKeyError(null);
+                                  setApiKeySuccessMessage(null);
+                                }}
+                              />
+                            </div>
+                            <div className="flex flex-col gap-3 sm:flex-row">
+                              <button
+                                type="submit"
+                                disabled={isSavingApiKey || !apiKeyInput.trim()}
+                                className="inline-flex items-center justify-center rounded-lg bg-amber-500 px-4 py-2 text-sm font-semibold text-gray-900 shadow-sm transition hover:bg-amber-400 disabled:cursor-not-allowed disabled:bg-gray-700 disabled:text-gray-400"
+                              >
+                                {isSavingApiKey ? 'Saving…' : 'Save API Key'}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={handleRemoveStoredApiKey}
+                                disabled={isSavingApiKey || !hasStoredApiKey}
+                                className="inline-flex items-center justify-center rounded-lg border border-gray-600 px-4 py-2 text-sm font-semibold text-gray-200 transition hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-60"
+                              >
+                                Remove Stored Key
+                              </button>
+                            </div>
+                          </form>
+
                           <p className="text-xs text-gray-400">
-                            Choose the ambiance that best matches your study ritual.
+                            Need a key? Create one from{' '}
+                            <a
+                              href="https://aistudio.google.com/app/apikey"
+                              target="_blank"
+                              rel="noreferrer"
+                              className="text-amber-300 underline-offset-2 hover:text-amber-200 hover:underline"
+                            >
+                              Google AI Studio
+                            </a>
+                            . Your key never leaves this browser unencrypted.
                           </p>
-                          <select
-                            id="theme-select"
-                            className="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-200 focus:border-amber-400 focus:ring-amber-400"
-                            value={preferredTheme}
-                            onChange={(event) => setPreferredTheme(event.target.value as 'system' | 'light' | 'dark')}
-                          >
-                            <option value="dark">Dark</option>
-                            <option value="light">Light</option>
-                            <option value="system">System</option>
-                          </select>
                         </div>
 
-                        <p className="text-xs text-gray-400">
-                          Settings are stored locally for now. Cloud sync will arrive in a future update of School of the
-                          Ancients.
-                        </p>
+                        <div className="bg-gray-800/30 border border-gray-700/50 rounded-xl p-5 space-y-2">
+                          <p className="text-sm text-gray-300">
+                            We retired the experimental notification, auto-save, and theme toggles while we build a secure, cloud-backed preferences system.
+                          </p>
+                          <p className="text-xs text-gray-500">
+                            More customization options will return soon.
+                          </p>
+                        </div>
                       </div>
                     ) : (
                       <div className="bg-gray-800/60 border border-gray-700 rounded-xl p-6 text-center">

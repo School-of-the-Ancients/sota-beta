@@ -120,6 +120,11 @@ export interface Quest {
   focusPoints: string[];
 }
 
+export interface EncryptedSecret {
+  iv: string;
+  ciphertext: string;
+}
+
 export interface UserData {
   customCharacters: Character[];
   customQuests: Quest[];
@@ -128,4 +133,5 @@ export interface UserData {
   activeQuestId: string | null;
   lastQuizResult: QuizResult | null;
   migratedAt?: string | null;
+  apiKeySecret: EncryptedSecret | null;
 }

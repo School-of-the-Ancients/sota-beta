@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { GoogleGenAI, Type } from '@google/genai';
 import type { Character, PersonaData, Quest } from '../types';
 import { AMBIENCE_LIBRARY, AVAILABLE_VOICES } from '../constants';
@@ -19,6 +20,7 @@ interface QuestCreatorProps {
   onQuestReady: (quest: Quest, character: Character) => void;
   onCharacterCreated: (character: Character) => void;
   initialGoal?: string;
+  apiKey: string | null;
 }
 
 /** Pretty, branded SVG fallback if portrait generation fails */
@@ -54,6 +56,7 @@ const QuestCreator: React.FC<QuestCreatorProps> = ({
   onQuestReady,
   onCharacterCreated,
   initialGoal,
+  apiKey,
 }) => {
   const [goal, setGoal] = useState(initialGoal ?? '');
   const [prefs, setPrefs] = useState({ difficulty: 'auto', style: 'auto', time: 'auto' });
@@ -65,6 +68,35 @@ const QuestCreator: React.FC<QuestCreatorProps> = ({
     setGoal(initialGoal ?? '');
   }, [initialGoal]);
 
+  if (!apiKey) {
+    return (
+      <div className="space-y-6">
+        <button
+          type="button"
+          onClick={onBack}
+          className="inline-flex items-center gap-2 rounded-lg border border-gray-700 bg-gray-800/60 px-4 py-2 text-sm font-semibold text-gray-200 transition hover:bg-gray-800"
+        >
+          ← Back
+        </button>
+        <div className="rounded-2xl border border-gray-800 bg-gray-900/70 p-6 text-left shadow-xl">
+          <h2 className="text-2xl font-semibold text-amber-200">Connect your Gemini API key</h2>
+          <p className="mt-3 text-sm text-gray-300">
+            The quest generator uses Google&apos;s Gemini models. Add your personal API key in the Settings view to unlock this feature.
+          </p>
+          <p className="mt-3 text-sm text-gray-400">
+            Once saved, your key is encrypted client-side before syncing to Supabase—only you can decrypt it in the browser.
+          </p>
+          <Link
+            to="/settings"
+            className="mt-6 inline-flex items-center justify-center rounded-lg bg-amber-500 px-4 py-2 text-sm font-semibold text-gray-900 shadow transition hover:bg-amber-400"
+          >
+            Go to Settings
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
   const findCharacterByName = (name: string): Character | null => {
     const lower = name.trim().toLowerCase();
     return characters.find(c => c.name.trim().toLowerCase() === lower) ?? null;
@@ -72,8 +104,8 @@ const QuestCreator: React.FC<QuestCreatorProps> = ({
 
   /** Persona generator reused from your character creator, with a SAFE portrait step */
   const createPersonaFor = async (name: string): Promise<Character> => {
-    if (!process.env.API_KEY) throw new Error('API_KEY not set.');
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    if (!apiKey) throw new Error('API key not set.');
+    const ai = new GoogleGenAI({ apiKey });
 
     const availableAmbienceTags = AMBIENCE_LIBRARY.map(a => a.tag).join(', ');
     const voiceOptions = AVAILABLE_VOICES.map(
@@ -174,8 +206,8 @@ const QuestCreator: React.FC<QuestCreatorProps> = ({
   };
 
   const ensureMeaningfulGoal = async (cleanGoal: string) => {
-    if (!process.env.API_KEY) throw new Error('API_KEY not set.');
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    if (!apiKey) throw new Error('API key not set.');
+    const ai = new GoogleGenAI({ apiKey });
 
     const validationPrompt = `You are the Gatekeeper for a learning quest generator. Decide if the user's goal is specific, meaningful, and actionable. If the text is gibberish, a single repeated word, or otherwise not a legitimate learning objective, reject it.\n\nReturn JSON with { "meaningful": boolean, "reason": string }. Use meaningful=false for gibberish, nonsense, or empty goals.`;
 
@@ -250,8 +282,8 @@ const QuestCreator: React.FC<QuestCreatorProps> = ({
 
       await ensureMeaningfulGoal(clean);
 
-      if (!process.env.API_KEY) throw new Error('API_KEY not set.');
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+      if (!apiKey) throw new Error('API key not set.');
+      const ai = new GoogleGenAI({ apiKey });
 
       const draftPrompt = `You are the Quest Architect. Convert this learner goal into a concise quest and pick the most appropriate historical mentor.
 

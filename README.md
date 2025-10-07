@@ -109,12 +109,7 @@ School of the Ancients is a modern web application that pairs immersive visuals 
    ```bash
    npm install
    ```
-3. Create a `.env` file in the project root and add your Gemini credentials:
-   ```bash
-   GEMINI_API_KEY=your_api_key_here
-   ```
-
-4. Configure Supabase authentication and persistence by adding the following Vite environment variables to `.env`:
+3. Configure Supabase authentication and persistence by adding the following Vite environment variables to `.env`:
    ```bash
    VITE_SUPABASE_URL=https://your-project-id.supabase.co
    VITE_SUPABASE_ANON_KEY=your_public_anon_key
@@ -142,6 +137,8 @@ npm run dev
 
 When the app loads, use the **Sign in** button in the top right corner to authenticate with Supabase. Authenticated sessions unlock quest progress syncing, history, and custom content across browsers.
 
+Open **Settings → Gemini API Key** to paste your personal Google Gemini API key. The key is encrypted in the browser before being saved to Supabase so only your account can decrypt it.
+
 Visit the printed URL (defaults to http://localhost:3000) and grant the browser microphone access when prompted.
 
 ### Building for Production
@@ -157,7 +154,7 @@ Deploy the contents of `dist/` to your static hosting platform of choice.
 
 ## Development Tips
 
-- Vite exposes `process.env.API_KEY` and `process.env.GEMINI_API_KEY` based on the `GEMINI_API_KEY` entry in your `.env` file. Be sure not to commit this file.
+- Each user stores their Gemini API key through the Settings view; the key is encrypted client-side before syncing to Supabase.
 - Shared UI components live in `components/`, while feature views are registered in `App.tsx`.
 - Hooks such as `useGeminiLive` encapsulate audio capture, streaming, and playback logic.
 - Tailwind utility classes handle layout; extend the Tailwind config before introducing custom CSS.
@@ -172,7 +169,7 @@ Deploy the contents of `dist/` to your static hosting platform of choice.
 
 ## Troubleshooting
 
-- **"API_KEY not set" errors**: Ensure your `.env` file is present and you restarted `npm run dev` after adding it.
+- **"API key not set" errors**: Visit **Settings** and save your Gemini API key. The app cannot call Gemini models without it.
 - **Microphone permissions**: Clear browser permissions if you accidentally deny access; audio capture is required for real-time chat.
 - **Slow or missing visuals**: Imagen requests can take a few seconds. Watch the developer console for network errors if images do not appear.
 

@@ -1,4 +1,5 @@
 import React, { useMemo, useRef, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { GoogleGenAI, Type } from '@google/genai';
 import type { Character, PersonaData } from '../types';
 import { AMBIENCE_LIBRARY, AVAILABLE_VOICES } from '../constants';
@@ -8,6 +9,7 @@ import DiceIcon from './icons/DiceIcon';
 interface CharacterCreatorProps {
   onCharacterCreated: (character: Character) => void;
   onBack: () => void;
+  apiKey: string | null;
 }
 
 /** Pretty, branded SVG fallback if portrait generation fails */
@@ -37,7 +39,7 @@ function makeFallbackAvatar(name: string, title?: string) {
   return `data:image/svg+xml;charset=utf-8,${svg}`;
 }
 
-const CharacterCreator: React.FC<CharacterCreatorProps> = ({ onCharacterCreated, onBack }) => {
+const CharacterCreator: React.FC<CharacterCreatorProps> = ({ onCharacterCreated, onBack, apiKey }) => {
   const [name, setName] = useState('');
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState('');
@@ -53,6 +55,35 @@ const CharacterCreator: React.FC<CharacterCreatorProps> = ({ onCharacterCreated,
       suggestion.toLowerCase().includes(query)
     ).slice(0, 12);
   }, [name]);
+
+  if (!apiKey) {
+    return (
+      <div className="space-y-6">
+        <button
+          type="button"
+          onClick={onBack}
+          className="inline-flex items-center gap-2 rounded-lg border border-gray-700 bg-gray-800/60 px-4 py-2 text-sm font-semibold text-gray-200 transition hover:bg-gray-800"
+        >
+          ← Back
+        </button>
+        <div className="rounded-2xl border border-gray-800 bg-gray-900/70 p-6 text-left shadow-xl">
+          <h2 className="text-2xl font-semibold text-amber-200">Add your Gemini API key</h2>
+          <p className="mt-3 text-sm text-gray-300">
+            Creating custom ancients requires access to Google&apos;s Gemini models. Save your API key in Settings to continue.
+          </p>
+          <p className="mt-3 text-sm text-gray-400">
+            The key is encrypted before it is stored in Supabase, keeping it private to your account.
+          </p>
+          <Link
+            to="/settings"
+            className="mt-6 inline-flex items-center justify-center rounded-lg bg-amber-500 px-4 py-2 text-sm font-semibold text-gray-900 shadow transition hover:bg-amber-400"
+          >
+            Go to Settings
+          </Link>
+        </div>
+      </div>
+    );
+  }
 
   const handleSuggestionClick = (suggestion: string) => {
     setName(suggestion);
@@ -112,8 +143,8 @@ If you are not at least 80% confident in their historicity, set verified to fals
       setLoading(true);
       setMsg('Verifying historical figure…');
 
-      if (!process.env.API_KEY) throw new Error('API_KEY not set.');
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+      if (!apiKey) throw new Error('API key not set.');
+      const ai = new GoogleGenAI({ apiKey });
 
       const verification = await verifyHistoricalFigure(ai, clean);
 
