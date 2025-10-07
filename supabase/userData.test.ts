@@ -67,6 +67,7 @@ describe('fetchUserData', () => {
     expect(result.apiKey).toBeNull();
     expect(updateMock).toHaveBeenCalledWith({
       data: expect.objectContaining({ apiKey: null }),
+      migrated_at: null,
     });
     expect(updateEqMock).toHaveBeenCalledWith('user_id', 'user-1');
   });
@@ -113,6 +114,7 @@ describe('fetchUserData', () => {
     expect(result.apiKey).toBeNull();
     expect(updateMock).toHaveBeenCalledWith({
       data: expect.objectContaining({ apiKey: null }),
+      migrated_at: null,
     });
     expect(updateEqMock).toHaveBeenCalledWith('user_id', 'user-3');
   });

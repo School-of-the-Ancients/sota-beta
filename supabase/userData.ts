@@ -108,9 +108,14 @@ export const fetchUserData = async (userId: string): Promise<UserData> => {
   }
 
   if (shouldPersistSanitized) {
+    const sanitizedUpdatePayload = {
+      data: sanitizedUserData,
+      migrated_at: sanitizedUserData.migratedAt ?? null,
+    };
+
     const { error: updateError } = await client
       .from(TABLE)
-      .update({ data: sanitizedUserData })
+      .update(sanitizedUpdatePayload)
       .eq('user_id', userId);
 
     if (updateError) {
