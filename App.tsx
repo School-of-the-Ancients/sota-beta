@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { matchPath, useLocation, useNavigate } from 'react-router-dom';
 import { GoogleGenAI, Type } from '@google/genai';
 
 import type {
@@ -29,23 +30,56 @@ import { useSupabaseAuth } from './hooks/useSupabaseAuth';
 import { useUserData } from './hooks/useUserData';
 import { DEFAULT_USER_DATA } from './supabase/userData';
 
-const updateCharacterQueryParam = (characterId: string, mode: 'push' | 'replace') => {
-  try {
-    const params = new URLSearchParams(window.location.search);
-    params.set('character', characterId);
-    const pathname = typeof window.location.pathname === 'string' && window.location.pathname
-      ? window.location.pathname
-      : '/';
-    const newSearch = params.toString();
-    const nextUrl = `${pathname}${newSearch ? `?${newSearch}` : ''}`;
-    if (mode === 'push') {
-      window.history.pushState({}, '', nextUrl);
-    } else {
-      window.history.replaceState({}, '', nextUrl);
-    }
-  } catch (error) {
-    console.warn('Failed to update character query parameter:', error);
+const ROUTES = {
+  selector: '/',
+  history: '/history',
+  quests: '/quests',
+  questCreator: '/quests/create',
+  characterCreator: '/characters/new',
+  quizRoot: '/quiz',
+  profile: '/profile',
+  settings: '/settings',
+  conversation: (characterId: string) => `/conversation/${encodeURIComponent(characterId)}`,
+  quizForQuest: (questId: string) => `/quiz/${encodeURIComponent(questId)}`,
+};
+
+type ViewName =
+  | 'selector'
+  | 'conversation'
+  | 'history'
+  | 'creator'
+  | 'quests'
+  | 'questCreator'
+  | 'quiz'
+  | 'profile'
+  | 'settings';
+
+const deriveViewFromPath = (pathname: string): ViewName => {
+  if (matchPath('/conversation/:characterId', pathname)) {
+    return 'conversation';
   }
+  if (matchPath('/history', pathname)) {
+    return 'history';
+  }
+  if (matchPath('/quests/create', pathname)) {
+    return 'questCreator';
+  }
+  if (matchPath('/quests', pathname)) {
+    return 'quests';
+  }
+  if (matchPath('/characters/new', pathname)) {
+    return 'creator';
+  }
+  if (matchPath('/quiz/:questId', pathname) || matchPath('/quiz', pathname)) {
+    return 'quiz';
+  }
+  if (matchPath('/profile', pathname)) {
+    return 'profile';
+  }
+  if (matchPath('/settings', pathname)) {
+    return 'settings';
+  }
+  return 'selector';
 };
 
 // ---- App -------------------------------------------------------------------
@@ -53,19 +87,10 @@ const updateCharacterQueryParam = (characterId: string, mode: 'push' | 'replace'
 const App: React.FC = () => {
   const { user, loading: authLoading, signOut } = useSupabaseAuth();
   const { data: userData, loading: dataLoading, saving: dataSaving, updateData } = useUserData();
+  const location = useLocation();
+  const navigate = useNavigate();
 
   const [selectedCharacter, setSelectedCharacter] = useState<Character | null>(null);
-  const [view, setView] = useState<
-    | 'selector'
-    | 'conversation'
-    | 'history'
-    | 'creator'
-    | 'quests'
-    | 'questCreator'
-    | 'quiz'
-    | 'profile'
-    | 'settings'
-  >('selector');
 
   const [environmentImageUrl, setEnvironmentImageUrl] = useState<string | null>(null);
   const [activeQuest, setActiveQuest] = useState<Quest | null>(null);
@@ -92,6 +117,81 @@ const App: React.FC = () => {
   const isSaving = isSavingConversation || dataSaving;
   const isAuthenticated = Boolean(user);
   const isAppLoading = authLoading || dataLoading;
+  const currentView = useMemo(() => deriveViewFromPath(location.pathname), [location.pathname]);
+  const conversationRouteMatch = useMemo(
+    () => matchPath('/conversation/:characterId', location.pathname),
+    [location.pathname],
+  );
+  const conversationRouteCharacterId = conversationRouteMatch?.params.characterId ?? null;
+  const resolvedConversationCharacter = useMemo(() => {
+    if (selectedCharacter && (!conversationRouteCharacterId || selectedCharacter.id === conversationRouteCharacterId)) {
+      return selectedCharacter;
+    }
+    if (!conversationRouteCharacterId) {
+      return selectedCharacter;
+    }
+    const allCharacters = [...customCharacters, ...CHARACTERS];
+    return allCharacters.find((character) => character.id === conversationRouteCharacterId) ?? null;
+  }, [conversationRouteCharacterId, customCharacters, selectedCharacter]);
+
+  const navigateToHome = useCallback(() => {
+    navigate(ROUTES.selector);
+  }, [navigate]);
+
+  const navigateToConversation = useCallback(
+    (characterId: string, options?: { replace?: boolean; resumeId?: string | null }) => {
+      const searchParams = new URLSearchParams(location.search);
+      searchParams.delete('character');
+      if (options?.resumeId) {
+        searchParams.set('resume', options.resumeId);
+      } else {
+        searchParams.delete('resume');
+      }
+      navigate(
+        {
+          pathname: ROUTES.conversation(characterId),
+          search: searchParams.toString() ? `?${searchParams.toString()}` : '',
+        },
+        { replace: options?.replace },
+      );
+    },
+    [location.search, navigate],
+  );
+
+  const navigateToQuests = useCallback(() => {
+    navigate(ROUTES.quests);
+  }, [navigate]);
+
+  const navigateToQuestCreator = useCallback(() => {
+    navigate(ROUTES.questCreator);
+  }, [navigate]);
+
+  const navigateToHistory = useCallback(() => {
+    navigate(ROUTES.history);
+  }, [navigate]);
+
+  const navigateToProfile = useCallback(() => {
+    navigate(ROUTES.profile);
+  }, [navigate]);
+
+  const navigateToSettings = useCallback(() => {
+    navigate(ROUTES.settings);
+  }, [navigate]);
+
+  const navigateToCharacterCreator = useCallback(() => {
+    navigate(ROUTES.characterCreator);
+  }, [navigate]);
+
+  const navigateToQuiz = useCallback(
+    (questId?: string) => {
+      if (questId) {
+        navigate(ROUTES.quizForQuest(questId));
+      } else {
+        navigate(ROUTES.quizRoot);
+      }
+    },
+    [navigate],
+  );
 
   const requireAuth = useCallback(
     (message?: string) => {
@@ -207,12 +307,16 @@ const App: React.FC = () => {
     if (!selectedCharacter) {
       let characterToSelect: Character | null = null;
 
-      if (nextActiveQuest) {
-        characterToSelect = allCharacters.find((c) => c.id === nextActiveQuest?.characterId) ?? null;
+      if (conversationRouteCharacterId) {
+        characterToSelect = allCharacters.find((c) => c.id === conversationRouteCharacterId) ?? null;
+      }
+
+      if (!characterToSelect && nextActiveQuest) {
+        characterToSelect = allCharacters.find((c) => c.id === nextActiveQuest.characterId) ?? null;
       }
 
       if (!characterToSelect) {
-        const urlParams = new URLSearchParams(window.location.search);
+        const urlParams = new URLSearchParams(location.search);
         const characterId = urlParams.get('character');
         if (characterId) {
           characterToSelect = allCharacters.find((c) => c.id === characterId) ?? null;
@@ -221,8 +325,9 @@ const App: React.FC = () => {
 
       if (characterToSelect) {
         setSelectedCharacter(characterToSelect);
-        setView('conversation');
-        updateCharacterQueryParam(characterToSelect.id, 'replace');
+        if (!conversationRouteCharacterId) {
+          navigateToConversation(characterToSelect.id, { replace: true });
+        }
       }
     }
 
@@ -231,6 +336,9 @@ const App: React.FC = () => {
     customCharacters,
     customQuests,
     isAppLoading,
+    location.search,
+    navigateToConversation,
+    conversationRouteCharacterId,
     selectedCharacter,
     syncQuestProgress,
     userData.activeQuestId,
@@ -240,11 +348,60 @@ const App: React.FC = () => {
     if (!isAuthenticated) {
       setSelectedCharacter(null);
       setActiveQuest(null);
-      setView('selector');
       setResumeConversationId(null);
       setEnvironmentImageUrl(null);
+      navigateToHome();
     }
-  }, [isAuthenticated]);
+  }, [isAuthenticated, navigateToHome]);
+
+  useEffect(() => {
+    if (currentView !== 'conversation') {
+      return;
+    }
+
+    const params = new URLSearchParams(location.search);
+    const resumeId = params.get('resume');
+    if (resumeId && resumeConversationId !== resumeId) {
+      setResumeConversationId(resumeId);
+    } else if (!resumeId && resumeConversationId) {
+      setResumeConversationId(null);
+    }
+  }, [currentView, location.search, resumeConversationId]);
+
+  useEffect(() => {
+    if (!resumeConversationId) {
+      return;
+    }
+
+    const matchingConversation = conversationHistory.find(
+      (conversation) => conversation.id === resumeConversationId,
+    );
+    if (matchingConversation?.environmentImageUrl) {
+      setEnvironmentImageUrl(matchingConversation.environmentImageUrl);
+    }
+  }, [conversationHistory, resumeConversationId]);
+
+  useEffect(() => {
+    if (currentView !== 'quiz') {
+      return;
+    }
+
+    const quizMatch = matchPath('/quiz/:questId', location.pathname);
+    const questId = quizMatch?.params.questId;
+    if (!questId) {
+      return;
+    }
+
+    const quest = allQuests.find((entry) => entry.id === questId);
+    if (quest && quizQuest?.id !== quest.id) {
+      setQuizQuest(quest);
+      if (lastQuestOutcome?.questId === quest.id) {
+        setQuizAssessment(lastQuestOutcome);
+      } else {
+        setQuizAssessment(null);
+      }
+    }
+  }, [allQuests, currentView, lastQuestOutcome, location.pathname, quizQuest]);
 
   // ---- Navigation helpers ----
 
@@ -253,14 +410,13 @@ const App: React.FC = () => {
       return;
     }
     setSelectedCharacter(character);
-    setView('conversation');
     setActiveQuest(null); // clear any quest when directly picking a character
     updateData((prev) => ({
       ...prev,
       activeQuestId: null,
     }));
     setResumeConversationId(null);
-    updateCharacterQueryParam(character.id, 'push');
+    navigateToConversation(character.id);
   };
 
   const handleSelectQuest = (quest: Quest) => {
@@ -276,9 +432,8 @@ const App: React.FC = () => {
         activeQuestId: quest.id,
       }));
       setSelectedCharacter(characterForQuest);
-      setView('conversation');
       setResumeConversationId(null);
-      updateCharacterQueryParam(characterForQuest.id, 'push');
+      navigateToConversation(characterForQuest.id);
     } else {
       console.error(`Character with ID ${quest.characterId} not found for the selected quest.`);
     }
@@ -339,9 +494,7 @@ const App: React.FC = () => {
       }));
     }
 
-    setView('conversation');
-
-    updateCharacterQueryParam(characterToResume.id, 'push');
+    navigateToConversation(characterToResume.id, { resumeId: conversation.id });
   };
 
   const handleConversationUpdate = useCallback(
@@ -384,10 +537,9 @@ const App: React.FC = () => {
       activeQuestId: null,
     }));
     setSelectedCharacter(newCharacter);
-    setView('conversation');
     setActiveQuest(null);
     setResumeConversationId(null);
-    updateCharacterQueryParam(newCharacter.id, 'push');
+    navigateToConversation(newCharacter.id);
   };
 
   const handleDeleteCharacter = (characterId: string) => {
@@ -470,15 +622,15 @@ const App: React.FC = () => {
       return;
     }
     setQuestCreatorPrefill(goal ?? null);
-    setView('questCreator');
+    navigateToQuestCreator();
   };
 
   const openCharacterCreatorView = useCallback(() => {
     if (!requireAuth('Sign in to create a new ancient.')) {
       return;
     }
-    setView('creator');
-  }, [requireAuth]);
+    navigateToCharacterCreator();
+  }, [navigateToCharacterCreator, requireAuth]);
 
   const handleCreateQuestFromNextSteps = (steps: string[], questTitle?: string) => {
     if (!requireAuth('Sign in to turn feedback into new quests.')) {
@@ -522,22 +674,21 @@ const App: React.FC = () => {
     });
     setActiveQuest(quest);
     setSelectedCharacter(mentor);
-    setView('conversation');
     setResumeConversationId(null);
-    updateCharacterQueryParam(mentor.id, 'push');
+    navigateToConversation(mentor.id);
   };
 
   const handleQuizExit = () => {
     setQuizQuest(null);
     setQuizAssessment(null);
-    setView('selector');
+    navigateToHome();
   };
 
   const handleQuizComplete = (result: QuizResult) => {
     if (!requireAuth('Sign in to track quiz results.')) {
       setQuizQuest(null);
       setQuizAssessment(null);
-      setView('selector');
+      navigateToHome();
       return;
     }
     const quest = quizQuest;
@@ -561,14 +712,14 @@ const App: React.FC = () => {
     });
     setQuizQuest(null);
     setQuizAssessment(null);
-    setView('selector');
+    navigateToHome();
   };
 
   const launchQuizForQuest = (questId: string) => {
     const quest = allQuests.find((q) => q.id === questId);
     if (!quest) {
       console.warn(`Unable to launch quiz: quest with ID ${questId} not found.`);
-      setView('selector');
+      navigateToHome();
       return;
     }
 
@@ -578,12 +729,13 @@ const App: React.FC = () => {
     } else {
       setQuizAssessment(null);
     }
-    setView('quiz');
+    navigateToQuiz(questId);
   };
 
   // ---- End conversation: summarize & (if quest) evaluate mastery ----
-    const handleEndConversation = async (transcript: ConversationTurn[], sessionId: string) => {
-    if (!selectedCharacter) return;
+  const handleEndConversation = async (transcript: ConversationTurn[], sessionId: string) => {
+    const activeCharacter = resolvedConversationCharacter;
+    if (!activeCharacter) return;
     if (!requireAuth('Sign in to save your conversation.')) {
       return;
     }
@@ -603,9 +755,9 @@ const App: React.FC = () => {
         existingConversation ??
         ({
           id: sessionId,
-          characterId: selectedCharacter.id,
-          characterName: selectedCharacter.name,
-          portraitUrl: selectedCharacter.portraitUrl,
+          characterId: activeCharacter.id,
+          characterName: activeCharacter.name,
+          portraitUrl: activeCharacter.portraitUrl,
           timestamp: Date.now(),
           transcript,
           environmentImageUrl: environmentImageUrl || undefined,
@@ -640,7 +792,7 @@ const App: React.FC = () => {
           .join('\n\n');
 
         if (transcriptText.trim()) {
-          const prompt = `Please summarize the following educational dialogue with ${selectedCharacter.name}. Provide a concise one-paragraph overview of the key topics discussed, and then list 3-5 of the most important takeaways or concepts as bullet points.\n\nDialogue:\n${transcriptText}`;
+          const prompt = `Please summarize the following educational dialogue with ${activeCharacter.name}. Provide a concise one-paragraph overview of the key topics discussed, and then list 3-5 of the most important takeaways or concepts as bullet points.\n\nDialogue:\n${transcriptText}`;
 
           const response = await ai.models.generateContent({
             model: 'gemini-2.5-flash',
@@ -761,12 +913,12 @@ const App: React.FC = () => {
         if (questAssessment.passed && questForSession) {
           setQuizQuest(questForSession);
           setQuizAssessment(questAssessment);
-          setView('quiz');
+          navigateToQuiz(questForSession.id);
         } else {
-          setView('selector');
+          navigateToHome();
         }
       } else {
-        setView('selector');
+        navigateToHome();
       }
       setSelectedCharacter(null);
       setEnvironmentImageUrl(null);
@@ -776,18 +928,17 @@ const App: React.FC = () => {
         activeQuestId: null,
       }));
       setResumeConversationId(null);
-      window.history.pushState({}, '', window.location.pathname);
     }
   };
 
   // ---- View switcher ----
 
   const renderContent = () => {
-    switch (view) {
+    switch (currentView) {
       case 'conversation':
-        return selectedCharacter ? (
+        return resolvedConversationCharacter ? (
           <ConversationView
-            character={selectedCharacter}
+            character={resolvedConversationCharacter}
             onEndConversation={handleEndConversation}
             environmentImageUrl={environmentImageUrl}
             onEnvironmentUpdate={setEnvironmentImageUrl}
@@ -797,11 +948,15 @@ const App: React.FC = () => {
             conversationHistory={conversationHistory}
             onConversationUpdate={handleConversationUpdate}
           />
-        ) : null;
+        ) : (
+          <div className="text-center text-gray-300">
+            <p className="text-lg">Loading conversation...</p>
+          </div>
+        );
       case 'history':
         return (
           <HistoryView
-            onBack={() => setView('selector')}
+            onBack={() => navigate(ROUTES.selector)}
             onResumeConversation={handleResumeConversation}
             onCreateQuestFromNextSteps={handleCreateQuestFromNextSteps}
             history={conversationHistory}
@@ -809,12 +964,17 @@ const App: React.FC = () => {
           />
         );
       case 'creator':
-        return <CharacterCreator onCharacterCreated={handleCharacterCreated} onBack={() => setView('selector')} />;
+        return (
+          <CharacterCreator
+            onCharacterCreated={handleCharacterCreated}
+            onBack={() => navigate(ROUTES.selector)}
+          />
+        );
       case 'quests': {
         const allCharacters = [...customCharacters, ...CHARACTERS];
         return (
           <QuestsView
-            onBack={() => setView('selector')}
+            onBack={() => navigate(ROUTES.selector)}
             onSelectQuest={handleSelectQuest}
             quests={allQuests}
             characters={allCharacters}
@@ -830,7 +990,7 @@ const App: React.FC = () => {
         const allChars = [...customCharacters, ...CHARACTERS];
         const handleBack = () => {
           setQuestCreatorPrefill(null);
-          setView('selector');
+          navigateToHome();
         };
         const handleQuestReady = (quest: Quest, character: Character) => {
           setQuestCreatorPrefill(null);
@@ -867,7 +1027,7 @@ const App: React.FC = () => {
             <p className="text-lg">Quiz unavailable. Returning to the hub…</p>
             <button
               type="button"
-              onClick={() => setView('selector')}
+              onClick={() => navigate(ROUTES.selector)}
               className="mt-4 inline-flex items-center rounded-md bg-amber-600 px-4 py-2 text-sm font-semibold text-black hover:bg-amber-500"
             >
               Go back
@@ -1203,29 +1363,29 @@ const App: React.FC = () => {
     if (!requireAuth('Sign in to review your past conversations.')) {
       return;
     }
-    setView('history');
-  }, [requireAuth]);
+    navigateToHistory();
+  }, [navigateToHistory, requireAuth]);
 
   const openQuestsView = useCallback(() => {
     if (!requireAuth('Sign in to manage your quests.')) {
       return;
     }
-    setView('quests');
-  }, [requireAuth]);
+    navigateToQuests();
+  }, [navigateToQuests, requireAuth]);
 
   const openProfileView = useCallback(() => {
     if (!requireAuth('Sign in to view your explorer profile.')) {
       return;
     }
-    setView('profile');
-  }, [requireAuth]);
+    navigateToProfile();
+  }, [navigateToProfile, requireAuth]);
 
   const openSettingsView = useCallback(() => {
     if (!requireAuth('Sign in to update your settings.')) {
       return;
     }
-    setView('settings');
-  }, [requireAuth]);
+    navigateToSettings();
+  }, [navigateToSettings, requireAuth]);
 
   return (
     <div className="relative min-h-screen bg-[#1a1a1a]">
@@ -1282,7 +1442,7 @@ const App: React.FC = () => {
             onOpenProfile={openProfileView}
             onOpenSettings={openSettingsView}
             onOpenQuests={openQuestsView}
-            currentView={view}
+            currentView={currentView}
             isAuthenticated={isAuthenticated}
             userEmail={userEmail}
           />
