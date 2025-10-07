@@ -150,6 +150,7 @@ export const useGeminiLive = (
     const pendingResumptionHandleRef = useRef<string | null>(null);
     const sessionRenewalTimeoutRef = useRef<number | null>(null);
     const isRenewingSessionRef = useRef(false);
+    const handledFunctionCallIdsRef = useRef<Set<string>>(new Set());
     useEffect(() => {
         isMicActiveRef.current = isMicActive;
     }, [isMicActive]);
@@ -232,6 +233,8 @@ export const useGeminiLive = (
         clearScheduledRenewal();
         isRenewingSessionRef.current = false;
 
+        handledFunctionCallIdsRef.current.clear();
+
         sessionPromiseRef.current?.then((session) => session.close()).catch(err => {
             console.warn('Error during session close:', err);
         });
@@ -300,6 +303,8 @@ export const useGeminiLive = (
 
     const connect = useCallback(async () => {
         setConnectionState(ConnectionState.CONNECTING);
+
+        handledFunctionCallIdsRef.current.clear();
 
         if (!process.env.API_KEY) {
             console.error("API_KEY environment variable not set.");
@@ -437,23 +442,32 @@ export const useGeminiLive = (
 
                             if (message.toolCall) {
                                 for (const fc of message.toolCall.functionCalls) {
-                                  if (fc.name === 'changeEnvironment' && fc.args && typeof fc.args.description === 'string') {
-                                    onEnvironmentChangeRequestRef.current(fc.args.description);
-                                  } else if (fc.name === 'displayArtifact' && fc.args && typeof fc.args.name === 'string' && typeof fc.args.description === 'string') {
-                                    onArtifactDisplayRequestRef.current(fc.args.name, fc.args.description);
-                                  }
-                        
-                                  sessionPromiseRef.current?.then((session) => {
-                                    session.sendToolResponse({
-                                      functionResponses: {
-                                        id: fc.id,
-                                        name: fc.name,
-                                        response: { result: "ok, action started" },
-                                      }
+                                    const callId = typeof fc.id === 'string' ? fc.id : null;
+                                    if (callId && handledFunctionCallIdsRef.current.has(callId)) {
+                                        continue;
+                                    }
+
+                                    if (callId) {
+                                        handledFunctionCallIdsRef.current.add(callId);
+                                    }
+
+                                    if (fc.name === 'changeEnvironment' && fc.args && typeof fc.args.description === 'string') {
+                                        onEnvironmentChangeRequestRef.current(fc.args.description);
+                                    } else if (fc.name === 'displayArtifact' && fc.args && typeof fc.args.name === 'string' && typeof fc.args.description === 'string') {
+                                        onArtifactDisplayRequestRef.current(fc.args.name, fc.args.description);
+                                    }
+
+                                    sessionPromiseRef.current?.then((session) => {
+                                        session.sendToolResponse({
+                                            functionResponses: [{
+                                                id: fc.id,
+                                                name: fc.name,
+                                                response: { result: 'ok, action started' },
+                                            }],
+                                        });
                                     });
-                                  });
                                 }
-                              }
+                            }
 
                             if (message.serverContent?.turnComplete) {
                                 if (userTranscriptionRef.current.trim() || modelTranscriptionRef.current.trim()) {
