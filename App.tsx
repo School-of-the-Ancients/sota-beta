@@ -42,6 +42,10 @@ const App: React.FC = () => {
   const [resumeConversationId, setResumeConversationId] = useState<string | null>(null);
 
   const [isSavingConversation, setIsSavingConversation] = useState(false);
+  const [activeSessionMeta, setActiveSessionMeta] = useState<{
+    conversationId: string;
+    hasUserMessage: boolean;
+  } | null>(null);
 
   const [lastQuestOutcome, setLastQuestOutcome] = useState<QuestAssessment | null>(null);
   const [inProgressQuestIds, setInProgressQuestIds] = useState<string[]>([]);
@@ -84,6 +88,30 @@ const App: React.FC = () => {
     }
   }, [isAuthenticated]);
 
+  useEffect(() => {
+    if (!selectedCharacter) {
+      setActiveSessionMeta(null);
+    }
+  }, [selectedCharacter]);
+
+  const guardLinearFlow = useCallback(
+    (message?: string) => {
+      if (isSavingConversation) {
+        window.alert('Please wait while we finish saving your current conversation.');
+        return false;
+      }
+      if (!selectedCharacter) {
+        return true;
+      }
+      if (!activeSessionMeta?.hasUserMessage) {
+        return true;
+      }
+      window.alert(message ?? 'Finish your conversation with the End button to generate a summary before navigating away.');
+      return false;
+    },
+    [activeSessionMeta?.hasUserMessage, isSavingConversation, selectedCharacter]
+  );
+
   const combinedCharacters = useMemo(() => [...customCharacters, ...CHARACTERS], [customCharacters]);
   const allQuests = useMemo(() => [...customQuests, ...QUESTS], [customQuests]);
 
@@ -119,6 +147,7 @@ const App: React.FC = () => {
       character: Character,
       options?: { quest?: Quest | null; resumeId?: string | null; environmentImageUrl?: string | null }
     ) => {
+      setActiveSessionMeta(null);
       setSelectedCharacter(character);
       setResumeConversationId(options?.resumeId ?? null);
       setEnvironmentImageUrl(options?.environmentImageUrl ?? null);
@@ -358,6 +387,9 @@ const App: React.FC = () => {
   }, [conversationHistory, isAppLoading, syncQuestProgress]);
 
   const handleSelectCharacter = (character: Character) => {
+    if (!guardLinearFlow('Complete or end your current conversation before starting a new one.')) {
+      return;
+    }
     if (!requireAuth('Sign in to start a new conversation.')) {
       return;
     }
@@ -366,6 +398,9 @@ const App: React.FC = () => {
   };
 
   const handleSelectQuest = (quest: Quest) => {
+    if (!guardLinearFlow('Finish your current conversation before starting a quest.')) {
+      return;
+    }
     if (!requireAuth('Sign in to embark on a quest.')) {
       return;
     }
@@ -379,6 +414,9 @@ const App: React.FC = () => {
   };
 
   const handleContinueQuest = (questId: string | undefined) => {
+    if (!guardLinearFlow('Wrap up your current conversation before resuming a different quest.')) {
+      return;
+    }
     if (!requireAuth('Sign in to resume your quest.')) {
       return;
     }
@@ -394,6 +432,9 @@ const App: React.FC = () => {
   };
 
   const handleResumeConversation = (conversation: SavedConversation) => {
+    if (!guardLinearFlow('End your current conversation before switching to another.')) {
+      return;
+    }
     if (!requireAuth('Sign in to view your saved conversations.')) {
       return;
     }
@@ -422,8 +463,16 @@ const App: React.FC = () => {
           conversations: nextHistory,
         };
       });
+
+      if (selectedCharacter && conversation.characterId === selectedCharacter.id) {
+        const hasUserMessage = conversation.transcript.some((turn) => turn.speaker === 'user');
+        setActiveSessionMeta({
+          conversationId: conversation.id,
+          hasUserMessage,
+        });
+      }
     },
-    [updateData]
+    [selectedCharacter, updateData]
   );
 
   const handleDeleteConversation = useCallback(
@@ -525,6 +574,9 @@ const App: React.FC = () => {
   };
 
   const openQuestCreator = (goal?: string | null) => {
+    if (!guardLinearFlow('Complete your current conversation before creating a new quest.')) {
+      return;
+    }
     if (!requireAuth('Sign in to design new quests.')) {
       return;
     }
@@ -533,11 +585,14 @@ const App: React.FC = () => {
   };
 
   const openCharacterCreatorView = useCallback(() => {
+    if (!guardLinearFlow('Finish your active conversation before creating a new ancient.')) {
+      return;
+    }
     if (!requireAuth('Sign in to create a new ancient.')) {
       return;
     }
     navigate('/character/new');
-  }, [navigate, requireAuth]);
+  }, [guardLinearFlow, navigate, requireAuth]);
 
   const handleCreateQuestFromNextSteps = (steps: string[], questTitle?: string) => {
     if (!requireAuth('Sign in to turn feedback into new quests.')) {
@@ -559,6 +614,9 @@ const App: React.FC = () => {
   };
 
   const startGeneratedQuest = (quest: Quest, mentor: Character) => {
+    if (!guardLinearFlow('Finish your current conversation before starting another quest.')) {
+      return;
+    }
     if (!requireAuth('Sign in to embark on your generated quest.')) {
       return;
     }
@@ -754,6 +812,7 @@ const App: React.FC = () => {
       setActiveQuest(null);
       syncActiveQuestId(null);
       setResumeConversationId(null);
+      setActiveSessionMeta(null);
 
       if (questAssessment && questAssessment.passed && questForSession) {
         setQuizAssessment(questAssessment);
@@ -766,6 +825,9 @@ const App: React.FC = () => {
 
   const handleSignInClick = useCallback(() => {
     if (isAuthenticated) {
+      if (!guardLinearFlow('Finish your current conversation before signing out.')) {
+        return;
+      }
       signOut().catch((error) => {
         console.error('Sign out failed', error);
         setAuthPrompt(error instanceof Error ? error.message : 'Unable to sign out.');
@@ -775,37 +837,49 @@ const App: React.FC = () => {
 
     setAuthPrompt('Sign in to personalize your ancient studies.');
     setIsAuthModalOpen(true);
-  }, [isAuthenticated, signOut]);
+  }, [guardLinearFlow, isAuthenticated, signOut]);
 
   const userEmail = user?.email ?? (user?.user_metadata as { email?: string })?.email;
 
   const openHistoryView = useCallback(() => {
+    if (!guardLinearFlow('Finish your ongoing conversation before viewing history.')) {
+      return;
+    }
     if (!requireAuth('Sign in to review your past conversations.')) {
       return;
     }
     navigate('/history');
-  }, [navigate, requireAuth]);
+  }, [guardLinearFlow, navigate, requireAuth]);
 
   const openQuestsView = useCallback(() => {
+    if (!guardLinearFlow('End your current conversation before browsing quests.')) {
+      return;
+    }
     if (!requireAuth('Sign in to manage your quests.')) {
       return;
     }
     navigate('/quests');
-  }, [navigate, requireAuth]);
+  }, [guardLinearFlow, navigate, requireAuth]);
 
   const openProfileView = useCallback(() => {
+    if (!guardLinearFlow('Finish your current conversation before visiting your profile.')) {
+      return;
+    }
     if (!requireAuth('Sign in to view your explorer profile.')) {
       return;
     }
     navigate('/profile');
-  }, [navigate, requireAuth]);
+  }, [guardLinearFlow, navigate, requireAuth]);
 
   const openSettingsView = useCallback(() => {
+    if (!guardLinearFlow('End your conversation before adjusting settings.')) {
+      return;
+    }
     if (!requireAuth('Sign in to update your settings.')) {
       return;
     }
     navigate('/settings');
-  }, [navigate, requireAuth]);
+  }, [guardLinearFlow, navigate, requireAuth]);
 
   const currentView = useMemo(() => {
     if (location.pathname.startsWith('/conversation')) return 'conversation';
