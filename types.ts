@@ -93,6 +93,11 @@ export interface SavedConversation {
   questAssessment?: QuestAssessment;
 }
 
+export interface ConversationSessionState {
+  sessionId: string;
+  hasUnfinishedChanges: boolean;
+}
+
 export interface QuizQuestion {
   id: string;
   prompt: string;

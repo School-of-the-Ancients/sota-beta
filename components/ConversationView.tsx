@@ -1,6 +1,12 @@
 import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { GoogleGenAI, Type } from '@google/genai';
-import type { Character, ConversationTurn, SavedConversation, Quest } from '../types';
+import type {
+  Character,
+  ConversationSessionState,
+  ConversationTurn,
+  SavedConversation,
+  Quest,
+} from '../types';
 import { useGeminiLive } from '../hooks/useGeminiLive';
 import { useAmbientAudio } from '../hooks/useAmbientAudio';
 import { ConnectionState } from '../types';
@@ -23,6 +29,7 @@ interface ConversationViewProps {
   resumeConversationId?: string | null;
   conversationHistory: SavedConversation[];
   onConversationUpdate: (conversation: SavedConversation) => void;
+  onSessionStateChange: (state: ConversationSessionState | null) => void;
 }
 
 const StatusIndicator: React.FC<{ state: ConnectionState; isMicActive: boolean }> = ({ state, isMicActive }) => {
@@ -85,6 +92,7 @@ const ConversationView: React.FC<ConversationViewProps> = ({
   resumeConversationId,
   conversationHistory,
   onConversationUpdate,
+  onSessionStateChange,
 }) => {
   const [transcript, setTranscript] = useState<ConversationTurn[]>([]);
   const [textInput, setTextInput] = useState('');
@@ -129,6 +137,7 @@ const ConversationView: React.FC<ConversationViewProps> = ({
 
   const sessionIdRef = useRef(`conv_${character.id}_${Date.now()}`);
   const sessionQuestRef = useRef<{ questId?: string; questTitle?: string }>({});
+  const [sessionId, setSessionId] = useState(sessionIdRef.current);
 
   // Load existing conversation or start a new one with a greeting
   useEffect(() => {
@@ -159,6 +168,7 @@ const ConversationView: React.FC<ConversationViewProps> = ({
     if (resumeConversationId) {
       const conversationToResume = history.find((c) => c.id === resumeConversationId);
       if (hydrateFromConversation(conversationToResume)) {
+        setSessionId(sessionIdRef.current);
         return;
       }
     }
@@ -166,12 +176,14 @@ const ConversationView: React.FC<ConversationViewProps> = ({
     if (activeQuest) {
       const existingQuestConversation = history.find((c) => c.questId === activeQuest.id);
       if (hydrateFromConversation(existingQuestConversation)) {
+        setSessionId(sessionIdRef.current);
         return;
       }
 
       setTranscript([greetingTurn]);
       onEnvironmentUpdate(null);
       sessionIdRef.current = `quest_${activeQuest.id}_${Date.now()}`;
+      setSessionId(sessionIdRef.current);
       sessionQuestRef.current = {
         questId: activeQuest.id,
         questTitle: activeQuest.title,
@@ -181,6 +193,7 @@ const ConversationView: React.FC<ConversationViewProps> = ({
 
     const existingConversation = history.find((c) => c.characterId === character.id);
     if (hydrateFromConversation(existingConversation)) {
+      setSessionId(sessionIdRef.current);
       return;
     }
 
@@ -188,6 +201,7 @@ const ConversationView: React.FC<ConversationViewProps> = ({
     setTranscript([greetingTurn]);
     onEnvironmentUpdate(null);
     sessionIdRef.current = existingConversation ? existingConversation.id : `conv_${character.id}_${Date.now()}`;
+    setSessionId(sessionIdRef.current);
     sessionQuestRef.current = existingConversation?.questId
       ? {
           questId: existingConversation.questId,
@@ -195,6 +209,22 @@ const ConversationView: React.FC<ConversationViewProps> = ({
         }
       : {};
   }, [character, onEnvironmentUpdate, activeQuest, resumeConversationId, conversationHistory]);
+
+  const hasUnfinishedChanges = useMemo(
+    () => transcript.length > 1 || Boolean(environmentImageUrl),
+    [transcript, environmentImageUrl]
+  );
+
+  useEffect(() => {
+    onSessionStateChange({
+      sessionId,
+      hasUnfinishedChanges,
+    });
+  }, [hasUnfinishedChanges, onSessionStateChange, sessionId]);
+
+  useEffect(() => () => {
+    onSessionStateChange(null);
+  }, [onSessionStateChange]);
 
     // Cycle through placeholders for text input
     useEffect(() => {

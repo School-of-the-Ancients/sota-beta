@@ -1,6 +1,12 @@
 import React, { useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import type { Character, ConversationTurn, Quest, SavedConversation } from '../../types';
+import type {
+  Character,
+  ConversationSessionState,
+  ConversationTurn,
+  Quest,
+  SavedConversation,
+} from '../../types';
 import ConversationView from '../../components/ConversationView';
 
 interface ConversationRouteProps {
@@ -15,6 +21,7 @@ interface ConversationRouteProps {
   onEndConversation: (transcript: ConversationTurn[], sessionId: string) => Promise<void> | void;
   onHydrateFromParams: (characterId: string | null, resumeId: string | null) => void;
   isAppLoading: boolean;
+  onSessionStateChange: (state: ConversationSessionState | null) => void;
 }
 
 const ConversationRoute: React.FC<ConversationRouteProps> = ({
@@ -29,6 +36,7 @@ const ConversationRoute: React.FC<ConversationRouteProps> = ({
   onEndConversation,
   onHydrateFromParams,
   isAppLoading,
+  onSessionStateChange,
 }) => {
   const [searchParams] = useSearchParams();
 
@@ -60,6 +68,7 @@ const ConversationRoute: React.FC<ConversationRouteProps> = ({
       resumeConversationId={resumeConversationId}
       conversationHistory={conversationHistory}
       onConversationUpdate={onConversationUpdate}
+      onSessionStateChange={onSessionStateChange}
     />
   );
 };
