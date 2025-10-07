@@ -22,6 +22,7 @@ import QuestIcon from './components/icons/QuestIcon';
 import QuestCreator from './components/QuestCreator';
 import QuestQuiz from './components/QuestQuiz';
 import AuthModal from './components/AuthModal';
+import Sidebar, { SidebarPreferenceKey } from './components/Sidebar';
 
 import { CHARACTERS, QUESTS } from './constants';
 import { useSupabaseAuth } from './hooks/useSupabaseAuth';
@@ -71,6 +72,10 @@ const App: React.FC = () => {
   const [quizAssessment, setQuizAssessment] = useState<QuestAssessment | null>(null);
   const [authPrompt, setAuthPrompt] = useState<string | null>(null);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [preferences, setPreferences] = useState<Record<SidebarPreferenceKey, boolean>>({
+    immersiveAudio: false,
+    autoSaveNotes: true,
+  });
 
   const customCharacters = userData.customCharacters;
   const customQuests = userData.customQuests;
@@ -110,6 +115,10 @@ const App: React.FC = () => {
     }
     return allQuests.find((quest) => quest.id === lastQuizResult.questId) ?? null;
   }, [allQuests, lastQuizResult]);
+  const recentConversations = useMemo(() => {
+    const sorted = [...conversationHistory].sort((a, b) => (b.timestamp ?? 0) - (a.timestamp ?? 0));
+    return sorted.slice(0, 5);
+  }, [conversationHistory]);
 
   useEffect(() => {
     if (customQuests.length === 0) {
@@ -464,6 +473,13 @@ const App: React.FC = () => {
     setView('creator');
   }, [requireAuth]);
 
+  const handlePreferenceToggle = useCallback((key: SidebarPreferenceKey) => {
+    setPreferences((prev) => ({
+      ...prev,
+      [key]: !prev[key],
+    }));
+  }, []);
+
   const handleCreateQuestFromNextSteps = (steps: string[], questTitle?: string) => {
     if (!requireAuth('Sign in to turn feedback into new quests.')) {
       return;
@@ -803,7 +819,7 @@ const App: React.FC = () => {
             quests={allQuests}
             characters={allCharacters}
             completedQuestIds={completedQuests}
-            onCreateQuest={() => openQuestCreator()}
+            onCreateQuest={openQuestCreator}
             inProgressQuestIds={inProgressQuestIds}
             onDeleteQuest={handleDeleteQuest}
             deletableQuestIds={customQuests.map((quest) => quest.id)}
@@ -1063,6 +1079,20 @@ const App: React.FC = () => {
     setIsAuthModalOpen(true);
   }, [isAuthenticated, signOut]);
 
+  const handleOpenProfile = useCallback(() => {
+    if (!requireAuth('Sign in to view your profile.')) {
+      return;
+    }
+    window.alert('Profile customization is coming soon!');
+  }, [requireAuth]);
+
+  const handleOpenSettings = useCallback(() => {
+    if (!requireAuth('Sign in to update your settings.')) {
+      return;
+    }
+    window.alert('Settings controls are coming soon.');
+  }, [requireAuth]);
+
   const userEmail = user?.email ?? (user?.user_metadata as { email?: string })?.email;
 
   const openHistoryView = useCallback(() => {
@@ -1125,7 +1155,22 @@ const App: React.FC = () => {
           </div>
         </header>
 
-        <main className="max-w-7xl w-full mx-auto flex-grow flex flex-col">{renderContent()}</main>
+        <div className="max-w-7xl w-full mx-auto flex-grow flex flex-col gap-6 lg:flex-row">
+          <main className="order-2 flex-1 lg:order-1 flex flex-col">{renderContent()}</main>
+          <Sidebar
+            userEmail={userEmail}
+            isAuthenticated={isAuthenticated}
+            onSignInToggle={handleSignInClick}
+            onCreateAncient={openCharacterCreatorView}
+            onCreateQuest={openQuestCreator}
+            onOpenProfile={handleOpenProfile}
+            onOpenSettings={handleOpenSettings}
+            onResumeChat={handleResumeConversation}
+            recentChats={recentConversations}
+            preferences={preferences}
+            onTogglePreference={handlePreferenceToggle}
+          />
+        </div>
       </div>
     </div>
   );
