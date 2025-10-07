@@ -42,6 +42,10 @@ const App: React.FC = () => {
   const [resumeConversationId, setResumeConversationId] = useState<string | null>(null);
 
   const [isSavingConversation, setIsSavingConversation] = useState(false);
+  const [activeConversationSession, setActiveConversationSession] = useState<{
+    id: string;
+    characterId: string;
+  } | null>(null);
 
   const [lastQuestOutcome, setLastQuestOutcome] = useState<QuestAssessment | null>(null);
   const [inProgressQuestIds, setInProgressQuestIds] = useState<string[]>([]);
@@ -61,6 +65,32 @@ const App: React.FC = () => {
   const isSaving = isSavingConversation || dataSaving;
   const isAuthenticated = Boolean(user);
   const isAppLoading = authLoading || dataLoading;
+
+  const ensureConversationComplete = useCallback(
+    (options?: { allowSessionId?: string; message?: string }) => {
+      const hasActiveSession = Boolean(activeConversationSession || selectedCharacter);
+      if (!hasActiveSession) {
+        return true;
+      }
+
+      if (options?.allowSessionId && activeConversationSession?.id === options.allowSessionId) {
+        return true;
+      }
+
+      if (isSaving) {
+        window.alert('Please wait for your conversation to finish saving.');
+        return false;
+      }
+
+      const defaultMessage = location.pathname.startsWith('/conversation')
+        ? 'Please finish your current conversation by tapping End before leaving.'
+        : 'You have an unfinished conversation. Return to it and tap End to create the summary before continuing.';
+
+      window.alert(options?.message ?? defaultMessage);
+      return false;
+    },
+    [activeConversationSession, isSaving, location.pathname, selectedCharacter]
+  );
 
   const requireAuth = useCallback(
     (message?: string) => {
@@ -344,6 +374,7 @@ const App: React.FC = () => {
       setEnvironmentImageUrl(null);
       setLastQuestOutcome(null);
       setQuizAssessment(null);
+      setActiveConversationSession(null);
       if (location.pathname !== '/') {
         navigate('/', { replace: true });
       }
@@ -358,6 +389,9 @@ const App: React.FC = () => {
   }, [conversationHistory, isAppLoading, syncQuestProgress]);
 
   const handleSelectCharacter = (character: Character) => {
+    if (!ensureConversationComplete()) {
+      return;
+    }
     if (!requireAuth('Sign in to start a new conversation.')) {
       return;
     }
@@ -366,6 +400,9 @@ const App: React.FC = () => {
   };
 
   const handleSelectQuest = (quest: Quest) => {
+    if (!ensureConversationComplete()) {
+      return;
+    }
     if (!requireAuth('Sign in to embark on a quest.')) {
       return;
     }
@@ -379,6 +416,9 @@ const App: React.FC = () => {
   };
 
   const handleContinueQuest = (questId: string | undefined) => {
+    if (!ensureConversationComplete()) {
+      return;
+    }
     if (!requireAuth('Sign in to resume your quest.')) {
       return;
     }
@@ -394,6 +434,9 @@ const App: React.FC = () => {
   };
 
   const handleResumeConversation = (conversation: SavedConversation) => {
+    if (!ensureConversationComplete({ allowSessionId: conversation.id })) {
+      return;
+    }
     if (!requireAuth('Sign in to view your saved conversations.')) {
       return;
     }
@@ -408,6 +451,11 @@ const App: React.FC = () => {
 
   const handleConversationUpdate = useCallback(
     (conversation: SavedConversation) => {
+      setActiveConversationSession({
+        id: conversation.id,
+        characterId: conversation.characterId,
+      });
+
       updateData((prev) => {
         const existingIndex = prev.conversations.findIndex((item) => item.id === conversation.id);
         const nextHistory = [...prev.conversations];
@@ -437,6 +485,9 @@ const App: React.FC = () => {
   );
 
   const handleCharacterCreated = (newCharacter: Character) => {
+    if (!ensureConversationComplete()) {
+      return;
+    }
     if (!requireAuth('Sign in to save your custom ancient.')) {
       return;
     }
@@ -450,6 +501,9 @@ const App: React.FC = () => {
   };
 
   const handleDeleteCharacter = (characterId: string) => {
+    if (!ensureConversationComplete()) {
+      return;
+    }
     if (!requireAuth('Sign in to manage your roster of ancients.')) {
       return;
     }
@@ -482,6 +536,9 @@ const App: React.FC = () => {
   };
 
   const handleDeleteQuest = (questId: string) => {
+    if (!ensureConversationComplete()) {
+      return;
+    }
     if (!requireAuth('Sign in to update your quest log.')) {
       return;
     }
@@ -525,6 +582,9 @@ const App: React.FC = () => {
   };
 
   const openQuestCreator = (goal?: string | null) => {
+    if (!ensureConversationComplete()) {
+      return;
+    }
     if (!requireAuth('Sign in to design new quests.')) {
       return;
     }
@@ -533,13 +593,19 @@ const App: React.FC = () => {
   };
 
   const openCharacterCreatorView = useCallback(() => {
+    if (!ensureConversationComplete()) {
+      return;
+    }
     if (!requireAuth('Sign in to create a new ancient.')) {
       return;
     }
     navigate('/character/new');
-  }, [navigate, requireAuth]);
+  }, [ensureConversationComplete, navigate, requireAuth]);
 
   const handleCreateQuestFromNextSteps = (steps: string[], questTitle?: string) => {
+    if (!ensureConversationComplete()) {
+      return;
+    }
     if (!requireAuth('Sign in to turn feedback into new quests.')) {
       return;
     }
@@ -559,6 +625,9 @@ const App: React.FC = () => {
   };
 
   const startGeneratedQuest = (quest: Quest, mentor: Character) => {
+    if (!ensureConversationComplete()) {
+      return;
+    }
     if (!requireAuth('Sign in to embark on your generated quest.')) {
       return;
     }
@@ -583,11 +652,17 @@ const App: React.FC = () => {
   };
 
   const handleQuizExit = () => {
+    if (!ensureConversationComplete()) {
+      return;
+    }
     setQuizAssessment(null);
     navigate('/');
   };
 
   const handleQuizComplete = (quest: Quest, result: QuizResult) => {
+    if (!ensureConversationComplete()) {
+      return;
+    }
     if (!requireAuth('Sign in to track quiz results.')) {
       setQuizAssessment(null);
       navigate('/');
@@ -614,6 +689,9 @@ const App: React.FC = () => {
   };
 
   const launchQuizForQuest = (questId: string) => {
+    if (!ensureConversationComplete()) {
+      return;
+    }
     const quest = allQuests.find((q) => q.id === questId);
     if (!quest) {
       console.warn(`Unable to launch quiz: quest with ID ${questId} not found.`);
@@ -749,6 +827,7 @@ const App: React.FC = () => {
       console.error('Failed to finalize conversation:', error);
     } finally {
       setIsSavingConversation(false);
+      setActiveConversationSession(null);
       setSelectedCharacter(null);
       setEnvironmentImageUrl(null);
       setActiveQuest(null);
@@ -780,32 +859,44 @@ const App: React.FC = () => {
   const userEmail = user?.email ?? (user?.user_metadata as { email?: string })?.email;
 
   const openHistoryView = useCallback(() => {
+    if (!ensureConversationComplete()) {
+      return;
+    }
     if (!requireAuth('Sign in to review your past conversations.')) {
       return;
     }
     navigate('/history');
-  }, [navigate, requireAuth]);
+  }, [ensureConversationComplete, navigate, requireAuth]);
 
   const openQuestsView = useCallback(() => {
+    if (!ensureConversationComplete()) {
+      return;
+    }
     if (!requireAuth('Sign in to manage your quests.')) {
       return;
     }
     navigate('/quests');
-  }, [navigate, requireAuth]);
+  }, [ensureConversationComplete, navigate, requireAuth]);
 
   const openProfileView = useCallback(() => {
+    if (!ensureConversationComplete()) {
+      return;
+    }
     if (!requireAuth('Sign in to view your explorer profile.')) {
       return;
     }
     navigate('/profile');
-  }, [navigate, requireAuth]);
+  }, [ensureConversationComplete, navigate, requireAuth]);
 
   const openSettingsView = useCallback(() => {
+    if (!ensureConversationComplete()) {
+      return;
+    }
     if (!requireAuth('Sign in to update your settings.')) {
       return;
     }
     navigate('/settings');
-  }, [navigate, requireAuth]);
+  }, [ensureConversationComplete, navigate, requireAuth]);
 
   const currentView = useMemo(() => {
     if (location.pathname.startsWith('/conversation')) return 'conversation';
