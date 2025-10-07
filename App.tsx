@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { GoogleGenAI, Type } from '@google/genai';
+import { Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 
 import type {
   Character,
@@ -12,61 +13,30 @@ import type {
   UserData,
 } from './types';
 
-import CharacterSelector from './components/CharacterSelector';
-import ConversationView from './components/ConversationView';
-import HistoryView from './components/HistoryView';
-import CharacterCreator from './components/CharacterCreator';
-import QuestsView from './components/QuestsView';
-import Instructions from './components/Instructions';
-import QuestIcon from './components/icons/QuestIcon';
-import QuestCreator from './components/QuestCreator';
-import QuestQuiz from './components/QuestQuiz';
 import AuthModal from './components/AuthModal';
 import Sidebar from './components/Sidebar';
 
 import { CHARACTERS, QUESTS } from './constants';
 import { useSupabaseAuth } from './hooks/useSupabaseAuth';
 import { useUserData } from './hooks/useUserData';
-import { DEFAULT_USER_DATA } from './supabase/userData';
-
-const updateCharacterQueryParam = (characterId: string, mode: 'push' | 'replace') => {
-  try {
-    const params = new URLSearchParams(window.location.search);
-    params.set('character', characterId);
-    const pathname = typeof window.location.pathname === 'string' && window.location.pathname
-      ? window.location.pathname
-      : '/';
-    const newSearch = params.toString();
-    const nextUrl = `${pathname}${newSearch ? `?${newSearch}` : ''}`;
-    if (mode === 'push') {
-      window.history.pushState({}, '', nextUrl);
-    } else {
-      window.history.replaceState({}, '', nextUrl);
-    }
-  } catch (error) {
-    console.warn('Failed to update character query parameter:', error);
-  }
-};
-
-// ---- App -------------------------------------------------------------------
+import ScrollToTop from './src/components/ScrollToTop';
+import SelectorRoute from './src/routes/Selector';
+import QuestsRoute from './src/routes/Quests';
+import QuestDetailRoute from './src/routes/QuestDetail';
+import QuestCreatorRoute from './src/routes/QuestCreator';
+import QuizRoute from './src/routes/Quiz';
+import ConversationRoute from './src/routes/Conversation';
+import HistoryRoute from './src/routes/History';
+import CharacterCreatorRoute from './src/routes/CharacterCreator';
+import { links } from './src/lib/links';
 
 const App: React.FC = () => {
+  const navigate = useNavigate();
+  const location = useLocation();
   const { user, loading: authLoading, signOut } = useSupabaseAuth();
   const { data: userData, loading: dataLoading, saving: dataSaving, updateData } = useUserData();
 
   const [selectedCharacter, setSelectedCharacter] = useState<Character | null>(null);
-  const [view, setView] = useState<
-    | 'selector'
-    | 'conversation'
-    | 'history'
-    | 'creator'
-    | 'quests'
-    | 'questCreator'
-    | 'quiz'
-    | 'profile'
-    | 'settings'
-  >('selector');
-
   const [environmentImageUrl, setEnvironmentImageUrl] = useState<string | null>(null);
   const [activeQuest, setActiveQuest] = useState<Quest | null>(null);
   const [resumeConversationId, setResumeConversationId] = useState<string | null>(null);
@@ -76,7 +46,6 @@ const App: React.FC = () => {
   const [lastQuestOutcome, setLastQuestOutcome] = useState<QuestAssessment | null>(null);
   const [inProgressQuestIds, setInProgressQuestIds] = useState<string[]>([]);
   const [questCreatorPrefill, setQuestCreatorPrefill] = useState<string | null>(null);
-  const [quizQuest, setQuizQuest] = useState<Quest | null>(null);
   const [quizAssessment, setQuizAssessment] = useState<QuestAssessment | null>(null);
   const [authPrompt, setAuthPrompt] = useState<string | null>(null);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
@@ -115,16 +84,138 @@ const App: React.FC = () => {
     }
   }, [isAuthenticated]);
 
+  const combinedCharacters = useMemo(() => [...customCharacters, ...CHARACTERS], [customCharacters]);
   const allQuests = useMemo(() => [...customQuests, ...QUESTS], [customQuests]);
+
   const lastQuizQuest = useMemo(() => {
     if (!lastQuizResult) {
       return null;
     }
     return allQuests.find((quest) => quest.id === lastQuizResult.questId) ?? null;
   }, [allQuests, lastQuizResult]);
+
   const recentConversations = useMemo(
     () => conversationHistory.slice(0, 5),
     [conversationHistory]
+  );
+
+  const syncActiveQuestId = useCallback(
+    (questId: string | null) => {
+      updateData((prev) => {
+        if (prev.activeQuestId === questId) {
+          return prev;
+        }
+        return {
+          ...prev,
+          activeQuestId: questId,
+        };
+      });
+    },
+    [updateData]
+  );
+
+  const beginConversation = useCallback(
+    (
+      character: Character,
+      options?: { quest?: Quest | null; resumeId?: string | null; environmentImageUrl?: string | null }
+    ) => {
+      setSelectedCharacter(character);
+      setResumeConversationId(options?.resumeId ?? null);
+      setEnvironmentImageUrl(options?.environmentImageUrl ?? null);
+      if (options?.quest ?? null) {
+        const quest = options?.quest ?? null;
+        setActiveQuest(quest);
+        syncActiveQuestId(quest ? quest.id : null);
+      } else {
+        setActiveQuest(null);
+        syncActiveQuestId(null);
+      }
+    },
+    [syncActiveQuestId]
+  );
+
+  const hydrateConversation = useCallback(
+    (conversation: SavedConversation) => {
+      const character = combinedCharacters.find((item) => item.id === conversation.characterId);
+      if (!character) {
+        console.error(`Unable to resume conversation: character with ID ${conversation.characterId} not found.`);
+        return false;
+      }
+
+      let quest: Quest | null = null;
+      if (conversation.questId) {
+        quest = allQuests.find((item) => item.id === conversation.questId) ?? null;
+        if (!quest) {
+          console.warn(`Quest with ID ${conversation.questId} not found while resuming conversation.`);
+        }
+      }
+
+      beginConversation(character, {
+        quest,
+        resumeId: conversation.id,
+        environmentImageUrl: conversation.environmentImageUrl ?? null,
+      });
+      return true;
+    },
+    [allQuests, beginConversation, combinedCharacters]
+  );
+
+  const hydrateConversationFromParams = useCallback(
+    (characterId: string | null, resumeId: string | null) => {
+      if (isAppLoading) {
+        return;
+      }
+
+      if (!characterId && !resumeId) {
+        return;
+      }
+
+      if (!requireAuth('Sign in to continue your conversation.')) {
+        return;
+      }
+
+      if (resumeId) {
+        if (resumeConversationId === resumeId && selectedCharacter) {
+          return;
+        }
+        const conversation = conversationHistory.find((item) => item.id === resumeId);
+        if (!conversation) {
+          console.warn(`Conversation with ID ${resumeId} not found.`);
+          navigate('/history', { replace: true });
+          return;
+        }
+        hydrateConversation(conversation);
+        return;
+      }
+
+      if (characterId) {
+        if (selectedCharacter?.id === characterId && !resumeId) {
+          return;
+        }
+        const character = combinedCharacters.find((item) => item.id === characterId);
+        if (!character) {
+          console.warn(`Character with ID ${characterId} not found.`);
+          navigate('/', { replace: true });
+          return;
+        }
+        beginConversation(character, {
+          quest: null,
+          resumeId: null,
+          environmentImageUrl: null,
+        });
+      }
+    },
+    [
+      beginConversation,
+      combinedCharacters,
+      conversationHistory,
+      hydrateConversation,
+      isAppLoading,
+      navigate,
+      requireAuth,
+      resumeConversationId,
+      selectedCharacter,
+    ]
   );
 
   useEffect(() => {
@@ -188,18 +279,14 @@ const App: React.FC = () => {
     setInProgressQuestIds(Array.from(inProgress));
   }, [conversationHistory]);
 
-  // On mount: load saved characters, url param character, and progress
   useEffect(() => {
-    if (isAppLoading) {
+    if (isAppLoading || !isAuthenticated) {
       return;
     }
 
-    const allCharacters = [...customCharacters, ...CHARACTERS];
-    const availableQuests = [...customQuests, ...QUESTS];
-
     let nextActiveQuest: Quest | null = null;
     if (userData.activeQuestId) {
-      nextActiveQuest = availableQuests.find((quest) => quest.id === userData.activeQuestId) ?? null;
+      nextActiveQuest = allQuests.find((quest) => quest.id === userData.activeQuestId) ?? null;
     }
 
     setActiveQuest(nextActiveQuest);
@@ -208,77 +295,84 @@ const App: React.FC = () => {
       let characterToSelect: Character | null = null;
 
       if (nextActiveQuest) {
-        characterToSelect = allCharacters.find((c) => c.id === nextActiveQuest?.characterId) ?? null;
+        characterToSelect = combinedCharacters.find((c) => c.id === nextActiveQuest?.characterId) ?? null;
       }
 
       if (!characterToSelect) {
-        const urlParams = new URLSearchParams(window.location.search);
-        const characterId = urlParams.get('character');
-        if (characterId) {
-          characterToSelect = allCharacters.find((c) => c.id === characterId) ?? null;
+        const params = new URLSearchParams(location.search);
+        const characterIdFromUrl = params.get('character');
+        if (characterIdFromUrl) {
+          characterToSelect = combinedCharacters.find((c) => c.id === characterIdFromUrl) ?? null;
         }
       }
 
       if (characterToSelect) {
-        setSelectedCharacter(characterToSelect);
-        setView('conversation');
-        updateCharacterQueryParam(characterToSelect.id, 'replace');
+        beginConversation(characterToSelect, {
+          quest:
+            nextActiveQuest && nextActiveQuest.characterId === characterToSelect.id
+              ? nextActiveQuest
+              : null,
+          resumeId: null,
+          environmentImageUrl: null,
+        });
+        if (location.pathname !== '/conversation') {
+          navigate(links.conversation(characterToSelect.id), { replace: true });
+        }
       }
     }
 
     syncQuestProgress();
   }, [
-    customCharacters,
-    customQuests,
+    allQuests,
+    beginConversation,
+    combinedCharacters,
     isAppLoading,
+    isAuthenticated,
+    location.pathname,
+    location.search,
+    navigate,
     selectedCharacter,
     syncQuestProgress,
     userData.activeQuestId,
   ]);
 
   useEffect(() => {
-    if (!isAuthenticated) {
+    if (!isAuthenticated && !authLoading) {
       setSelectedCharacter(null);
       setActiveQuest(null);
-      setView('selector');
       setResumeConversationId(null);
       setEnvironmentImageUrl(null);
+      setLastQuestOutcome(null);
+      setQuizAssessment(null);
+      if (location.pathname !== '/') {
+        navigate('/', { replace: true });
+      }
     }
-  }, [isAuthenticated]);
+  }, [authLoading, isAuthenticated, location.pathname, navigate]);
 
-  // ---- Navigation helpers ----
+  useEffect(() => {
+    if (isAppLoading) {
+      return;
+    }
+    syncQuestProgress();
+  }, [conversationHistory, isAppLoading, syncQuestProgress]);
 
   const handleSelectCharacter = (character: Character) => {
     if (!requireAuth('Sign in to start a new conversation.')) {
       return;
     }
-    setSelectedCharacter(character);
-    setView('conversation');
-    setActiveQuest(null); // clear any quest when directly picking a character
-    updateData((prev) => ({
-      ...prev,
-      activeQuestId: null,
-    }));
-    setResumeConversationId(null);
-    updateCharacterQueryParam(character.id, 'push');
+    beginConversation(character, { quest: null, resumeId: null, environmentImageUrl: null });
+    navigate(links.conversation(character.id));
   };
 
   const handleSelectQuest = (quest: Quest) => {
     if (!requireAuth('Sign in to embark on a quest.')) {
       return;
     }
-    const allCharacters = [...customCharacters, ...CHARACTERS];
-    const characterForQuest = allCharacters.find((c) => c.id === quest.characterId);
+    const characterForQuest = combinedCharacters.find((c) => c.id === quest.characterId);
     if (characterForQuest) {
-      setActiveQuest(quest);
-      updateData((prev) => ({
-        ...prev,
-        activeQuestId: quest.id,
-      }));
-      setSelectedCharacter(characterForQuest);
-      setView('conversation');
-      setResumeConversationId(null);
-      updateCharacterQueryParam(characterForQuest.id, 'push');
+      beginConversation(characterForQuest, { quest, resumeId: null, environmentImageUrl: null });
+      navigate(links.conversation(characterForQuest.id));
     } else {
       console.error(`Character with ID ${quest.characterId} not found for the selected quest.`);
     }
@@ -303,45 +397,13 @@ const App: React.FC = () => {
     if (!requireAuth('Sign in to view your saved conversations.')) {
       return;
     }
-    const allCharacters = [...customCharacters, ...CHARACTERS];
-    const characterToResume = allCharacters.find((c) => c.id === conversation.characterId);
 
-    if (!characterToResume) {
-      console.error(`Unable to resume conversation: character with ID ${conversation.characterId} not found.`);
+    const hydrated = hydrateConversation(conversation);
+    if (!hydrated) {
       return;
     }
 
-    setResumeConversationId(conversation.id);
-    setSelectedCharacter(characterToResume);
-    setEnvironmentImageUrl(conversation.environmentImageUrl || null);
-
-    if (conversation.questId) {
-      const questToResume = allQuests.find((quest) => quest.id === conversation.questId);
-      if (questToResume) {
-        setActiveQuest(questToResume);
-        updateData((prev) => ({
-          ...prev,
-          activeQuestId: questToResume.id,
-        }));
-      } else {
-        console.warn(`Quest with ID ${conversation.questId} not found while resuming conversation.`);
-        setActiveQuest(null);
-        updateData((prev) => ({
-          ...prev,
-          activeQuestId: null,
-        }));
-      }
-    } else {
-      setActiveQuest(null);
-      updateData((prev) => ({
-        ...prev,
-        activeQuestId: null,
-      }));
-    }
-
-    setView('conversation');
-
-    updateCharacterQueryParam(characterToResume.id, 'push');
+    navigate(links.conversation(conversation.characterId, { resumeId: conversation.id }));
   };
 
   const handleConversationUpdate = useCallback(
@@ -383,11 +445,8 @@ const App: React.FC = () => {
       customCharacters: [newCharacter, ...prev.customCharacters],
       activeQuestId: null,
     }));
-    setSelectedCharacter(newCharacter);
-    setView('conversation');
-    setActiveQuest(null);
-    setResumeConversationId(null);
-    updateCharacterQueryParam(newCharacter.id, 'push');
+    beginConversation(newCharacter, { quest: null, resumeId: null, environmentImageUrl: null });
+    navigate(links.conversation(newCharacter.id));
   };
 
   const handleDeleteCharacter = (characterId: string) => {
@@ -470,15 +529,15 @@ const App: React.FC = () => {
       return;
     }
     setQuestCreatorPrefill(goal ?? null);
-    setView('questCreator');
+    navigate('/quest/new');
   };
 
   const openCharacterCreatorView = useCallback(() => {
     if (!requireAuth('Sign in to create a new ancient.')) {
       return;
     }
-    setView('creator');
-  }, [requireAuth]);
+    navigate('/character/new');
+  }, [navigate, requireAuth]);
 
   const handleCreateQuestFromNextSteps = (steps: string[], questTitle?: string) => {
     if (!requireAuth('Sign in to turn feedback into new quests.')) {
@@ -499,7 +558,6 @@ const App: React.FC = () => {
     openQuestCreator(prefill);
   };
 
-  // NEW: handle a freshly-generated quest & mentor from QuestCreator
   const startGeneratedQuest = (quest: Quest, mentor: Character) => {
     if (!requireAuth('Sign in to embark on your generated quest.')) {
       return;
@@ -520,37 +578,29 @@ const App: React.FC = () => {
         activeQuestId: quest.id,
       };
     });
-    setActiveQuest(quest);
-    setSelectedCharacter(mentor);
-    setView('conversation');
-    setResumeConversationId(null);
-    updateCharacterQueryParam(mentor.id, 'push');
+    beginConversation(mentor, { quest, resumeId: null, environmentImageUrl: null });
+    navigate(links.conversation(mentor.id));
   };
 
   const handleQuizExit = () => {
-    setQuizQuest(null);
     setQuizAssessment(null);
-    setView('selector');
+    navigate('/');
   };
 
-  const handleQuizComplete = (result: QuizResult) => {
+  const handleQuizComplete = (quest: Quest, result: QuizResult) => {
     if (!requireAuth('Sign in to track quiz results.')) {
-      setQuizQuest(null);
       setQuizAssessment(null);
-      setView('selector');
+      navigate('/');
       return;
     }
-    const quest = quizQuest;
     updateData((prev) => {
       let updatedCompleted = [...prev.completedQuestIds];
-      if (quest) {
-        const alreadyCompleted = updatedCompleted.includes(quest.id);
-        if (result.passed && !alreadyCompleted) {
-          updatedCompleted = [...updatedCompleted, quest.id];
-        }
-        if (!result.passed && alreadyCompleted) {
-          updatedCompleted = updatedCompleted.filter((id) => id !== quest.id);
-        }
+      const alreadyCompleted = updatedCompleted.includes(quest.id);
+      if (result.passed && !alreadyCompleted) {
+        updatedCompleted = [...updatedCompleted, quest.id];
+      }
+      if (!result.passed && alreadyCompleted) {
+        updatedCompleted = updatedCompleted.filter((id) => id !== quest.id);
       }
 
       return {
@@ -559,30 +609,27 @@ const App: React.FC = () => {
         lastQuizResult: result,
       };
     });
-    setQuizQuest(null);
     setQuizAssessment(null);
-    setView('selector');
+    navigate('/');
   };
 
   const launchQuizForQuest = (questId: string) => {
     const quest = allQuests.find((q) => q.id === questId);
     if (!quest) {
       console.warn(`Unable to launch quiz: quest with ID ${questId} not found.`);
-      setView('selector');
+      navigate('/quests');
       return;
     }
 
-    setQuizQuest(quest);
     if (lastQuestOutcome?.questId === questId) {
       setQuizAssessment(lastQuestOutcome);
     } else {
       setQuizAssessment(null);
     }
-    setView('quiz');
+    navigate(links.quiz(questId));
   };
 
-  // ---- End conversation: summarize & (if quest) evaluate mastery ----
-    const handleEndConversation = async (transcript: ConversationTurn[], sessionId: string) => {
+  const handleEndConversation = async (transcript: ConversationTurn[], sessionId: string) => {
     if (!selectedCharacter) return;
     if (!requireAuth('Sign in to save your conversation.')) {
       return;
@@ -591,15 +638,12 @@ const App: React.FC = () => {
     let questAssessment: QuestAssessment | null = null;
     const questForSession = activeQuest;
 
-    if (questForSession) {
-      setQuizQuest(null);
-      setQuizAssessment(null);
-    }
-
     try {
       const existingConversation = conversationHistory.find((c) => c.id === sessionId);
 
-      let updatedConversation: SavedConversation =
+      let updatedConversation:
+        | (SavedConversation & { questId?: string; questTitle?: string; questAssessment?: QuestAssessment })
+        | SavedConversation =
         existingConversation ??
         ({
           id: sessionId,
@@ -619,97 +663,45 @@ const App: React.FC = () => {
       };
 
       if (questForSession) {
-        updatedConversation = {
-          ...updatedConversation,
+        const ai = new GoogleGenAI({ apiKey: process.env.API_KEY ?? '' });
+        const questTranscriptText = transcript
+          .map((turn) => `${turn.speakerName || turn.speaker}: ${turn.text}`)
+          .join('\n');
+
+        const evaluationPrompt = `You are a precise mentor at the School of the Ancients. Assess whether the learner has mastered the quest goal. Respond as JSON with:\n{\n  \\"passed\\": boolean, // true if the learner clearly demonstrates mastery, false otherwise\n  \\"summary\\": string, // 2-3 sentence summary of the learner's performance\n  \\"evidence\\": string[], // key quotes or reasoning that show understanding\n  \\"improvements\\": string[], // actionable suggestions if the student has gaps (empty if passed)\n}\n\nFocus only on the student's contributions. Mark passed=true only if the learner clearly articulates key ideas from the objective.`;
+
+        const evaluationResponse = await ai.models.generateContent({
+          model: 'gemini-2.5-flash',
+          contents: evaluationPrompt + `\n\nTranscript:\n${questTranscriptText}`,
+          config: {
+            responseMimeType: 'application/json',
+            responseSchema: {
+              type: Type.OBJECT,
+              properties: {
+                passed: { type: Type.BOOLEAN },
+                summary: { type: Type.STRING },
+                evidence: { type: Type.ARRAY, items: { type: Type.STRING } },
+                improvements: { type: Type.ARRAY, items: { type: Type.STRING } },
+              },
+              required: ['passed', 'summary', 'evidence', 'improvements'],
+            },
+          },
+        });
+
+        const evaluation = JSON.parse(evaluationResponse.text);
+        questAssessment = {
           questId: questForSession.id,
           questTitle: questForSession.title,
+          passed: Boolean(evaluation.passed),
+          summary: evaluation.summary || '',
+          evidence: Array.isArray(evaluation.evidence) ? evaluation.evidence : [],
+          improvements: Array.isArray(evaluation.improvements) ? evaluation.improvements : [],
         };
-      }
 
-      let ai: GoogleGenAI | null = null;
-      if (!process.env.API_KEY) {
-        console.error('API_KEY not set, skipping summary and quest assessment.');
-      } else {
-        ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-      }
-
-      if (ai && transcript.length > 1) {
-        const transcriptText = transcript
-          .slice(1)
-          .map((turn) => `${turn.speakerName}: ${turn.text}`)
-          .join('\n\n');
-
-        if (transcriptText.trim()) {
-          const prompt = `Please summarize the following educational dialogue with ${selectedCharacter.name}. Provide a concise one-paragraph overview of the key topics discussed, and then list 3-5 of the most important takeaways or concepts as bullet points.\n\nDialogue:\n${transcriptText}`;
-
-          const response = await ai.models.generateContent({
-            model: 'gemini-2.5-flash',
-            contents: prompt,
-            config: {
-              responseMimeType: 'application/json',
-              responseSchema: {
-                type: Type.OBJECT,
-                properties: {
-                  overview: { type: Type.STRING, description: 'A one-paragraph overview of the conversation.' },
-                  takeaways: {
-                    type: Type.ARRAY,
-                    items: { type: Type.STRING },
-                    description: 'A list of 3-5 key takeaways from the conversation.',
-                  },
-                },
-                required: ['overview', 'takeaways'],
-              },
-            },
-          });
-
-          const summary: Summary = JSON.parse(response.text);
-          updatedConversation = {
-            ...updatedConversation,
-            summary,
-            timestamp: Date.now(),
-          };
-        }
-      }
-
-      if (ai && questForSession) {
-        const questTranscriptText = transcript.map((turn) => `${turn.speakerName}: ${turn.text}`).join('\n\n');
-
-        if (questTranscriptText.trim()) {
-          const evaluationPrompt = `You are a meticulous mentor evaluating whether a student has mastered the quest "${questForSession.title}". Review the conversation transcript between the mentor and student. Determine if the student demonstrates a working understanding of the quest objective: "${questForSession.objective}".\n\nReturn a JSON object with this structure:\n{\n  "passed": boolean,\n  "summary": string,          // one or two sentences explaining your verdict in plain language\n  "evidence": string[],       // bullet-friendly phrases citing what the student said that shows understanding\n  "improvements": string[]    // actionable suggestions if the student has gaps (empty if passed)\n}\n\nFocus only on the student's contributions. Mark passed=true only if the learner clearly articulates key ideas from the objective.`;
-
-          const evaluationResponse = await ai.models.generateContent({
-            model: 'gemini-2.5-flash',
-            contents: evaluationPrompt + `\n\nTranscript:\n${questTranscriptText}`,
-            config: {
-              responseMimeType: 'application/json',
-              responseSchema: {
-                type: Type.OBJECT,
-                properties: {
-                  passed: { type: Type.BOOLEAN },
-                  summary: { type: Type.STRING },
-                  evidence: { type: Type.ARRAY, items: { type: Type.STRING } },
-                  improvements: { type: Type.ARRAY, items: { type: Type.STRING } },
-                },
-                required: ['passed', 'summary', 'evidence', 'improvements'],
-              },
-            },
-          });
-
-          const evaluation = JSON.parse(evaluationResponse.text);
-          questAssessment = {
-            questId: questForSession.id,
-            questTitle: questForSession.title,
-            passed: Boolean(evaluation.passed),
-            summary: evaluation.summary || '',
-            evidence: Array.isArray(evaluation.evidence) ? evaluation.evidence : [],
-            improvements: Array.isArray(evaluation.improvements) ? evaluation.improvements : [],
-          };
-
-          updatedConversation = {
-            ...updatedConversation,
-            questAssessment,
-          };
-        }
+        updatedConversation = {
+          ...updatedConversation,
+          questAssessment,
+        };
       } else if (questForSession) {
         updatedConversation = {
           ...updatedConversation,
@@ -722,9 +714,9 @@ const App: React.FC = () => {
         const existingIndex = prev.conversations.findIndex((conversation) => conversation.id === updatedConversation.id);
         const nextHistory = [...prev.conversations];
         if (existingIndex > -1) {
-          nextHistory[existingIndex] = updatedConversation;
+          nextHistory[existingIndex] = updatedConversation as SavedConversation;
         } else {
-          nextHistory.unshift(updatedConversation);
+          nextHistory.unshift(updatedConversation as SavedConversation);
         }
 
         let nextCompleted = [...prev.completedQuestIds];
@@ -757,430 +749,18 @@ const App: React.FC = () => {
       console.error('Failed to finalize conversation:', error);
     } finally {
       setIsSavingConversation(false);
-      if (questAssessment) {
-        if (questAssessment.passed && questForSession) {
-          setQuizQuest(questForSession);
-          setQuizAssessment(questAssessment);
-          setView('quiz');
-        } else {
-          setView('selector');
-        }
-      } else {
-        setView('selector');
-      }
       setSelectedCharacter(null);
       setEnvironmentImageUrl(null);
       setActiveQuest(null);
-      updateData((prev) => ({
-        ...prev,
-        activeQuestId: null,
-      }));
+      syncActiveQuestId(null);
       setResumeConversationId(null);
-      window.history.pushState({}, '', window.location.pathname);
-    }
-  };
 
-  // ---- View switcher ----
-
-  const renderContent = () => {
-    switch (view) {
-      case 'conversation':
-        return selectedCharacter ? (
-          <ConversationView
-            character={selectedCharacter}
-            onEndConversation={handleEndConversation}
-            environmentImageUrl={environmentImageUrl}
-            onEnvironmentUpdate={setEnvironmentImageUrl}
-            activeQuest={activeQuest}
-            isSaving={isSaving} // pass saving state
-            resumeConversationId={resumeConversationId}
-            conversationHistory={conversationHistory}
-            onConversationUpdate={handleConversationUpdate}
-          />
-        ) : null;
-      case 'history':
-        return (
-          <HistoryView
-            onBack={() => setView('selector')}
-            onResumeConversation={handleResumeConversation}
-            onCreateQuestFromNextSteps={handleCreateQuestFromNextSteps}
-            history={conversationHistory}
-            onDeleteConversation={handleDeleteConversation}
-          />
-        );
-      case 'creator':
-        return <CharacterCreator onCharacterCreated={handleCharacterCreated} onBack={() => setView('selector')} />;
-      case 'quests': {
-        const allCharacters = [...customCharacters, ...CHARACTERS];
-        return (
-          <QuestsView
-            onBack={() => setView('selector')}
-            onSelectQuest={handleSelectQuest}
-            quests={allQuests}
-            characters={allCharacters}
-            completedQuestIds={completedQuests}
-            onCreateQuest={() => openQuestCreator()}
-            inProgressQuestIds={inProgressQuestIds}
-            onDeleteQuest={handleDeleteQuest}
-            deletableQuestIds={customQuests.map((quest) => quest.id)}
-          />
-        );
+      if (questAssessment && questAssessment.passed && questForSession) {
+        setQuizAssessment(questAssessment);
+        navigate(links.quiz(questForSession.id));
+      } else {
+        navigate('/');
       }
-      case 'questCreator': {
-        const allChars = [...customCharacters, ...CHARACTERS];
-        const handleBack = () => {
-          setQuestCreatorPrefill(null);
-          setView('selector');
-        };
-        const handleQuestReady = (quest: Quest, character: Character) => {
-          setQuestCreatorPrefill(null);
-          startGeneratedQuest(quest, character);
-        };
-        return (
-          <QuestCreator
-            characters={allChars}
-            onBack={handleBack}
-            onQuestReady={handleQuestReady}
-            onCharacterCreated={(newChar) => {
-              if (!requireAuth('Sign in to save your custom ancient.')) {
-                return;
-              }
-              updateData((prev) => ({
-                ...prev,
-                customCharacters: [newChar, ...prev.customCharacters],
-              }));
-            }}
-            initialGoal={questCreatorPrefill ?? undefined}
-          />
-        );
-      }
-      case 'quiz':
-        return quizQuest ? (
-          <QuestQuiz
-            quest={quizQuest}
-            assessment={quizAssessment}
-            onExit={handleQuizExit}
-            onComplete={handleQuizComplete}
-          />
-        ) : (
-          <div className="text-center text-gray-300">
-            <p className="text-lg">Quiz unavailable. Returning to the hub…</p>
-            <button
-              type="button"
-              onClick={() => setView('selector')}
-              className="mt-4 inline-flex items-center rounded-md bg-amber-600 px-4 py-2 text-sm font-semibold text-black hover:bg-amber-500"
-            >
-              Go back
-            </button>
-          </div>
-        );
-      case 'profile':
-        return (
-          <div className="bg-gray-900/60 border border-gray-800 rounded-2xl p-6 text-left space-y-6 animate-fade-in">
-            <div>
-              <h2 className="text-3xl font-bold text-amber-200">Explorer Profile</h2>
-              <p className="text-sm text-gray-400 mt-1">
-                Chronicle your journey with the ancients and track your learning legacy.
-              </p>
-            </div>
-            {isAuthenticated ? (
-              <div className="space-y-6">
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                  <div className="bg-gray-800/60 border border-gray-700 rounded-xl p-4">
-                    <p className="text-xs uppercase tracking-wide text-gray-400">Custom Ancients</p>
-                    <p className="text-2xl font-semibold text-amber-200 mt-1">{customCharacters.length}</p>
-                  </div>
-                  <div className="bg-gray-800/60 border border-gray-700 rounded-xl p-4">
-                    <p className="text-xs uppercase tracking-wide text-gray-400">Conversations</p>
-                    <p className="text-2xl font-semibold text-amber-200 mt-1">{conversationHistory.length}</p>
-                  </div>
-                  <div className="bg-gray-800/60 border border-gray-700 rounded-xl p-4">
-                    <p className="text-xs uppercase tracking-wide text-gray-400">Quests Complete</p>
-                    <p className="text-2xl font-semibold text-amber-200 mt-1">{completedQuests.length}</p>
-                  </div>
-                </div>
-
-                <div className="bg-gray-800/50 border border-gray-700 rounded-xl p-5 space-y-2">
-                  <p className="text-xs uppercase tracking-wide text-gray-400">Account Email</p>
-                  <p className="text-lg text-gray-100">{userEmail ?? 'Unknown adventurer'}</p>
-                </div>
-
-                <div className="bg-gray-800/50 border border-gray-700 rounded-xl p-5">
-                  <p className="text-sm text-gray-200 leading-relaxed">
-                    Keep creating ancients and embarking on quests to expand your mastery. Each conversation strengthens your
-                    connection to the eras you study.
-                  </p>
-                </div>
-              </div>
-            ) : (
-              <div className="bg-gray-800/60 border border-gray-700 rounded-xl p-6 text-center">
-                <p className="text-lg text-amber-200 font-semibold mb-2">Traveler, you must sign in.</p>
-                <p className="text-sm text-gray-300">
-                  Access your profile, track achievements, and synchronize progress across devices once you are authenticated.
-                </p>
-              </div>
-            )}
-          </div>
-        );
-      case 'settings':
-        return (
-          <div className="bg-gray-900/60 border border-gray-800 rounded-2xl p-6 text-left space-y-6 animate-fade-in">
-            <div>
-              <h2 className="text-3xl font-bold text-amber-200">User Settings</h2>
-              <p className="text-sm text-gray-400 mt-1">
-                Customize how you experience conversations with history&apos;s greatest minds.
-              </p>
-            </div>
-            {isAuthenticated ? (
-              <div className="space-y-5">
-                <label className="flex items-center justify-between gap-4 bg-gray-800/50 border border-gray-700 rounded-xl p-4">
-                  <div>
-                    <span className="text-sm font-semibold text-gray-200">Journey Notifications</span>
-                    <p className="text-xs text-gray-400">Receive alerts when a quest assessment is ready.</p>
-                  </div>
-                  <input
-                    type="checkbox"
-                    className="h-5 w-5 rounded border-gray-600 bg-gray-900 text-amber-500 focus:ring-amber-400"
-                    checked={notificationsEnabled}
-                    onChange={(event) => setNotificationsEnabled(event.target.checked)}
-                  />
-                </label>
-
-                <label className="flex items-center justify-between gap-4 bg-gray-800/50 border border-gray-700 rounded-xl p-4">
-                  <div>
-                    <span className="text-sm font-semibold text-gray-200">Auto-save Transcripts</span>
-                    <p className="text-xs text-gray-400">Keep every exchange stored in your history automatically.</p>
-                  </div>
-                  <input
-                    type="checkbox"
-                    className="h-5 w-5 rounded border-gray-600 bg-gray-900 text-amber-500 focus:ring-amber-400"
-                    checked={autoSaveEnabled}
-                    onChange={(event) => setAutoSaveEnabled(event.target.checked)}
-                  />
-                </label>
-
-                <div className="bg-gray-800/50 border border-gray-700 rounded-xl p-4 space-y-2">
-                  <label htmlFor="theme-select" className="text-sm font-semibold text-gray-200">
-                    Interface Theme
-                  </label>
-                  <p className="text-xs text-gray-400">
-                    Choose the ambiance that best matches your study ritual.
-                  </p>
-                  <select
-                    id="theme-select"
-                    className="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-200 focus:border-amber-400 focus:ring-amber-400"
-                    value={preferredTheme}
-                    onChange={(event) => setPreferredTheme(event.target.value as 'system' | 'light' | 'dark')}
-                  >
-                    <option value="dark">Dark</option>
-                    <option value="light">Light</option>
-                    <option value="system">System</option>
-                  </select>
-                </div>
-
-                <p className="text-xs text-gray-400">
-                  Settings are stored locally for now. Cloud sync will arrive in a future update of School of the Ancients.
-                </p>
-              </div>
-            ) : (
-              <div className="bg-gray-800/60 border border-gray-700 rounded-xl p-6 text-center">
-                <p className="text-lg text-amber-200 font-semibold mb-2">Sign in to tailor your experience.</p>
-                <p className="text-sm text-gray-300">
-                  Manage notifications, transcripts, and appearance preferences once you&apos;re authenticated.
-                </p>
-              </div>
-            )}
-          </div>
-        );
-      case 'selector':
-      default:
-        return (
-          <div className="text-center animate-fade-in">
-            <p className="max-w-3xl mx-auto mb-8 text-gray-400 text-lg">
-              Engage in real-time voice conversations with legendary minds from history, or embark on a guided Learning
-              Quest to master a new subject.
-            </p>
-
-            <div className="max-w-3xl mx-auto mb-8 bg-gray-800/50 border border-gray-700 rounded-lg p-4 text-left">
-              <p className="text-sm text-gray-300 mb-2 font-semibold">Quest Progress</p>
-              <p className="text-xs uppercase tracking-wide text-gray-400 mb-3">
-                {completedQuests.length} of {allQuests.length} quests completed
-              </p>
-              <div className="w-full h-2 bg-gray-700 rounded-full overflow-hidden">
-                <div
-                  className="h-full bg-amber-500 transition-all duration-500"
-                  style={{
-                    width: `${Math.min(
-                      100,
-                      Math.round(
-                        (completedQuests.length / Math.max(allQuests.length, 1)) * 100
-                      )
-                    )}%`,
-                  }}
-                />
-              </div>
-            </div>
-
-            {lastQuestOutcome && (
-              <div
-                className={`max-w-3xl mx-auto mb-8 rounded-lg border p-5 text-left shadow-lg ${
-                  lastQuestOutcome.passed ? 'bg-emerald-900/40 border-emerald-700' : 'bg-red-900/30 border-red-700'
-                }`}
-              >
-                <div className="flex justify-between items-start gap-4">
-                  <div>
-                    <p className="text-xs uppercase tracking-wide text-gray-300 font-semibold">Latest Quest Review</p>
-                    <h3 className="text-2xl font-bold text-amber-200 mt-1">{lastQuestOutcome.questTitle}</h3>
-                  </div>
-                  <span
-                    className={`text-sm font-semibold px-3 py-1 rounded-full ${
-                      lastQuestOutcome.passed ? 'bg-emerald-600 text-emerald-50' : 'bg-red-600 text-red-50'
-                    }`}
-                  >
-                    {lastQuestOutcome.passed ? 'Completed' : 'Needs Review'}
-                  </span>
-                </div>
-
-                <p className="text-gray-200 mt-4 leading-relaxed">{lastQuestOutcome.summary}</p>
-
-                {lastQuestOutcome.evidence.length > 0 && (
-                  <div className="mt-4">
-                    <p className="text-sm font-semibold text-emerald-200 uppercase tracking-wide mb-1">Highlights</p>
-                    <ul className="list-disc list-inside text-gray-100 space-y-1 text-sm">
-                      {lastQuestOutcome.evidence.map((item) => (
-                        <li key={item}>{item}</li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-
-                {!lastQuestOutcome.passed && lastQuestOutcome.improvements.length > 0 && (
-                  <div className="mt-4">
-                    <p className="text-sm font-semibold text-red-200 uppercase tracking-wide mb-1">Next Steps</p>
-                    <ul className="list-disc list-inside text-red-100 space-y-1 text-sm">
-                      {lastQuestOutcome.improvements.map((item) => (
-                        <li key={item}>{item}</li>
-                      ))}
-                    </ul>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        handleCreateQuestFromNextSteps(
-                          lastQuestOutcome.improvements,
-                          lastQuestOutcome.questTitle
-                        )
-                      }
-                      className="mt-3 inline-flex items-center text-sm font-semibold text-teal-200 border border-teal-500/60 px-3 py-1.5 rounded-md hover:bg-teal-600/20 focus:outline-none focus:ring-2 focus:ring-teal-400/60"
-                    >
-                      Turn next steps into a new quest
-                    </button>
-                  </div>
-                )}
-
-                {!lastQuestOutcome.passed && lastQuestOutcome.questId && (
-                  <button
-                    type="button"
-                    onClick={() => handleContinueQuest(lastQuestOutcome.questId)}
-                    className="mt-4 inline-flex items-center text-sm font-semibold text-amber-200 hover:text-amber-100 hover:underline focus:outline-none"
-                  >
-                    Continue quest?
-                  </button>
-                )}
-              </div>
-            )}
-
-            {lastQuizResult && (
-              <div
-                className={`max-w-3xl mx-auto mb-8 rounded-lg border p-5 text-left shadow-lg ${
-                  lastQuizResult.passed ? 'bg-emerald-900/30 border-emerald-700/80' : 'bg-amber-900/30 border-amber-700/80'
-                }`}
-              >
-                <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
-                  <div>
-                    <p className="text-xs uppercase tracking-wide text-gray-300 font-semibold">Latest Quiz Result</p>
-                    <h3 className="text-2xl font-bold text-amber-200 mt-1">
-                      {lastQuizQuest?.title ?? 'Quest Mastery Quiz'}
-                    </h3>
-                  </div>
-                  <span
-                    className={`text-sm font-semibold px-3 py-1 rounded-full ${
-                      lastQuizResult.passed ? 'bg-emerald-600 text-emerald-50' : 'bg-amber-600 text-amber-50'
-                    }`}
-                  >
-                    {lastQuizResult.passed ? 'Mastery Confirmed' : 'Needs Review'}
-                  </span>
-                </div>
-
-                <p className="text-gray-200 mt-4 text-lg font-semibold">
-                  Score: {lastQuizResult.correct} / {lastQuizResult.total} correct ({
-                    Math.round(lastQuizResult.scoreRatio * 100)
-                  }
-                  %)
-                </p>
-
-                {lastQuizResult.missedObjectiveTags.length > 0 && (
-                  <div className="mt-4">
-                    <p className="text-xs uppercase tracking-wide text-amber-200 mb-2">Review focus areas</p>
-                    <div className="flex flex-wrap justify-center gap-2">
-                      {lastQuizResult.missedObjectiveTags.map((tag) => (
-                        <span
-                          key={tag}
-                          className="inline-flex items-center rounded-full border border-amber-500/70 bg-amber-900/30 px-3 py-1 text-xs text-amber-100"
-                        >
-                          {tag}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                <div className="mt-6 flex flex-col sm:flex-row sm:items-center sm:justify-end gap-3">
-                  <button
-                    type="button"
-                    onClick={() => launchQuizForQuest(lastQuizResult.questId)}
-                    className="rounded-lg border border-amber-500/70 px-4 py-2 text-sm font-semibold text-amber-200 hover:bg-amber-500/10"
-                  >
-                    {lastQuizResult.passed ? 'Retake for practice' : 'Retry quiz'}
-                  </button>
-                </div>
-              </div>
-            )}
-
-            <div className="flex flex-col sm:flex-row justify-center items-center gap-4 mb-12">
-              <button
-                onClick={openQuestsView}
-                className="flex items-center gap-3 bg-amber-600 hover:bg-amber-500 text-black font-bold py-3 px-8 rounded-lg transition-colors duration-300 text-lg w-full sm:w-auto"
-              >
-                <QuestIcon className="w-6 h-6" />
-                <span>Learning Quests</span>
-              </button>
-
-              <button
-                onClick={openHistoryView}
-                className="bg-gray-700 hover:bg-gray-600 text-amber-300 font-bold py-3 px-8 rounded-lg transition-colors duration-300 border border-gray-600 w-full sm:w-auto"
-              >
-                View Conversation History
-              </button>
-
-              {/* NEW CTA */}
-              <button
-                onClick={() => openQuestCreator()}
-                className="bg-teal-700 hover:bg-teal-600 text-white font-bold py-3 px-8 rounded-lg transition-colors duration-300 w-full sm:w-auto"
-              >
-                Create Your Quest
-              </button>
-            </div>
-
-            <Instructions />
-
-            <CharacterSelector
-              characters={[...customCharacters, ...CHARACTERS]}
-              onSelectCharacter={handleSelectCharacter}
-              onStartCreation={openCharacterCreatorView}
-              onDeleteCharacter={handleDeleteCharacter}
-            />
-          </div>
-        );
     }
   };
 
@@ -1203,29 +783,41 @@ const App: React.FC = () => {
     if (!requireAuth('Sign in to review your past conversations.')) {
       return;
     }
-    setView('history');
-  }, [requireAuth]);
+    navigate('/history');
+  }, [navigate, requireAuth]);
 
   const openQuestsView = useCallback(() => {
     if (!requireAuth('Sign in to manage your quests.')) {
       return;
     }
-    setView('quests');
-  }, [requireAuth]);
+    navigate('/quests');
+  }, [navigate, requireAuth]);
 
   const openProfileView = useCallback(() => {
     if (!requireAuth('Sign in to view your explorer profile.')) {
       return;
     }
-    setView('profile');
-  }, [requireAuth]);
+    navigate('/profile');
+  }, [navigate, requireAuth]);
 
   const openSettingsView = useCallback(() => {
     if (!requireAuth('Sign in to update your settings.')) {
       return;
     }
-    setView('settings');
-  }, [requireAuth]);
+    navigate('/settings');
+  }, [navigate, requireAuth]);
+
+  const currentView = useMemo(() => {
+    if (location.pathname.startsWith('/conversation')) return 'conversation';
+    if (location.pathname.startsWith('/history')) return 'history';
+    if (location.pathname.startsWith('/quests')) return 'quests';
+    if (location.pathname.startsWith('/quest/new')) return 'questCreator';
+    if (location.pathname.startsWith('/quiz')) return 'quiz';
+    if (location.pathname.startsWith('/character')) return 'creator';
+    if (location.pathname.startsWith('/profile')) return 'profile';
+    if (location.pathname.startsWith('/settings')) return 'settings';
+    return 'selector';
+  }, [location.pathname]);
 
   return (
     <div className="relative min-h-screen bg-[#1a1a1a]">
@@ -1282,11 +874,266 @@ const App: React.FC = () => {
             onOpenProfile={openProfileView}
             onOpenSettings={openSettingsView}
             onOpenQuests={openQuestsView}
-            currentView={view}
+            currentView={currentView}
             isAuthenticated={isAuthenticated}
             userEmail={userEmail}
           />
-          <div className="flex-1 flex flex-col">{renderContent()}</div>
+          <div className="flex-1 flex flex-col">
+            <ScrollToTop />
+            <Routes>
+              <Route
+                path="/"
+                element={
+                  <SelectorRoute
+                    characters={combinedCharacters}
+                    allQuests={allQuests}
+                    completedQuestIds={completedQuests}
+                    lastQuestOutcome={lastQuestOutcome}
+                    lastQuizResult={lastQuizResult}
+                    lastQuizQuest={lastQuizQuest}
+                    onSelectCharacter={handleSelectCharacter}
+                    onDeleteCharacter={handleDeleteCharacter}
+                    onStartCharacterCreation={openCharacterCreatorView}
+                    onOpenQuests={openQuestsView}
+                    onOpenHistory={openHistoryView}
+                    onOpenQuestCreator={() => openQuestCreator()}
+                    onContinueQuest={handleContinueQuest}
+                    onCreateQuestFromNextSteps={handleCreateQuestFromNextSteps}
+                    onLaunchQuiz={launchQuizForQuest}
+                  />
+                }
+              />
+              <Route
+                path="/quests"
+                element={
+                  <QuestsRoute
+                    quests={allQuests}
+                    characters={combinedCharacters}
+                    completedQuestIds={completedQuests}
+                    inProgressQuestIds={inProgressQuestIds}
+                    deletableQuestIds={customQuests.map((quest) => quest.id)}
+                    onSelectQuest={handleSelectQuest}
+                    onCreateQuest={() => openQuestCreator()}
+                    onBack={() => navigate('/')}
+                    onDeleteQuest={handleDeleteQuest}
+                  />
+                }
+              />
+              <Route
+                path="/quests/:questId"
+                element={
+                  <QuestDetailRoute
+                    quests={allQuests}
+                    characters={combinedCharacters}
+                    completedQuestIds={completedQuests}
+                    inProgressQuestIds={inProgressQuestIds}
+                    deletableQuestIds={customQuests.map((quest) => quest.id)}
+                    onStartQuest={handleSelectQuest}
+                    onDeleteQuest={handleDeleteQuest}
+                    onBack={() => navigate('/quests')}
+                  />
+                }
+              />
+              <Route
+                path="/quest/new"
+                element={
+                  <QuestCreatorRoute
+                    characters={combinedCharacters}
+                    initialGoal={questCreatorPrefill}
+                    onBack={() => {
+                      setQuestCreatorPrefill(null);
+                      navigate('/');
+                    }}
+                    onQuestReady={startGeneratedQuest}
+                    onCharacterCreated={(newChar) => {
+                      if (!requireAuth('Sign in to save your custom ancient.')) {
+                        return;
+                      }
+                      updateData((prev) => ({
+                        ...prev,
+                        customCharacters: [newChar, ...prev.customCharacters],
+                      }));
+                    }}
+                  />
+                }
+              />
+              <Route
+                path="/quiz/:questId"
+                element={
+                  <QuizRoute
+                    quests={allQuests}
+                    assessment={quizAssessment}
+                    onExit={handleQuizExit}
+                    onComplete={handleQuizComplete}
+                  />
+                }
+              />
+              <Route
+                path="/conversation"
+                element={
+                  <ConversationRoute
+                    character={selectedCharacter}
+                    activeQuest={activeQuest}
+                    isSaving={isSaving}
+                    environmentImageUrl={environmentImageUrl}
+                    onEnvironmentUpdate={setEnvironmentImageUrl}
+                    resumeConversationId={resumeConversationId}
+                    conversationHistory={conversationHistory}
+                    onConversationUpdate={handleConversationUpdate}
+                    onEndConversation={handleEndConversation}
+                    onHydrateFromParams={hydrateConversationFromParams}
+                    isAppLoading={isAppLoading}
+                  />
+                }
+              />
+              <Route
+                path="/history"
+                element={
+                  <HistoryRoute
+                    history={conversationHistory}
+                    onBack={() => navigate('/')}
+                    onResumeConversation={handleResumeConversation}
+                    onCreateQuestFromNextSteps={handleCreateQuestFromNextSteps}
+                    onDeleteConversation={handleDeleteConversation}
+                  />
+                }
+              />
+              <Route
+                path="/character/new"
+                element={
+                  <CharacterCreatorRoute
+                    onCharacterCreated={handleCharacterCreated}
+                    onBack={() => navigate('/')}
+                  />
+                }
+              />
+              <Route
+                path="/profile"
+                element={
+                  <div className="bg-gray-900/60 border border-gray-800 rounded-2xl p-6 text-left space-y-6 animate-fade-in">
+                    <div>
+                      <h2 className="text-3xl font-bold text-amber-200">Explorer Profile</h2>
+                      <p className="text-sm text-gray-400 mt-1">
+                        Chronicle your journey with the ancients and track your learning legacy.
+                      </p>
+                    </div>
+                    {isAuthenticated ? (
+                      <div className="space-y-6">
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                          <div className="bg-gray-800/60 border border-gray-700 rounded-xl p-4">
+                            <p className="text-xs uppercase tracking-wide text-gray-400">Custom Ancients</p>
+                            <p className="text-2xl font-semibold text-amber-200 mt-1">{customCharacters.length}</p>
+                          </div>
+                          <div className="bg-gray-800/60 border border-gray-700 rounded-xl p-4">
+                            <p className="text-xs uppercase tracking-wide text-gray-400">Conversations</p>
+                            <p className="text-2xl font-semibold text-amber-200 mt-1">{conversationHistory.length}</p>
+                          </div>
+                          <div className="bg-gray-800/60 border border-gray-700 rounded-xl p-4">
+                            <p className="text-xs uppercase tracking-wide text-gray-400">Quests Complete</p>
+                            <p className="text-2xl font-semibold text-amber-200 mt-1">{completedQuests.length}</p>
+                          </div>
+                        </div>
+
+                        <div className="bg-gray-800/50 border border-gray-700 rounded-xl p-5 space-y-2">
+                          <p className="text-xs uppercase tracking-wide text-gray-400">Account Email</p>
+                          <p className="text-lg text-gray-100">{userEmail ?? 'Unknown adventurer'}</p>
+                        </div>
+
+                        <div className="bg-gray-800/50 border border-gray-700 rounded-xl p-5">
+                          <p className="text-sm text-gray-200 leading-relaxed">
+                            Keep creating ancients and embarking on quests to expand your mastery. Each conversation strengthens
+                            your connection to the eras you study.
+                          </p>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="bg-gray-800/60 border border-gray-700 rounded-xl p-6 text-center">
+                        <p className="text-lg text-amber-200 font-semibold mb-2">Traveler, you must sign in.</p>
+                        <p className="text-sm text-gray-300">
+                          Access your profile, track achievements, and synchronize progress across devices once you are
+                          authenticated.
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                }
+              />
+              <Route
+                path="/settings"
+                element={
+                  <div className="bg-gray-900/60 border border-gray-800 rounded-2xl p-6 text-left space-y-6 animate-fade-in">
+                    <div>
+                      <h2 className="text-3xl font-bold text-amber-200">User Settings</h2>
+                      <p className="text-sm text-gray-400 mt-1">
+                        Customize how you experience conversations with history&apos;s greatest minds.
+                      </p>
+                    </div>
+                    {isAuthenticated ? (
+                      <div className="space-y-5">
+                        <label className="flex items-center justify-between gap-4 bg-gray-800/50 border border-gray-700 rounded-xl p-4">
+                          <div>
+                            <span className="text-sm font-semibold text-gray-200">Journey Notifications</span>
+                            <p className="text-xs text-gray-400">Receive alerts when a quest assessment is ready.</p>
+                          </div>
+                          <input
+                            type="checkbox"
+                            className="h-5 w-5 rounded border-gray-600 bg-gray-900 text-amber-500 focus:ring-amber-400"
+                            checked={notificationsEnabled}
+                            onChange={(event) => setNotificationsEnabled(event.target.checked)}
+                          />
+                        </label>
+
+                        <label className="flex items-center justify-between gap-4 bg-gray-800/50 border border-gray-700 rounded-xl p-4">
+                          <div>
+                            <span className="text-sm font-semibold text-gray-200">Auto-save Transcripts</span>
+                            <p className="text-xs text-gray-400">Keep every exchange stored in your history automatically.</p>
+                          </div>
+                          <input
+                            type="checkbox"
+                            className="h-5 w-5 rounded border-gray-600 bg-gray-900 text-amber-500 focus:ring-amber-400"
+                            checked={autoSaveEnabled}
+                            onChange={(event) => setAutoSaveEnabled(event.target.checked)}
+                          />
+                        </label>
+
+                        <div className="bg-gray-800/50 border border-gray-700 rounded-xl p-4 space-y-2">
+                          <label htmlFor="theme-select" className="text-sm font-semibold text-gray-200">
+                            Interface Theme
+                          </label>
+                          <p className="text-xs text-gray-400">
+                            Choose the ambiance that best matches your study ritual.
+                          </p>
+                          <select
+                            id="theme-select"
+                            className="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-200 focus:border-amber-400 focus:ring-amber-400"
+                            value={preferredTheme}
+                            onChange={(event) => setPreferredTheme(event.target.value as 'system' | 'light' | 'dark')}
+                          >
+                            <option value="dark">Dark</option>
+                            <option value="light">Light</option>
+                            <option value="system">System</option>
+                          </select>
+                        </div>
+
+                        <p className="text-xs text-gray-400">
+                          Settings are stored locally for now. Cloud sync will arrive in a future update of School of the
+                          Ancients.
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="bg-gray-800/60 border border-gray-700 rounded-xl p-6 text-center">
+                        <p className="text-lg text-amber-200 font-semibold mb-2">Sign in to tailor your experience.</p>
+                        <p className="text-sm text-gray-300">
+                          Manage notifications, transcripts, and appearance preferences once you&apos;re authenticated.
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                }
+              />
+              <Route path="*" element={<Navigate to="/" replace />} />
+            </Routes>
+          </div>
         </main>
       </div>
     </div>
