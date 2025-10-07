@@ -13,6 +13,9 @@ type SidebarProps = {
   currentView: string;
   isAuthenticated: boolean;
   userEmail?: string | null;
+  variant?: 'desktop' | 'mobile';
+  onNavigate?: () => void;
+  onClose?: () => void;
 };
 
 const Sidebar: React.FC<SidebarProps> = ({
@@ -26,46 +29,78 @@ const Sidebar: React.FC<SidebarProps> = ({
   currentView,
   isAuthenticated,
   userEmail,
+  variant = 'desktop',
+  onNavigate,
+  onClose,
 }) => {
+  const isMobileVariant = variant === 'mobile';
+
+  const containerClassName = isMobileVariant
+    ? 'w-full max-w-xs h-full flex flex-col'
+    : 'w-full lg:w-72 xl:w-80 flex-shrink-0';
+
+  const panelClassName = isMobileVariant
+    ? 'bg-gray-900 border border-gray-800 rounded-3xl p-6 shadow-2xl backdrop-blur-md flex-1 overflow-y-auto'
+    : 'bg-gray-900/70 border border-gray-800 rounded-2xl p-5 shadow-xl backdrop-blur-sm';
+
+  const handleNavigation = (callback: () => void) => () => {
+    callback();
+    if (onNavigate) {
+      onNavigate();
+    }
+  };
+
   const navigationItems = [
     {
       key: 'quests',
       label: 'Quest Library',
       description: 'Browse and continue active quests.',
-      onClick: onOpenQuests,
+      onClick: handleNavigation(onOpenQuests),
     },
     {
       key: 'creator',
       label: 'Create Ancient',
       description: 'Design a new historical guide.',
-      onClick: onCreateAncient,
+      onClick: handleNavigation(onCreateAncient),
     },
     {
       key: 'profile',
       label: 'User Profile',
       description: 'Review your explorer identity.',
-      onClick: onOpenProfile,
+      onClick: handleNavigation(onOpenProfile),
     },
     {
       key: 'settings',
       label: 'User Settings',
       description: 'Adjust preferences and saved options.',
-      onClick: onOpenSettings,
+      onClick: handleNavigation(onOpenSettings),
     },
   ];
 
   return (
-    <aside className="w-full lg:w-72 xl:w-80 flex-shrink-0">
-      <div className="bg-gray-900/70 border border-gray-800 rounded-2xl p-5 shadow-xl backdrop-blur-sm">
-        <div className="mb-6">
-          <h2 className="text-lg font-semibold text-amber-300 tracking-wide">Explorer Hub</h2>
-          <p className="text-sm text-gray-400">
-            {isAuthenticated
-              ? userEmail
-                ? `Signed in as ${userEmail}`
-                : 'Signed in traveller'
-              : 'Sign in to unlock personalized features.'}
-          </p>
+    <aside className={containerClassName}>
+      <div className={panelClassName}>
+        <div className={`mb-6 ${isMobileVariant ? 'flex items-start justify-between gap-4' : ''}`}>
+          <div>
+            <h2 className="text-lg font-semibold text-amber-300 tracking-wide">Explorer Hub</h2>
+            <p className="text-sm text-gray-400">
+              {isAuthenticated
+                ? userEmail
+                  ? `Signed in as ${userEmail}`
+                  : 'Signed in traveller'
+                : 'Sign in to unlock personalized features.'}
+            </p>
+          </div>
+          {isMobileVariant && onClose && (
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-full border border-gray-700 bg-gray-800/70 p-2 text-xs font-semibold text-gray-300 hover:text-amber-200"
+              aria-label="Close navigation menu"
+            >
+              Close
+            </button>
+          )}
         </div>
 
         <div className="space-y-4">
@@ -81,7 +116,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                     key={item.key}
                     type="button"
                     onClick={item.onClick}
-                    className={`w-full text-left px-3 py-2 rounded-lg transition-all duration-200 border flex flex-col gap-1 ${
+                    className={`w-full text-left px-3 py-3 rounded-xl transition-all duration-200 border flex flex-col gap-1 ${
                       isActive
                         ? 'border-amber-500/80 bg-amber-500/10 text-amber-200'
                         : 'border-gray-800 hover:border-amber-500/40 hover:bg-gray-800/60 text-gray-200'
@@ -100,7 +135,7 @@ const Sidebar: React.FC<SidebarProps> = ({
               <h3 className="text-sm font-semibold uppercase tracking-wide text-gray-300">Recent Chats</h3>
               <button
                 type="button"
-                onClick={onOpenHistory}
+                onClick={handleNavigation(onOpenHistory)}
                 className="text-xs text-amber-300 hover:text-amber-200"
               >
                 View all
@@ -119,7 +154,12 @@ const Sidebar: React.FC<SidebarProps> = ({
                   <li key={conversation.id}>
                     <button
                       type="button"
-                      onClick={() => onSelectConversation(conversation)}
+                      onClick={() => {
+                        onSelectConversation(conversation);
+                        if (onNavigate) {
+                          onNavigate();
+                        }
+                      }}
                       className="w-full text-left px-3 py-2 rounded-lg border border-gray-800 hover:border-amber-500/40 hover:bg-gray-800/70 transition-all duration-200"
                     >
                       <p className="text-sm font-semibold text-gray-100 truncate">

@@ -56,6 +56,7 @@ const App: React.FC = () => {
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const [autoSaveEnabled, setAutoSaveEnabled] = useState(true);
   const [preferredTheme, setPreferredTheme] = useState<'system' | 'light' | 'dark'>('dark');
+  const [isSidebarOpen, setSidebarOpen] = useState(false);
 
   const customCharacters = userData.customCharacters;
   const customQuests = userData.customQuests;
@@ -65,6 +66,14 @@ const App: React.FC = () => {
   const isSaving = isSavingConversation || dataSaving;
   const isAuthenticated = Boolean(user);
   const isAppLoading = authLoading || dataLoading;
+
+  const toggleSidebar = useCallback(() => {
+    setSidebarOpen((prev) => !prev);
+  }, []);
+
+  const closeSidebar = useCallback(() => {
+    setSidebarOpen(false);
+  }, []);
 
   const ensureConversationComplete = useCallback(
     (options?: { allowSessionId?: string; message?: string }) => {
@@ -113,6 +122,24 @@ const App: React.FC = () => {
       setIsAuthModalOpen(false);
     }
   }, [isAuthenticated]);
+
+  useEffect(() => {
+    closeSidebar();
+  }, [closeSidebar, location.pathname]);
+
+  useEffect(() => {
+    if (!isSidebarOpen) {
+      return;
+    }
+    if (typeof document === 'undefined') {
+      return;
+    }
+    const originalOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = originalOverflow;
+    };
+  }, [isSidebarOpen]);
 
   const combinedCharacters = useMemo(() => [...customCharacters, ...CHARACTERS], [customCharacters]);
   const allQuests = useMemo(() => [...customQuests, ...QUESTS], [customQuests]);
@@ -910,6 +937,19 @@ const App: React.FC = () => {
     return 'selector';
   }, [location.pathname]);
 
+  const sidebarProps = {
+    recentConversations,
+    onSelectConversation: handleResumeConversation,
+    onCreateAncient: openCharacterCreatorView,
+    onOpenHistory: openHistoryView,
+    onOpenProfile: openProfileView,
+    onOpenSettings: openSettingsView,
+    onOpenQuests: openQuestsView,
+    currentView,
+    isAuthenticated,
+    userEmail,
+  };
+
   return (
     <div className="relative min-h-screen bg-[#1a1a1a]">
       <AuthModal
@@ -917,6 +957,28 @@ const App: React.FC = () => {
         prompt={authPrompt}
         onClose={() => setIsAuthModalOpen(false)}
       />
+      {isSidebarOpen && (
+        <div
+          className="lg:hidden fixed inset-0 z-40 flex"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Navigation menu"
+        >
+          <div
+            className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+            onClick={closeSidebar}
+            aria-hidden="true"
+          />
+          <div id="mobile-sidebar" className="relative ml-auto flex h-full w-80 max-w-[85%] p-4 z-10">
+            <Sidebar
+              {...sidebarProps}
+              variant="mobile"
+              onNavigate={closeSidebar}
+              onClose={closeSidebar}
+            />
+          </div>
+        </div>
+      )}
       <div
         className="absolute inset-0 bg-cover bg-center transition-opacity duration-1000 z-0"
         style={{ backgroundImage: environmentImageUrl ? `url(${environmentImageUrl})` : 'none' }}
@@ -928,47 +990,52 @@ const App: React.FC = () => {
         style={{ background: environmentImageUrl ? 'transparent' : 'linear-gradient(to bottom right, #1a1a1a, #2b2b2b)' }}
       >
         <header className="mb-8">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-            <div className="text-center sm:text-left">
-              <h1
-                className="text-4xl sm:text-5xl md:text-6xl font-bold text-amber-300 tracking-wider"
-                style={{ textShadow: '0 0 10px rgba(252, 211, 77, 0.5)' }}
-              >
-                School of the Ancients
-              </h1>
-              <p className="text-gray-400 mt-2 text-lg">Old world wisdom. New world classroom.</p>
-            </div>
-            <div className="flex flex-col sm:items-end gap-2">
-              {userEmail && (
-                <span className="text-sm text-gray-300">Signed in as {userEmail}</span>
-              )}
-              <button
-                type="button"
-                onClick={handleSignInClick}
-                className="self-center sm:self-end inline-flex items-center gap-2 rounded-md border border-amber-400/60 px-4 py-2 text-sm font-semibold text-amber-200 hover:bg-amber-500/10"
-              >
-                {isAuthenticated ? 'Sign out' : 'Sign in'}
-              </button>
-              {!isAuthenticated && authPrompt && (
-                <p className="text-xs text-amber-300 max-w-xs text-center sm:text-right">{authPrompt}</p>
-              )}
+          <div className="max-w-7xl mx-auto">
+            <div className="relative overflow-hidden rounded-3xl border border-gray-800 bg-gray-900/70 px-6 py-6 shadow-2xl">
+              <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-amber-500/10 via-transparent to-transparent" />
+              <div className="relative flex flex-col gap-6 sm:flex-row sm:items-center sm:justify-between">
+                <div className="space-y-3 text-center sm:text-left">
+                  <p className="text-xs uppercase tracking-[0.4em] text-amber-300/80">Immersive history tutoring</p>
+                  <h1 className="text-4xl sm:text-5xl md:text-6xl font-bold text-amber-200 drop-shadow-[0_0_12px_rgba(252,211,77,0.35)]">
+                    School of the Ancients
+                  </h1>
+                  <p className="mx-auto max-w-xl text-lg text-gray-300 sm:mx-0">
+                    Old world wisdom. New world classroom. Learn from timeless mentors on any device.
+                  </p>
+                </div>
+                <div className="flex w-full flex-col items-center gap-3 sm:w-auto sm:items-end">
+                  {userEmail && <span className="text-sm text-gray-300">Signed in as {userEmail}</span>}
+                  <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
+                    <button
+                      type="button"
+                      onClick={handleSignInClick}
+                      className="inline-flex items-center justify-center gap-2 rounded-md border border-amber-400/60 bg-gray-800/60 px-4 py-2 text-sm font-semibold text-amber-200 hover:bg-amber-500/10 focus:outline-none focus:ring-2 focus:ring-amber-400/60"
+                    >
+                      {isAuthenticated ? 'Sign out' : 'Sign in'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={toggleSidebar}
+                      aria-expanded={isSidebarOpen}
+                      aria-controls="mobile-sidebar"
+                      className="inline-flex items-center justify-center gap-2 rounded-md border border-amber-400/40 bg-gray-800/60 px-4 py-2 text-sm font-semibold text-amber-200 hover:bg-gray-800/90 focus:outline-none focus:ring-2 focus:ring-amber-400/60 lg:hidden"
+                    >
+                      {isSidebarOpen ? 'Close menu' : 'Open menu'}
+                    </button>
+                  </div>
+                  {!isAuthenticated && authPrompt && (
+                    <p className="max-w-xs text-center text-xs text-amber-200 sm:text-right">{authPrompt}</p>
+                  )}
+                </div>
+              </div>
             </div>
           </div>
         </header>
 
         <main className="max-w-7xl w-full mx-auto flex-grow flex flex-col lg:flex-row gap-6">
-          <Sidebar
-            recentConversations={recentConversations}
-            onSelectConversation={handleResumeConversation}
-            onCreateAncient={openCharacterCreatorView}
-            onOpenHistory={openHistoryView}
-            onOpenProfile={openProfileView}
-            onOpenSettings={openSettingsView}
-            onOpenQuests={openQuestsView}
-            currentView={currentView}
-            isAuthenticated={isAuthenticated}
-            userEmail={userEmail}
-          />
+          <div className="hidden lg:flex lg:flex-shrink-0">
+            <Sidebar {...sidebarProps} />
+          </div>
           <div className="flex-1 flex flex-col">
             <ScrollToTop />
             <Routes>
