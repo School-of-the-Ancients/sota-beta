@@ -15,6 +15,7 @@ import type {
 
 import AuthModal from './components/AuthModal';
 import Sidebar from './components/Sidebar';
+import MenuIcon from './components/icons/MenuIcon';
 
 import { CHARACTERS, QUESTS } from './constants';
 import { useSupabaseAuth } from './hooks/useSupabaseAuth';
@@ -56,6 +57,7 @@ const App: React.FC = () => {
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const [autoSaveEnabled, setAutoSaveEnabled] = useState(true);
   const [preferredTheme, setPreferredTheme] = useState<'system' | 'light' | 'dark'>('dark');
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   const customCharacters = userData.customCharacters;
   const customQuests = userData.customQuests;
@@ -387,6 +389,22 @@ const App: React.FC = () => {
     }
     syncQuestProgress();
   }, [conversationHistory, isAppLoading, syncQuestProgress]);
+
+  useEffect(() => {
+    setIsSidebarOpen(false);
+  }, [location.pathname]);
+
+  useEffect(() => {
+    if (!isSidebarOpen) {
+      document.body.style.removeProperty('overflow');
+      return;
+    }
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [isSidebarOpen]);
 
   const handleSelectCharacter = (character: Character) => {
     if (!ensureConversationComplete()) {
@@ -898,6 +916,28 @@ const App: React.FC = () => {
     navigate('/settings');
   }, [ensureConversationComplete, navigate, requireAuth]);
 
+  const renderAccountSection = (wrapperClassName: string, align: 'left' | 'right') => (
+    <div className={wrapperClassName}>
+      {userEmail && (
+        <span className={`text-sm text-gray-300 ${align === 'right' ? 'text-right' : 'text-left'}`}>
+          Signed in as {userEmail}
+        </span>
+      )}
+      <button
+        type="button"
+        onClick={handleSignInClick}
+        className={`inline-flex items-center gap-2 rounded-md border border-amber-400/60 px-4 py-2 text-sm font-semibold text-amber-200 transition hover:bg-amber-500/10 ${
+          align === 'right' ? 'self-end' : 'self-start'
+        }`}
+      >
+        {isAuthenticated ? 'Sign out' : 'Sign in'}
+      </button>
+      {!isAuthenticated && authPrompt && (
+        <p className={`text-xs text-amber-300 ${align === 'right' ? 'text-right' : 'text-left'}`}>{authPrompt}</p>
+      )}
+    </div>
+  );
+
   const currentView = useMemo(() => {
     if (location.pathname.startsWith('/conversation')) return 'conversation';
     if (location.pathname.startsWith('/history')) return 'history';
@@ -918,60 +958,98 @@ const App: React.FC = () => {
         onClose={() => setIsAuthModalOpen(false)}
       />
       <div
-        className="absolute inset-0 bg-cover bg-center transition-opacity duration-1000 z-0"
+        className="absolute inset-0 z-0 bg-cover bg-center transition-opacity duration-1000"
         style={{ backgroundImage: environmentImageUrl ? `url(${environmentImageUrl})` : 'none' }}
       />
-      {environmentImageUrl && <div className="absolute inset-0 bg-black/50 z-0" />}
+      {environmentImageUrl && <div className="absolute inset-0 z-0 bg-black/50" />}
 
       <div
-        className="relative z-10 min-h-screen flex flex-col text-gray-200 font-serif p-4 sm:p-6 lg:p-8"
-        style={{ background: environmentImageUrl ? 'transparent' : 'linear-gradient(to bottom right, #1a1a1a, #2b2b2b)' }}
+        className={`fixed inset-0 z-30 bg-black/70 transition-opacity duration-300 lg:hidden ${
+          isSidebarOpen ? 'pointer-events-auto opacity-100' : 'pointer-events-none opacity-0'
+        }`}
+        onClick={() => setIsSidebarOpen(false)}
+        aria-hidden={!isSidebarOpen}
+      />
+
+      <div
+        className={`fixed inset-y-0 left-0 z-40 w-full max-w-xs sm:max-w-sm transform shadow-2xl transition-transform duration-300 lg:hidden ${
+          isSidebarOpen ? 'translate-x-0' : '-translate-x-full'
+        }`}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Primary navigation"
       >
-        <header className="mb-8">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-            <div className="text-center sm:text-left">
-              <h1
-                className="text-4xl sm:text-5xl md:text-6xl font-bold text-amber-300 tracking-wider"
-                style={{ textShadow: '0 0 10px rgba(252, 211, 77, 0.5)' }}
-              >
-                School of the Ancients
-              </h1>
-              <p className="text-gray-400 mt-2 text-lg">Old world wisdom. New world classroom.</p>
-            </div>
-            <div className="flex flex-col sm:items-end gap-2">
-              {userEmail && (
-                <span className="text-sm text-gray-300">Signed in as {userEmail}</span>
-              )}
+        <Sidebar
+          recentConversations={recentConversations}
+          onSelectConversation={handleResumeConversation}
+          onCreateAncient={openCharacterCreatorView}
+          onOpenHistory={openHistoryView}
+          onOpenProfile={openProfileView}
+          onOpenSettings={openSettingsView}
+          onOpenQuests={openQuestsView}
+          currentView={currentView}
+          isAuthenticated={isAuthenticated}
+          userEmail={userEmail}
+          className="flex h-full flex-col overflow-y-auto bg-transparent"
+          onRequestClose={() => setIsSidebarOpen(false)}
+        />
+      </div>
+
+      <div
+        className="relative z-20 flex min-h-screen flex-col px-4 py-6 font-serif text-gray-200 sm:px-6 lg:px-10"
+        style={{ background: environmentImageUrl ? 'transparent' : 'linear-gradient(to bottom right, #1a1a1a, #232323)' }}
+      >
+        <div className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-8">
+          <header className="space-y-4">
+            <div className="flex items-center justify-between gap-3 sm:hidden">
               <button
                 type="button"
-                onClick={handleSignInClick}
-                className="self-center sm:self-end inline-flex items-center gap-2 rounded-md border border-amber-400/60 px-4 py-2 text-sm font-semibold text-amber-200 hover:bg-amber-500/10"
+                onClick={() => setIsSidebarOpen(true)}
+                className="inline-flex items-center gap-2 rounded-full border border-amber-400/60 bg-amber-500/10 px-4 py-2 text-sm font-semibold text-amber-200 transition hover:bg-amber-500/20"
+                aria-label="Open navigation menu"
               >
-                {isAuthenticated ? 'Sign out' : 'Sign in'}
+                <MenuIcon className="h-5 w-5" />
+                <span>Menu</span>
               </button>
-              {!isAuthenticated && authPrompt && (
-                <p className="text-xs text-amber-300 max-w-xs text-center sm:text-right">{authPrompt}</p>
-              )}
+              {renderAccountSection('flex flex-col items-end gap-1 text-right', 'right')}
             </div>
-          </div>
-        </header>
 
-        <main className="max-w-7xl w-full mx-auto flex-grow flex flex-col lg:flex-row gap-6">
-          <Sidebar
-            recentConversations={recentConversations}
-            onSelectConversation={handleResumeConversation}
-            onCreateAncient={openCharacterCreatorView}
-            onOpenHistory={openHistoryView}
-            onOpenProfile={openProfileView}
-            onOpenSettings={openSettingsView}
-            onOpenQuests={openQuestsView}
-            currentView={currentView}
-            isAuthenticated={isAuthenticated}
-            userEmail={userEmail}
-          />
-          <div className="flex-1 flex flex-col">
-            <ScrollToTop />
-            <Routes>
+            <div className="rounded-3xl border border-gray-800/80 bg-gray-900/60 p-6 shadow-xl backdrop-blur-sm sm:flex sm:items-center sm:justify-between sm:gap-6">
+              <div className="text-center sm:text-left">
+                <h1
+                  className="text-3xl font-bold tracking-wider text-amber-300 sm:text-4xl md:text-5xl"
+                  style={{ textShadow: '0 0 12px rgba(252, 211, 77, 0.45)' }}
+                >
+                  School of the Ancients
+                </h1>
+                <p className="mt-3 text-base text-gray-400 sm:text-lg">Old world wisdom. New world classroom.</p>
+                <p className="mt-2 text-sm text-gray-500 sm:text-base">
+                  Select a historical guide, continue a quest, or review your mastery—now in a layout that feels at home on any screen.
+                </p>
+              </div>
+              {renderAccountSection('hidden sm:flex flex-col items-end gap-2 text-right', 'right')}
+            </div>
+          </header>
+
+          <main className="flex flex-1 flex-col gap-6 lg:flex-row">
+            <Sidebar
+              recentConversations={recentConversations}
+              onSelectConversation={handleResumeConversation}
+              onCreateAncient={openCharacterCreatorView}
+              onOpenHistory={openHistoryView}
+              onOpenProfile={openProfileView}
+              onOpenSettings={openSettingsView}
+              onOpenQuests={openQuestsView}
+              currentView={currentView}
+              isAuthenticated={isAuthenticated}
+              userEmail={userEmail}
+              className="hidden lg:flex lg:sticky lg:top-6 lg:max-h-[calc(100vh-6rem)] lg:flex-col"
+            />
+            <div className="flex-1">
+              <div className="flex h-full flex-col overflow-hidden rounded-3xl border border-gray-800/80 bg-gray-900/70 shadow-2xl backdrop-blur-sm">
+                <ScrollToTop />
+                <div className="h-full overflow-y-auto p-4 sm:p-6 lg:p-8">
+                  <Routes>
               <Route
                 path="/"
                 element={
@@ -1224,8 +1302,11 @@ const App: React.FC = () => {
               />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
-          </div>
-        </main>
+                </div>
+              </div>
+            </div>
+          </main>
+        </div>
       </div>
     </div>
   );
