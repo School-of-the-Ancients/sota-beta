@@ -165,12 +165,7 @@ const Sidebar: React.FC<SidebarProps> = ({
             )}
           </div>
 
-          <div className="mt-auto rounded-2xl border border-gray-800/80 bg-gradient-to-r from-amber-500/20 via-transparent to-amber-500/10 p-4 text-sm text-gray-300">
-            <p className="font-semibold text-amber-200">Need inspiration?</p>
-            <p className="mt-1 text-sm text-gray-300">
-              Continue a saved conversation or launch a new quest to keep your learning streak alive.
-            </p>
-          </div>
+          
         </div>
       </div>
     </aside>
