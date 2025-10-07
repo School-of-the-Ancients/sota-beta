@@ -1,6 +1,7 @@
 
 import React from 'react';
 import ReactDOM from 'react-dom/client';
+import './index.css';
 import App from './App';
 import { SupabaseAuthProvider } from './hooks/useSupabaseAuth';
 import { UserDataProvider } from './hooks/useUserData';
