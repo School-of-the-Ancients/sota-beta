@@ -100,6 +100,8 @@ export const UserDataProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const hasMigratedRef = useRef(false);
+  const pendingPersistRef = useRef<UserData | null>(null);
+  const persistTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const persist = useCallback(
     async (next: UserData) => {
@@ -118,6 +120,46 @@ export const UserDataProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       }
     },
     [user]
+  );
+
+  const flushPendingPersist = useCallback(async () => {
+    if (!pendingPersistRef.current) {
+      return;
+    }
+
+    const payload = pendingPersistRef.current;
+    pendingPersistRef.current = null;
+
+    if (persistTimeoutRef.current) {
+      clearTimeout(persistTimeoutRef.current);
+      persistTimeoutRef.current = null;
+    }
+
+    await persist(payload);
+  }, [persist]);
+
+  const schedulePersist = useCallback(
+    (next: UserData) => {
+      if (!user) {
+        pendingPersistRef.current = null;
+        if (persistTimeoutRef.current) {
+          clearTimeout(persistTimeoutRef.current);
+          persistTimeoutRef.current = null;
+        }
+        return;
+      }
+
+      pendingPersistRef.current = next;
+
+      if (persistTimeoutRef.current) {
+        clearTimeout(persistTimeoutRef.current);
+      }
+
+      persistTimeoutRef.current = setTimeout(() => {
+        void flushPendingPersist();
+      }, 1500);
+    },
+    [flushPendingPersist, user]
   );
 
   const migrateFromLocalStorage = useCallback(
@@ -186,19 +228,19 @@ export const UserDataProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     (updater: (previous: UserData) => UserData) => {
       setData((prev) => {
         const next = updater(prev);
-        void persist(next);
+        schedulePersist(next);
         return next;
       });
     },
-    [persist]
+    [schedulePersist]
   );
 
   const replaceData = useCallback(
     (next: UserData) => {
       setData(next);
-      void persist(next);
+      schedulePersist(next);
     },
-    [persist]
+    [schedulePersist]
   );
 
   const value = useMemo<UserDataContextValue>(
@@ -213,6 +255,20 @@ export const UserDataProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     }),
     [data, error, loading, replaceData, saving, updateData, refresh]
   );
+
+  useEffect(() => {
+    return () => {
+      if (persistTimeoutRef.current) {
+        clearTimeout(persistTimeoutRef.current);
+        persistTimeoutRef.current = null;
+      }
+
+      if (pendingPersistRef.current) {
+        void persist(pendingPersistRef.current);
+        pendingPersistRef.current = null;
+      }
+    };
+  }, [persist]);
 
   return <UserDataContext.Provider value={value}>{children}</UserDataContext.Provider>;
 };
