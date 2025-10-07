@@ -18,6 +18,7 @@ import Sidebar from './components/Sidebar';
 import { CHARACTERS, QUESTS } from './constants';
 import { useSupabaseAuth } from './hooks/useSupabaseAuth';
 import { useUserData } from './hooks/useUserData';
+import { ApiKeyProvider } from './hooks/useApiKey';
 import ScrollToTop from './src/components/ScrollToTop';
 import SelectorRoute from './src/routes/Selector';
 import QuestsRoute from './src/routes/Quests';
@@ -28,6 +29,7 @@ import ConversationRoute from './src/routes/Conversation';
 import HistoryRoute from './src/routes/History';
 import CharacterCreatorRoute from './src/routes/CharacterCreator';
 import { links } from './src/lib/links';
+import { decryptString, encryptString, isEncryptionAvailable } from './src/lib/encryption';
 
 const App: React.FC = () => {
   const navigate = useNavigate();
@@ -52,16 +54,21 @@ const App: React.FC = () => {
   const [quizAssessment, setQuizAssessment] = useState<QuestAssessment | null>(null);
   const [authPrompt, setAuthPrompt] = useState<string | null>(null);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
-  const [notificationsEnabled, setNotificationsEnabled] = useState(true);
-  const [autoSaveEnabled, setAutoSaveEnabled] = useState(true);
-  const [preferredTheme, setPreferredTheme] = useState<'system' | 'light' | 'dark'>('dark');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [decryptedApiKey, setDecryptedApiKey] = useState<string | null>(null);
+  const [apiKeyInput, setApiKeyInput] = useState('');
+  const [isDecryptingApiKey, setIsDecryptingApiKey] = useState(false);
+  const [apiKeyError, setApiKeyError] = useState<string | null>(null);
+  const [isSavingApiKey, setIsSavingApiKey] = useState(false);
+  const [apiKeyStatus, setApiKeyStatus] = useState<'idle' | 'saved' | 'cleared'>('idle');
+  const [encryptionSupported, setEncryptionSupported] = useState(isEncryptionAvailable());
 
   const customCharacters = userData.customCharacters;
   const customQuests = userData.customQuests;
   const completedQuests = userData.completedQuestIds;
   const conversationHistory = userData.conversations;
   const lastQuizResult = userData.lastQuizResult;
+  const hasStoredApiKey = Boolean(userData.apiKey);
   const isSaving = isSavingConversation || dataSaving;
   const isAuthenticated = Boolean(user);
   const isAppLoading = authLoading || dataLoading;
@@ -111,6 +118,77 @@ const App: React.FC = () => {
     if (isAuthenticated) {
       setAuthPrompt(null);
       setIsAuthModalOpen(false);
+    }
+  }, [isAuthenticated]);
+
+  useEffect(() => {
+    setEncryptionSupported(isEncryptionAvailable());
+  }, []);
+
+  useEffect(() => {
+    if (!encryptionSupported) {
+      if (userData.apiKey) {
+        setApiKeyError('This browser does not support the encryption required to unlock your API key.');
+      } else {
+        setApiKeyError(null);
+      }
+      setDecryptedApiKey(null);
+      setApiKeyInput('');
+      setIsDecryptingApiKey(false);
+      setApiKeyStatus('idle');
+      return;
+    }
+
+    const encrypted = userData.apiKey ?? null;
+    if (!encrypted) {
+      setDecryptedApiKey(null);
+      setApiKeyInput('');
+      setApiKeyError(null);
+      setApiKeyStatus('idle');
+      setIsDecryptingApiKey(false);
+      return;
+    }
+
+    let isMounted = true;
+    setIsDecryptingApiKey(true);
+    setApiKeyStatus('idle');
+
+    decryptString(encrypted.cipherText, encrypted.iv)
+      .then((value) => {
+        if (!isMounted) {
+          return;
+        }
+        setDecryptedApiKey(value);
+        setApiKeyInput(value);
+        setApiKeyError(null);
+      })
+      .catch((error) => {
+        console.error('Failed to decrypt API key', error);
+        if (!isMounted) {
+          return;
+        }
+        setDecryptedApiKey(null);
+        setApiKeyInput('');
+        setApiKeyError('We could not decrypt your stored API key on this device. Enter it again to continue.');
+      })
+      .finally(() => {
+        if (!isMounted) {
+          return;
+        }
+        setIsDecryptingApiKey(false);
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [encryptionSupported, userData.apiKey]);
+
+  useEffect(() => {
+    if (!isAuthenticated) {
+      setApiKeyInput('');
+      setDecryptedApiKey(null);
+      setApiKeyError(null);
+      setApiKeyStatus('idle');
     }
   }, [isAuthenticated]);
 
@@ -723,6 +801,73 @@ const App: React.FC = () => {
     navigate(links.quiz(questId));
   };
 
+  const handleSaveApiKey = useCallback(async () => {
+    if (!isAuthenticated) {
+      setApiKeyError('Sign in to save your API key.');
+      return;
+    }
+
+    if (!encryptionSupported) {
+      setApiKeyError('This browser cannot encrypt your API key. Try a modern browser with Web Crypto support.');
+      return;
+    }
+
+    const trimmed = apiKeyInput.trim();
+
+    if (!trimmed) {
+      setIsSavingApiKey(true);
+      try {
+        updateData((prev) => ({
+          ...prev,
+          apiKey: null,
+        }));
+        setDecryptedApiKey(null);
+        setApiKeyStatus('cleared');
+        setApiKeyError(null);
+      } finally {
+        setIsSavingApiKey(false);
+      }
+      return;
+    }
+
+    try {
+      setIsSavingApiKey(true);
+      const encrypted = await encryptString(trimmed);
+      updateData((prev) => ({
+        ...prev,
+        apiKey: {
+          cipherText: encrypted.cipherText,
+          iv: encrypted.iv,
+          updatedAt: new Date().toISOString(),
+        },
+      }));
+      setDecryptedApiKey(trimmed);
+      setApiKeyStatus('saved');
+      setApiKeyError(null);
+    } catch (error) {
+      console.error('Failed to encrypt API key before saving', error);
+      setApiKeyError('Unable to encrypt your API key on this device.');
+      setApiKeyStatus('idle');
+    } finally {
+      setIsSavingApiKey(false);
+    }
+  }, [apiKeyInput, encryptionSupported, isAuthenticated, updateData]);
+
+  const handleRemoveApiKey = useCallback(() => {
+    if (!isAuthenticated) {
+      setApiKeyError('Sign in to manage your API key.');
+      return;
+    }
+    setApiKeyInput('');
+    setDecryptedApiKey(null);
+    setApiKeyError(null);
+    setApiKeyStatus('cleared');
+    updateData((prev) => ({
+      ...prev,
+      apiKey: null,
+    }));
+  }, [isAuthenticated, updateData]);
+
   const handleEndConversation = async (transcript: ConversationTurn[], sessionId: string) => {
     if (!selectedCharacter) return;
     if (!requireAuth('Sign in to save your conversation.')) {
@@ -757,50 +902,54 @@ const App: React.FC = () => {
       };
 
       if (questForSession) {
-        const ai = new GoogleGenAI({ apiKey: process.env.API_KEY ?? '' });
-        const questTranscriptText = transcript
-          .map((turn) => `${turn.speakerName || turn.speaker}: ${turn.text}`)
-          .join('\n');
+        if (decryptedApiKey) {
+          try {
+            const ai = new GoogleGenAI({ apiKey: decryptedApiKey });
+            const questTranscriptText = transcript
+              .map((turn) => `${turn.speakerName || turn.speaker}: ${turn.text}`)
+              .join('\n');
 
-        const evaluationPrompt = `You are a precise mentor at the School of the Ancients. Assess whether the learner has mastered the quest goal. Respond as JSON with:\n{\n  \\"passed\\": boolean, // true if the learner clearly demonstrates mastery, false otherwise\n  \\"summary\\": string, // 2-3 sentence summary of the learner's performance\n  \\"evidence\\": string[], // key quotes or reasoning that show understanding\n  \\"improvements\\": string[], // actionable suggestions if the student has gaps (empty if passed)\n}\n\nFocus only on the student's contributions. Mark passed=true only if the learner clearly articulates key ideas from the objective.`;
+            const evaluationPrompt = `You are a precise mentor at the School of the Ancients. Assess whether the learner has mastered the quest goal. Respond as JSON with:\n{\n  \\"passed\\": boolean, // true if the learner clearly demonstrates mastery, false otherwise\n  \\"summary\\": string, // 2-3 sentence summary of the learner's performance\n  \\"evidence\\": string[], // key quotes or reasoning that show understanding\n  \\"improvements\\": string[], // actionable suggestions if the student has gaps (empty if passed)\n}\n\nFocus only on the student's contributions. Mark passed=true only if the learner clearly articulates key ideas from the objective.`;
 
-        const evaluationResponse = await ai.models.generateContent({
-          model: 'gemini-2.5-flash',
-          contents: evaluationPrompt + `\n\nTranscript:\n${questTranscriptText}`,
-          config: {
-            responseMimeType: 'application/json',
-            responseSchema: {
-              type: Type.OBJECT,
-              properties: {
-                passed: { type: Type.BOOLEAN },
-                summary: { type: Type.STRING },
-                evidence: { type: Type.ARRAY, items: { type: Type.STRING } },
-                improvements: { type: Type.ARRAY, items: { type: Type.STRING } },
+            const evaluationResponse = await ai.models.generateContent({
+              model: 'gemini-2.5-flash',
+              contents: evaluationPrompt + `\n\nTranscript:\n${questTranscriptText}`,
+              config: {
+                responseMimeType: 'application/json',
+                responseSchema: {
+                  type: Type.OBJECT,
+                  properties: {
+                    passed: { type: Type.BOOLEAN },
+                    summary: { type: Type.STRING },
+                    evidence: { type: Type.ARRAY, items: { type: Type.STRING } },
+                    improvements: { type: Type.ARRAY, items: { type: Type.STRING } },
+                  },
+                  required: ['passed', 'summary', 'evidence', 'improvements'],
+                },
               },
-              required: ['passed', 'summary', 'evidence', 'improvements'],
-            },
-          },
-        });
+            });
 
-        const evaluation = JSON.parse(evaluationResponse.text);
-        questAssessment = {
-          questId: questForSession.id,
-          questTitle: questForSession.title,
-          passed: Boolean(evaluation.passed),
-          summary: evaluation.summary || '',
-          evidence: Array.isArray(evaluation.evidence) ? evaluation.evidence : [],
-          improvements: Array.isArray(evaluation.improvements) ? evaluation.improvements : [],
-        };
+            const evaluation = JSON.parse(evaluationResponse.text);
+            questAssessment = {
+              questId: questForSession.id,
+              questTitle: questForSession.title,
+              passed: Boolean(evaluation.passed),
+              summary: evaluation.summary || '',
+              evidence: Array.isArray(evaluation.evidence) ? evaluation.evidence : [],
+              improvements: Array.isArray(evaluation.improvements) ? evaluation.improvements : [],
+            };
+          } catch (error) {
+            console.error('Failed to evaluate quest conversation', error);
+          }
+        } else {
+          console.warn('Quest assessment skipped because no API key is configured.');
+        }
 
         updatedConversation = {
           ...updatedConversation,
-          questAssessment,
-        };
-      } else if (questForSession) {
-        updatedConversation = {
-          ...updatedConversation,
           questId: questForSession.id,
           questTitle: questForSession.title,
+          ...(questAssessment ? { questAssessment } : {}),
         };
       }
 
@@ -960,56 +1109,57 @@ const App: React.FC = () => {
   }, [location.pathname]);
 
   return (
-    <div className="relative min-h-screen bg-[#1a1a1a]">
-      <AuthModal
-        isOpen={isAuthModalOpen && !isAuthenticated}
-        prompt={authPrompt}
-        onClose={() => setIsAuthModalOpen(false)}
-      />
-      <div
-        className="absolute inset-0 z-0 bg-cover bg-center transition-opacity duration-1000"
-        style={{ backgroundImage: environmentImageUrl ? `url(${environmentImageUrl})` : 'none' }}
-      />
-      {environmentImageUrl && <div className="absolute inset-0 z-0 bg-black/50" />}
-
-      <div
-        className={`fixed inset-0 z-30 bg-black/70 transition-opacity duration-300 lg:hidden ${
-          isSidebarOpen ? 'pointer-events-auto opacity-100' : 'pointer-events-none opacity-0'
-        }`}
-        onClick={() => setIsSidebarOpen(false)}
-        aria-hidden={!isSidebarOpen}
-      />
-
-      <div
-        className={`fixed inset-y-0 left-0 z-40 w-full max-w-xs sm:max-w-sm transform shadow-2xl transition-transform duration-300 lg:hidden ${
-          isSidebarOpen ? 'translate-x-0' : '-translate-x-full'
-        }`}
-        role="dialog"
-        aria-modal="true"
-        aria-label="Primary navigation"
-      >
-        <Sidebar
-          recentConversations={recentConversations}
-          onSelectConversation={handleResumeConversation}
-          onCreateAncient={openCharacterCreatorView}
-          onOpenHistory={openHistoryView}
-          onOpenProfile={openProfileView}
-          onOpenSettings={openSettingsView}
-          onOpenQuests={openQuestsView}
-          currentView={currentView}
-          isAuthenticated={isAuthenticated}
-          userEmail={userEmail}
-          className="flex h-full flex-col overflow-y-auto bg-transparent"
-          onRequestClose={() => setIsSidebarOpen(false)}
+    <ApiKeyProvider apiKey={decryptedApiKey}>
+      <div className="relative min-h-screen bg-[#1a1a1a]">
+        <AuthModal
+          isOpen={isAuthModalOpen && !isAuthenticated}
+          prompt={authPrompt}
+          onClose={() => setIsAuthModalOpen(false)}
         />
-      </div>
+        <div
+          className="absolute inset-0 z-0 bg-cover bg-center transition-opacity duration-1000"
+          style={{ backgroundImage: environmentImageUrl ? `url(${environmentImageUrl})` : 'none' }}
+        />
+        {environmentImageUrl && <div className="absolute inset-0 z-0 bg-black/50" />}
 
-      <div
-        className="relative z-20 flex min-h-screen flex-col px-4 py-6 font-serif text-gray-200 sm:px-6 lg:px-10"
-        style={{ background: environmentImageUrl ? 'transparent' : 'linear-gradient(to bottom right, #1a1a1a, #232323)' }}
-      >
-        <div className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-8">
-          <header className="space-y-4">
+        <div
+          className={`fixed inset-0 z-30 bg-black/70 transition-opacity duration-300 lg:hidden ${
+            isSidebarOpen ? 'pointer-events-auto opacity-100' : 'pointer-events-none opacity-0'
+          }`}
+          onClick={() => setIsSidebarOpen(false)}
+          aria-hidden={!isSidebarOpen}
+        />
+
+        <div
+          className={`fixed inset-y-0 left-0 z-40 w-full max-w-xs sm:max-w-sm transform shadow-2xl transition-transform duration-300 lg:hidden ${
+            isSidebarOpen ? 'translate-x-0' : '-translate-x-full'
+          }`}
+          role="dialog"
+          aria-modal="true"
+          aria-label="Primary navigation"
+        >
+          <Sidebar
+            recentConversations={recentConversations}
+            onSelectConversation={handleResumeConversation}
+            onCreateAncient={openCharacterCreatorView}
+            onOpenHistory={openHistoryView}
+            onOpenProfile={openProfileView}
+            onOpenSettings={openSettingsView}
+            onOpenQuests={openQuestsView}
+            currentView={currentView}
+            isAuthenticated={isAuthenticated}
+            userEmail={userEmail}
+            className="flex h-full flex-col overflow-y-auto bg-transparent"
+            onRequestClose={() => setIsSidebarOpen(false)}
+          />
+        </div>
+
+        <div
+          className="relative z-20 flex min-h-screen flex-col px-4 py-6 font-serif text-gray-200 sm:px-6 lg:px-10"
+          style={{ background: environmentImageUrl ? 'transparent' : 'linear-gradient(to bottom right, #1a1a1a, #232323)' }}
+        >
+          <div className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-8">
+            <header className="space-y-4">
             <div className="sticky top-0 z-30 -mx-4 bg-[#1a1a1a]/90 px-4 pb-4 pt-2 backdrop-blur-sm sm:hidden">
               <div className="flex items-center gap-4 rounded-3xl border border-gray-800/80 bg-gray-900/60 px-4 py-3 shadow-xl backdrop-blur-sm">
                 <button
@@ -1251,66 +1401,93 @@ const App: React.FC = () => {
                     <div>
                       <h2 className="text-3xl font-bold text-amber-200">User Settings</h2>
                       <p className="text-sm text-gray-400 mt-1">
-                        Customize how you experience conversations with history&apos;s greatest minds.
+                        Securely manage how the School of the Ancients connects to Gemini.
                       </p>
                     </div>
                     {isAuthenticated ? (
-                      <div className="space-y-5">
-                        <label className="flex items-center justify-between gap-4 bg-gray-800/50 border border-gray-700 rounded-xl p-4">
+                      <form
+                        className="space-y-5"
+                        onSubmit={(event) => {
+                          event.preventDefault();
+                          void handleSaveApiKey();
+                        }}
+                      >
+                        <div className="bg-gray-800/50 border border-gray-700 rounded-xl p-4 space-y-3">
                           <div>
-                            <span className="text-sm font-semibold text-gray-200">Journey Notifications</span>
-                            <p className="text-xs text-gray-400">Receive alerts when a quest assessment is ready.</p>
+                            <label htmlFor="api-key-input" className="text-sm font-semibold text-gray-200">
+                              Gemini API Key
+                            </label>
+                            <p className="text-xs text-gray-400 mt-1">
+                                                         
+                            Need a key? Create one from{' '}
+                            <a
+                              href="https://aistudio.google.com/app/apikey"
+                              target="_blank"
+                              rel="noreferrer"
+                              className="text-amber-300 underline-offset-2 hover:text-amber-200 hover:underline"
+                            >
+                              Google AI Studio
+                            </a>
+                            </p>
                           </div>
                           <input
-                            type="checkbox"
-                            className="h-5 w-5 rounded border-gray-600 bg-gray-900 text-amber-500 focus:ring-amber-400"
-                            checked={notificationsEnabled}
-                            onChange={(event) => setNotificationsEnabled(event.target.checked)}
+                            id="api-key-input"
+                            type="password"
+                            autoComplete="off"
+                            className="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-200 focus:border-amber-400 focus:ring-amber-400 disabled:opacity-50"
+                            value={apiKeyInput}
+                            onChange={(event) => {
+                              setApiKeyInput(event.target.value);
+                              setApiKeyStatus('idle');
+                              if (apiKeyError) {
+                                setApiKeyError(null);
+                              }
+                            }}
+                            placeholder="Paste your AI Studio key"
+                            disabled={!encryptionSupported || isSavingApiKey || isDecryptingApiKey}
                           />
-                        </label>
-
-                        <label className="flex items-center justify-between gap-4 bg-gray-800/50 border border-gray-700 rounded-xl p-4">
-                          <div>
-                            <span className="text-sm font-semibold text-gray-200">Auto-save Transcripts</span>
-                            <p className="text-xs text-gray-400">Keep every exchange stored in your history automatically.</p>
-                          </div>
-                          <input
-                            type="checkbox"
-                            className="h-5 w-5 rounded border-gray-600 bg-gray-900 text-amber-500 focus:ring-amber-400"
-                            checked={autoSaveEnabled}
-                            onChange={(event) => setAutoSaveEnabled(event.target.checked)}
-                          />
-                        </label>
-
-                        <div className="bg-gray-800/50 border border-gray-700 rounded-xl p-4 space-y-2">
-                          <label htmlFor="theme-select" className="text-sm font-semibold text-gray-200">
-                            Interface Theme
-                          </label>
-                          <p className="text-xs text-gray-400">
-                            Choose the ambiance that best matches your study ritual.
-                          </p>
-                          <select
-                            id="theme-select"
-                            className="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-200 focus:border-amber-400 focus:ring-amber-400"
-                            value={preferredTheme}
-                            onChange={(event) => setPreferredTheme(event.target.value as 'system' | 'light' | 'dark')}
-                          >
-                            <option value="dark">Dark</option>
-                            <option value="light">Light</option>
-                            <option value="system">System</option>
-                          </select>
+                          {isDecryptingApiKey && <p className="text-xs text-amber-300">Decrypting your saved key…</p>}
+                          {userData.apiKey?.updatedAt && !isDecryptingApiKey && (
+                            <p className="text-xs text-gray-500">
+                              Saved {new Date(userData.apiKey.updatedAt).toLocaleString()}
+                            </p>
+                          )}
                         </div>
-
+                        <div className="flex flex-wrap gap-3">
+                          <button
+                            type="submit"
+                            className="inline-flex items-center gap-2 rounded-md border border-amber-400/60 bg-amber-500/10 px-4 py-2 text-sm font-semibold text-amber-200 transition hover:bg-amber-500/20 disabled:opacity-50"
+                            disabled={!encryptionSupported || isSavingApiKey || isDecryptingApiKey}
+                          >
+                            {isSavingApiKey ? 'Saving…' : 'Save API Key'}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={handleRemoveApiKey}
+                            className="inline-flex items-center gap-2 rounded-md border border-gray-600 bg-transparent px-4 py-2 text-sm font-semibold text-gray-300 transition hover:bg-gray-700/60 disabled:opacity-50"
+                            disabled={!hasStoredApiKey || isSavingApiKey || isDecryptingApiKey}
+                          >
+                            Remove stored key
+                          </button>
+                        </div>
                         <p className="text-xs text-gray-400">
-                          Settings are stored locally for now. Cloud sync will arrive in a future update of School of the
-                          Ancients.
+                          {encryptionSupported
+                            ? 'Your key never leaves your browser unencrypted and must be re-entered on new devices.'
+                            : 'Secure storage is unavailable in this browser. Update your browser to store an API key.'}
                         </p>
-                      </div>
+                        {apiKeyError ? (
+                          <p className="text-sm text-red-400">{apiKeyError}</p>
+                        ) : apiKeyStatus === 'saved' ? (
+                          <p className="text-sm text-emerald-400">API key encrypted and synced to your account.</p>
+                        ) : apiKeyStatus === 'cleared' ? (
+                          <p className="text-sm text-amber-300">Stored API key removed for this account.</p>
+                        ) : null}
+                      </form>
                     ) : (
                       <div className="bg-gray-800/60 border border-gray-700 rounded-xl p-6 text-center">
-                        <p className="text-lg text-amber-200 font-semibold mb-2">Sign in to tailor your experience.</p>
+                        <p className="text-lg text-amber-200 font-semibold mb-2">Sign in to add your API key.</p>
                         <p className="text-sm text-gray-300">
-                          Manage notifications, transcripts, and appearance preferences once you&apos;re authenticated.
+                          Authenticate to encrypt your Gemini key and sync it with your explorer profile.
                         </p>
                       </div>
                     )}
@@ -1326,6 +1503,7 @@ const App: React.FC = () => {
         </div>
       </div>
     </div>
+    </ApiKeyProvider>
   );
 };
 

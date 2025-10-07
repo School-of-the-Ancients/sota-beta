@@ -1,6 +1,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { GoogleGenAI, LiveServerMessage, Modality, Blob, FunctionDeclaration, Type, SessionResumptionConfig } from '@google/genai';
+import { useApiKey } from './useApiKey';
 import { ConnectionState, Quest } from '../types';
 
 // Audio Encoding & Decoding functions
@@ -128,6 +129,7 @@ export const useGeminiLive = (
     onArtifactDisplayRequest: (name: string, description: string) => void,
     activeQuest: Quest | null,
 ) => {
+    const { apiKey } = useApiKey();
     const [connectionState, setConnectionState] = useState<ConnectionState>(ConnectionState.IDLE);
     const [userTranscription, setUserTranscription] = useState<string>('');
     const [modelTranscription, setModelTranscription] = useState<string>('');
@@ -306,14 +308,14 @@ export const useGeminiLive = (
 
         handledFunctionCallIdsRef.current.clear();
 
-        if (!process.env.API_KEY) {
-            console.error("API_KEY environment variable not set.");
+        if (!apiKey) {
+            console.warn('Gemini API key not configured. Visit Settings to add your key.');
             setConnectionState(ConnectionState.ERROR);
             return;
         }
 
         try {
-            const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+            const ai = new GoogleGenAI({ apiKey });
 
             const sanitizedAccent = voiceAccent?.trim();
             let baseInstruction = systemInstruction.trim();
@@ -598,7 +600,7 @@ export const useGeminiLive = (
             console.error('Failed to connect to Gemini Live:', error);
             setConnectionState(ConnectionState.ERROR);
         }
-    }, [systemInstruction, voiceName, voiceAccent, activeQuest, disconnect]);
+    }, [systemInstruction, voiceName, voiceAccent, activeQuest, disconnect, apiKey]);
 
     useEffect(() => {
         connect();

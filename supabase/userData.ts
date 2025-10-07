@@ -9,6 +9,7 @@ export const DEFAULT_USER_DATA: UserData = {
   activeQuestId: null,
   lastQuizResult: null,
   migratedAt: null,
+  apiKey: null,
 };
 
 const TABLE = 'user_data';
@@ -38,11 +39,91 @@ export const fetchUserData = async (userId: string): Promise<UserData> => {
   }
 
   const stored = (data.data ?? {}) as Partial<UserData>;
-  return {
+
+  const sanitizedApiKey = (() => {
+    const raw = stored.apiKey as unknown;
+
+    if (!raw || typeof raw !== 'object') {
+      return null;
+    }
+
+    const maybeCipherText = (raw as { cipherText?: unknown }).cipherText;
+    const maybeIv = (raw as { iv?: unknown }).iv;
+    if (typeof maybeCipherText !== 'string' || typeof maybeIv !== 'string') {
+      return null;
+    }
+
+    const maybeUpdatedAt = (raw as { updatedAt?: unknown }).updatedAt;
+    return {
+      cipherText: maybeCipherText,
+      iv: maybeIv,
+      updatedAt: typeof maybeUpdatedAt === 'string' ? maybeUpdatedAt : null,
+    };
+  })();
+
+  const sanitizedUserData: UserData = {
     ...DEFAULT_USER_DATA,
     ...stored,
+    apiKey: sanitizedApiKey,
     migratedAt: (data as { migrated_at?: string | null })?.migrated_at ?? stored.migratedAt ?? null,
   };
+
+  const rawApiKey = stored.apiKey as unknown;
+  let shouldPersistSanitized = false;
+
+  if (rawApiKey !== undefined) {
+    if (rawApiKey === null) {
+      shouldPersistSanitized = sanitizedApiKey !== null;
+    } else if (typeof rawApiKey !== 'object') {
+      shouldPersistSanitized = true;
+    } else {
+      const rawCipherText = (rawApiKey as { cipherText?: unknown }).cipherText;
+      const rawIv = (rawApiKey as { iv?: unknown }).iv;
+
+      if (typeof rawCipherText !== 'string' || typeof rawIv !== 'string') {
+        shouldPersistSanitized = true;
+      } else if (!sanitizedApiKey) {
+        shouldPersistSanitized = true;
+      } else {
+        if (
+          rawCipherText !== sanitizedApiKey.cipherText ||
+          rawIv !== sanitizedApiKey.iv
+        ) {
+          shouldPersistSanitized = true;
+        } else {
+          const rawUpdatedAt = (rawApiKey as { updatedAt?: unknown }).updatedAt;
+
+          if (typeof rawUpdatedAt === 'string') {
+            if (rawUpdatedAt !== sanitizedApiKey.updatedAt) {
+              shouldPersistSanitized = true;
+            }
+          } else if (rawUpdatedAt !== null && rawUpdatedAt !== undefined) {
+            shouldPersistSanitized = true;
+          } else if (sanitizedApiKey.updatedAt !== null) {
+            shouldPersistSanitized = true;
+          }
+        }
+      }
+    }
+  }
+
+  if (shouldPersistSanitized) {
+    const sanitizedUpdatePayload = {
+      data: sanitizedUserData,
+      migrated_at: sanitizedUserData.migratedAt ?? null,
+    };
+
+    const { error: updateError } = await client
+      .from(TABLE)
+      .update(sanitizedUpdatePayload)
+      .eq('user_id', userId);
+
+    if (updateError) {
+      throw updateError;
+    }
+  }
+
+  return sanitizedUserData;
 };
 
 export const saveUserData = async (userId: string, payload: UserData): Promise<void> => {
