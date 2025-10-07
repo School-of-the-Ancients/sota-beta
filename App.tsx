@@ -1009,22 +1009,39 @@ const App: React.FC = () => {
         style={{ background: environmentImageUrl ? 'transparent' : 'linear-gradient(to bottom right, #1a1a1a, #232323)' }}
       >
         <div className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-8">
-          <header
-            className="sticky top-0 z-30 -mx-4 bg-[#1a1a1a]/90 px-4 pb-4 pt-2 backdrop-blur-sm sm:static sm:mx-0 sm:bg-transparent sm:px-0 sm:pb-0 sm:pt-0 sm:backdrop-blur-none"
-          >
-            <div className="flex items-center gap-4 rounded-3xl border border-gray-800/80 bg-gray-900/60 px-4 py-3 shadow-xl backdrop-blur-sm">
-              <button
-                type="button"
-                onClick={() => setIsSidebarOpen(true)}
-                className="shrink-0 rounded-full border border-amber-400/60 bg-amber-500/10 px-4 py-2 text-sm font-semibold uppercase tracking-wide text-amber-200 transition hover:bg-amber-500/20 lg:hidden"
-                aria-label="Open navigation menu"
-              >
-                Menu
-              </button>
-              <span className="flex-1 text-center text-sm font-semibold uppercase tracking-[0.35em] text-amber-200 sm:text-base">
-                SoTA
-              </span>
-              {renderAccountSection('hidden shrink-0 items-center justify-end gap-2 text-right lg:flex', 'right', 'compact')}
+          <header className="space-y-4">
+            <div className="sticky top-0 z-30 -mx-4 bg-[#1a1a1a]/90 px-4 pb-4 pt-2 backdrop-blur-sm sm:hidden">
+              <div className="flex items-center gap-4 rounded-3xl border border-gray-800/80 bg-gray-900/60 px-4 py-3 shadow-xl backdrop-blur-sm">
+                <button
+                  type="button"
+                  onClick={() => setIsSidebarOpen(true)}
+                  className="shrink-0 rounded-full border border-amber-400/60 bg-amber-500/10 px-4 py-2 text-sm font-semibold uppercase tracking-wide text-amber-200 transition hover:bg-amber-500/20"
+                  aria-label="Open navigation menu"
+                >
+                  Menu
+                </button>
+                <span className="flex-1 text-center text-sm font-semibold uppercase tracking-[0.35em] text-amber-200">
+                  SoTA
+                </span>
+              </div>
+            </div>
+
+            <div className="hidden sm:block">
+              <div className="rounded-3xl border border-gray-800/80 bg-gray-900/60 p-6 shadow-xl backdrop-blur-sm sm:flex sm:items-center sm:justify-between sm:gap-6">
+                <div className="text-center sm:text-left">
+                  <h1
+                    className="text-3xl font-bold tracking-wider text-amber-300 sm:text-4xl md:text-5xl"
+                    style={{ textShadow: '0 0 12px rgba(252, 211, 77, 0.45)' }}
+                  >
+                    School of the Ancients
+                  </h1>
+                  <p className="mt-3 text-base text-gray-400 sm:text-lg">Old world wisdom. New world classroom.</p>
+                  <p className="mt-2 text-sm text-gray-500 sm:text-base">
+                    Select a historical guide, continue a quest, or review your mastery—now in a layout that feels at home on any screen.
+                  </p>
+                </div>
+                {renderAccountSection('sm:flex flex-col items-end gap-2 text-right', 'right')}
+              </div>
             </div>
           </header>
 
