@@ -5,6 +5,7 @@ import type { SavedConversation } from '../types';
 type SidebarProps = {
   recentConversations: SavedConversation[];
   onSelectConversation: (conversation: SavedConversation) => void;
+  onOpenHome: () => void;
   onCreateAncient: () => void;
   onOpenHistory: () => void;
   onOpenProfile: () => void;
@@ -18,6 +19,7 @@ type SidebarProps = {
 const Sidebar: React.FC<SidebarProps> = ({
   recentConversations,
   onSelectConversation,
+  onOpenHome,
   onCreateAncient,
   onOpenHistory,
   onOpenProfile,
@@ -28,6 +30,12 @@ const Sidebar: React.FC<SidebarProps> = ({
   userEmail,
 }) => {
   const navigationItems = [
+    {
+      key: 'selector',
+      label: 'Home',
+      description: 'Return to the hall of legendary guides.',
+      onClick: onOpenHome,
+    },
     {
       key: 'quests',
       label: 'Quest Library',
@@ -56,7 +64,7 @@ const Sidebar: React.FC<SidebarProps> = ({
 
   return (
     <aside className="w-full lg:w-72 xl:w-80 flex-shrink-0">
-      <div className="bg-gray-900/70 border border-gray-800 rounded-2xl p-5 shadow-xl backdrop-blur-sm">
+      <div className="bg-gradient-to-b from-gray-900/80 to-gray-950/80 border border-gray-800/70 rounded-2xl p-6 shadow-2xl backdrop-blur">
         <div className="mb-6">
           <h2 className="text-lg font-semibold text-amber-300 tracking-wide">Explorer Hub</h2>
           <p className="text-sm text-gray-400">
@@ -81,10 +89,10 @@ const Sidebar: React.FC<SidebarProps> = ({
                     key={item.key}
                     type="button"
                     onClick={item.onClick}
-                    className={`w-full text-left px-3 py-2 rounded-lg transition-all duration-200 border flex flex-col gap-1 ${
+                    className={`w-full text-left px-4 py-3 rounded-xl transition-all duration-200 border flex flex-col gap-1 ${
                       isActive
-                        ? 'border-amber-500/80 bg-amber-500/10 text-amber-200'
-                        : 'border-gray-800 hover:border-amber-500/40 hover:bg-gray-800/60 text-gray-200'
+                        ? 'border-amber-500/80 bg-amber-500/15 text-amber-100 shadow-lg shadow-amber-500/20'
+                        : 'border-gray-800/80 hover:border-amber-500/50 hover:bg-gray-900/70 text-gray-200'
                     }`}
                   >
                     <span className="text-sm font-semibold">{item.label}</span>
@@ -108,7 +116,7 @@ const Sidebar: React.FC<SidebarProps> = ({
             </div>
 
             {recentConversations.length === 0 ? (
-              <p className="text-sm text-gray-400 bg-gray-800/50 border border-dashed border-gray-700 rounded-lg p-3">
+              <p className="text-sm text-gray-400 bg-gray-900/50 border border-dashed border-gray-700 rounded-xl p-4">
                 {isAuthenticated
                   ? 'Your latest conversations will appear here.'
                   : 'Sign in to start building your historical dialogue archive.'}
@@ -120,7 +128,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                     <button
                       type="button"
                       onClick={() => onSelectConversation(conversation)}
-                      className="w-full text-left px-3 py-2 rounded-lg border border-gray-800 hover:border-amber-500/40 hover:bg-gray-800/70 transition-all duration-200"
+                      className="w-full text-left px-4 py-3 rounded-xl border border-gray-800/70 bg-gray-900/40 hover:border-amber-500/50 hover:bg-gray-900/70 transition-all duration-200"
                     >
                       <p className="text-sm font-semibold text-gray-100 truncate">
                         {conversation.title ?? conversation.characterName ?? 'Conversation'}

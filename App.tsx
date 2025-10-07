@@ -1206,6 +1206,10 @@ const App: React.FC = () => {
     setView('history');
   }, [requireAuth]);
 
+  const openHomeView = useCallback(() => {
+    setView('selector');
+  }, []);
+
   const openQuestsView = useCallback(() => {
     if (!requireAuth('Sign in to manage your quests.')) {
       return;
@@ -1242,34 +1246,49 @@ const App: React.FC = () => {
 
       <div
         className="relative z-10 min-h-screen flex flex-col text-gray-200 font-serif p-4 sm:p-6 lg:p-8"
-        style={{ background: environmentImageUrl ? 'transparent' : 'linear-gradient(to bottom right, #1a1a1a, #2b2b2b)' }}
+        style={{ background: environmentImageUrl ? 'transparent' : 'radial-gradient(circle at top, rgba(251, 191, 36, 0.08), transparent 55%)' }}
       >
-        <header className="mb-8">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-            <div className="text-center sm:text-left">
-              <h1
-                className="text-4xl sm:text-5xl md:text-6xl font-bold text-amber-300 tracking-wider"
-                style={{ textShadow: '0 0 10px rgba(252, 211, 77, 0.5)' }}
-              >
-                School of the Ancients
-              </h1>
-              <p className="text-gray-400 mt-2 text-lg">Old world wisdom. New world classroom.</p>
+        <header className="mb-10">
+          <div className="bg-gray-900/70 border border-gray-800/70 shadow-2xl shadow-amber-500/5 backdrop-blur rounded-2xl px-6 py-5 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
+            <div className="text-center lg:text-left space-y-2">
+              <span className="inline-flex items-center gap-2 rounded-full bg-amber-500/10 text-amber-200 px-3 py-1 text-xs uppercase tracking-[0.2em]">
+                Live your legend
+              </span>
+              <div>
+                <h1
+                  className="text-4xl sm:text-5xl font-bold text-amber-200 tracking-wider drop-shadow-[0_0_25px_rgba(251,191,36,0.25)]"
+                >
+                  School of the Ancients
+                </h1>
+                <p className="text-gray-400 mt-2 text-base sm:text-lg max-w-xl">
+                  Engage in guided conversations with storied minds, build bespoke quests, and uncover timeless wisdom.
+                </p>
+              </div>
             </div>
-            <div className="flex flex-col sm:items-end gap-2">
-              {userEmail && (
-                <span className="text-sm text-gray-300">Signed in as {userEmail}</span>
-              )}
+            <nav className="flex flex-col sm:flex-row items-center gap-4">
+              <button
+                type="button"
+                onClick={openHomeView}
+                className="inline-flex items-center gap-2 rounded-full border border-amber-400/50 px-4 py-2 text-sm font-semibold text-amber-200 hover:bg-amber-500/10 transition-colors"
+              >
+                Home
+              </button>
               <button
                 type="button"
                 onClick={handleSignInClick}
-                className="self-center sm:self-end inline-flex items-center gap-2 rounded-md border border-amber-400/60 px-4 py-2 text-sm font-semibold text-amber-200 hover:bg-amber-500/10"
+                className="inline-flex items-center gap-2 rounded-full border border-amber-400/50 px-4 py-2 text-sm font-semibold text-amber-200 hover:bg-amber-500/10 transition-colors"
               >
                 {isAuthenticated ? 'Sign out' : 'Sign in'}
               </button>
-              {!isAuthenticated && authPrompt && (
-                <p className="text-xs text-amber-300 max-w-xs text-center sm:text-right">{authPrompt}</p>
+              {userEmail && (
+                <span className="text-xs text-gray-300 whitespace-nowrap">Signed in as {userEmail}</span>
               )}
-            </div>
+              {!isAuthenticated && authPrompt && (
+                <p className="text-xs text-amber-300 max-w-[220px] text-center lg:text-right">
+                  {authPrompt}
+                </p>
+              )}
+            </nav>
           </div>
         </header>
 
@@ -1277,6 +1296,7 @@ const App: React.FC = () => {
           <Sidebar
             recentConversations={recentConversations}
             onSelectConversation={handleResumeConversation}
+            onOpenHome={openHomeView}
             onCreateAncient={openCharacterCreatorView}
             onOpenHistory={openHistoryView}
             onOpenProfile={openProfileView}
