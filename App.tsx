@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { GoogleGenAI, Type } from '@google/genai';
 
 import type {
@@ -29,44 +30,41 @@ import { useSupabaseAuth } from './hooks/useSupabaseAuth';
 import { useUserData } from './hooks/useUserData';
 import { DEFAULT_USER_DATA } from './supabase/userData';
 
-const updateCharacterQueryParam = (characterId: string, mode: 'push' | 'replace') => {
-  try {
-    const params = new URLSearchParams(window.location.search);
-    params.set('character', characterId);
-    const pathname = typeof window.location.pathname === 'string' && window.location.pathname
-      ? window.location.pathname
-      : '/';
-    const newSearch = params.toString();
-    const nextUrl = `${pathname}${newSearch ? `?${newSearch}` : ''}`;
-    if (mode === 'push') {
-      window.history.pushState({}, '', nextUrl);
-    } else {
-      window.history.replaceState({}, '', nextUrl);
-    }
-  } catch (error) {
-    console.warn('Failed to update character query parameter:', error);
-  }
-};
-
 // ---- App -------------------------------------------------------------------
 
 const App: React.FC = () => {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const currentPath = location.pathname;
+  const characterQueryParam = useMemo(() => {
+    const params = new URLSearchParams(location.search);
+    return params.get('character');
+  }, [location.search]);
+
+  const navigateWithCharacter = useCallback(
+    (path: string, characterId: string | null, replace = false) => {
+      const params = new URLSearchParams(location.search);
+      if (characterId) {
+        params.set('character', characterId);
+      } else {
+        params.delete('character');
+      }
+      const searchString = params.toString();
+      navigate(
+        {
+          pathname: path,
+          search: searchString ? `?${searchString}` : '',
+        },
+        { replace },
+      );
+    },
+    [location.search, navigate],
+  );
+
   const { user, loading: authLoading, signOut } = useSupabaseAuth();
   const { data: userData, loading: dataLoading, saving: dataSaving, updateData } = useUserData();
 
   const [selectedCharacter, setSelectedCharacter] = useState<Character | null>(null);
-  const [view, setView] = useState<
-    | 'selector'
-    | 'conversation'
-    | 'history'
-    | 'creator'
-    | 'quests'
-    | 'questCreator'
-    | 'quiz'
-    | 'profile'
-    | 'settings'
-  >('selector');
-
   const [environmentImageUrl, setEnvironmentImageUrl] = useState<string | null>(null);
   const [activeQuest, setActiveQuest] = useState<Quest | null>(null);
   const [resumeConversationId, setResumeConversationId] = useState<string | null>(null);
@@ -116,6 +114,7 @@ const App: React.FC = () => {
   }, [isAuthenticated]);
 
   const allQuests = useMemo(() => [...customQuests, ...QUESTS], [customQuests]);
+  const availableCharacters = useMemo(() => [...customCharacters, ...CHARACTERS], [customCharacters]);
   const lastQuizQuest = useMemo(() => {
     if (!lastQuizResult) {
       return null;
@@ -194,7 +193,6 @@ const App: React.FC = () => {
       return;
     }
 
-    const allCharacters = [...customCharacters, ...CHARACTERS];
     const availableQuests = [...customQuests, ...QUESTS];
 
     let nextActiveQuest: Quest | null = null;
@@ -208,29 +206,26 @@ const App: React.FC = () => {
       let characterToSelect: Character | null = null;
 
       if (nextActiveQuest) {
-        characterToSelect = allCharacters.find((c) => c.id === nextActiveQuest?.characterId) ?? null;
+        characterToSelect = availableCharacters.find((c) => c.id === nextActiveQuest?.characterId) ?? null;
       }
 
-      if (!characterToSelect) {
-        const urlParams = new URLSearchParams(window.location.search);
-        const characterId = urlParams.get('character');
-        if (characterId) {
-          characterToSelect = allCharacters.find((c) => c.id === characterId) ?? null;
-        }
+      if (!characterToSelect && characterQueryParam) {
+        characterToSelect = availableCharacters.find((c) => c.id === characterQueryParam) ?? null;
       }
 
       if (characterToSelect) {
         setSelectedCharacter(characterToSelect);
-        setView('conversation');
-        updateCharacterQueryParam(characterToSelect.id, 'replace');
+        navigateWithCharacter('/conversation', characterToSelect.id, true);
       }
     }
 
     syncQuestProgress();
   }, [
-    customCharacters,
+    characterQueryParam,
     customQuests,
     isAppLoading,
+    availableCharacters,
+    navigateWithCharacter,
     selectedCharacter,
     syncQuestProgress,
     userData.activeQuestId,
@@ -240,11 +235,11 @@ const App: React.FC = () => {
     if (!isAuthenticated) {
       setSelectedCharacter(null);
       setActiveQuest(null);
-      setView('selector');
       setResumeConversationId(null);
       setEnvironmentImageUrl(null);
+      navigateWithCharacter('/', null, true);
     }
-  }, [isAuthenticated]);
+  }, [isAuthenticated, navigateWithCharacter]);
 
   // ---- Navigation helpers ----
 
@@ -253,22 +248,20 @@ const App: React.FC = () => {
       return;
     }
     setSelectedCharacter(character);
-    setView('conversation');
     setActiveQuest(null); // clear any quest when directly picking a character
     updateData((prev) => ({
       ...prev,
       activeQuestId: null,
     }));
     setResumeConversationId(null);
-    updateCharacterQueryParam(character.id, 'push');
+    navigateWithCharacter('/conversation', character.id);
   };
 
   const handleSelectQuest = (quest: Quest) => {
     if (!requireAuth('Sign in to embark on a quest.')) {
       return;
     }
-    const allCharacters = [...customCharacters, ...CHARACTERS];
-    const characterForQuest = allCharacters.find((c) => c.id === quest.characterId);
+    const characterForQuest = availableCharacters.find((c) => c.id === quest.characterId);
     if (characterForQuest) {
       setActiveQuest(quest);
       updateData((prev) => ({
@@ -276,9 +269,8 @@ const App: React.FC = () => {
         activeQuestId: quest.id,
       }));
       setSelectedCharacter(characterForQuest);
-      setView('conversation');
       setResumeConversationId(null);
-      updateCharacterQueryParam(characterForQuest.id, 'push');
+      navigateWithCharacter('/conversation', characterForQuest.id);
     } else {
       console.error(`Character with ID ${quest.characterId} not found for the selected quest.`);
     }
@@ -303,8 +295,7 @@ const App: React.FC = () => {
     if (!requireAuth('Sign in to view your saved conversations.')) {
       return;
     }
-    const allCharacters = [...customCharacters, ...CHARACTERS];
-    const characterToResume = allCharacters.find((c) => c.id === conversation.characterId);
+    const characterToResume = availableCharacters.find((c) => c.id === conversation.characterId);
 
     if (!characterToResume) {
       console.error(`Unable to resume conversation: character with ID ${conversation.characterId} not found.`);
@@ -339,9 +330,7 @@ const App: React.FC = () => {
       }));
     }
 
-    setView('conversation');
-
-    updateCharacterQueryParam(characterToResume.id, 'push');
+    navigateWithCharacter('/conversation', characterToResume.id);
   };
 
   const handleConversationUpdate = useCallback(
@@ -384,10 +373,9 @@ const App: React.FC = () => {
       activeQuestId: null,
     }));
     setSelectedCharacter(newCharacter);
-    setView('conversation');
     setActiveQuest(null);
     setResumeConversationId(null);
-    updateCharacterQueryParam(newCharacter.id, 'push');
+    navigateWithCharacter('/conversation', newCharacter.id);
   };
 
   const handleDeleteCharacter = (characterId: string) => {
@@ -470,15 +458,15 @@ const App: React.FC = () => {
       return;
     }
     setQuestCreatorPrefill(goal ?? null);
-    setView('questCreator');
+    navigateWithCharacter('/quests/create', null);
   };
 
   const openCharacterCreatorView = useCallback(() => {
     if (!requireAuth('Sign in to create a new ancient.')) {
       return;
     }
-    setView('creator');
-  }, [requireAuth]);
+    navigateWithCharacter('/characters/new', null);
+  }, [navigateWithCharacter, requireAuth]);
 
   const handleCreateQuestFromNextSteps = (steps: string[], questTitle?: string) => {
     if (!requireAuth('Sign in to turn feedback into new quests.')) {
@@ -522,22 +510,21 @@ const App: React.FC = () => {
     });
     setActiveQuest(quest);
     setSelectedCharacter(mentor);
-    setView('conversation');
     setResumeConversationId(null);
-    updateCharacterQueryParam(mentor.id, 'push');
+    navigateWithCharacter('/conversation', mentor.id);
   };
 
   const handleQuizExit = () => {
     setQuizQuest(null);
     setQuizAssessment(null);
-    setView('selector');
+    navigateWithCharacter('/', null);
   };
 
   const handleQuizComplete = (result: QuizResult) => {
     if (!requireAuth('Sign in to track quiz results.')) {
       setQuizQuest(null);
       setQuizAssessment(null);
-      setView('selector');
+      navigateWithCharacter('/', null);
       return;
     }
     const quest = quizQuest;
@@ -561,14 +548,14 @@ const App: React.FC = () => {
     });
     setQuizQuest(null);
     setQuizAssessment(null);
-    setView('selector');
+    navigateWithCharacter('/', null);
   };
 
   const launchQuizForQuest = (questId: string) => {
     const quest = allQuests.find((q) => q.id === questId);
     if (!quest) {
       console.warn(`Unable to launch quiz: quest with ID ${questId} not found.`);
-      setView('selector');
+      navigateWithCharacter('/', null);
       return;
     }
 
@@ -578,7 +565,7 @@ const App: React.FC = () => {
     } else {
       setQuizAssessment(null);
     }
-    setView('quiz');
+    navigateWithCharacter('/quiz', null);
   };
 
   // ---- End conversation: summarize & (if quest) evaluate mastery ----
@@ -757,16 +744,17 @@ const App: React.FC = () => {
       console.error('Failed to finalize conversation:', error);
     } finally {
       setIsSavingConversation(false);
+      let nextPath: string | null = null;
       if (questAssessment) {
         if (questAssessment.passed && questForSession) {
           setQuizQuest(questForSession);
           setQuizAssessment(questAssessment);
-          setView('quiz');
+          nextPath = '/quiz';
         } else {
-          setView('selector');
+          nextPath = '/';
         }
       } else {
-        setView('selector');
+        nextPath = '/';
       }
       setSelectedCharacter(null);
       setEnvironmentImageUrl(null);
@@ -776,411 +764,7 @@ const App: React.FC = () => {
         activeQuestId: null,
       }));
       setResumeConversationId(null);
-      window.history.pushState({}, '', window.location.pathname);
-    }
-  };
-
-  // ---- View switcher ----
-
-  const renderContent = () => {
-    switch (view) {
-      case 'conversation':
-        return selectedCharacter ? (
-          <ConversationView
-            character={selectedCharacter}
-            onEndConversation={handleEndConversation}
-            environmentImageUrl={environmentImageUrl}
-            onEnvironmentUpdate={setEnvironmentImageUrl}
-            activeQuest={activeQuest}
-            isSaving={isSaving} // pass saving state
-            resumeConversationId={resumeConversationId}
-            conversationHistory={conversationHistory}
-            onConversationUpdate={handleConversationUpdate}
-          />
-        ) : null;
-      case 'history':
-        return (
-          <HistoryView
-            onBack={() => setView('selector')}
-            onResumeConversation={handleResumeConversation}
-            onCreateQuestFromNextSteps={handleCreateQuestFromNextSteps}
-            history={conversationHistory}
-            onDeleteConversation={handleDeleteConversation}
-          />
-        );
-      case 'creator':
-        return <CharacterCreator onCharacterCreated={handleCharacterCreated} onBack={() => setView('selector')} />;
-      case 'quests': {
-        const allCharacters = [...customCharacters, ...CHARACTERS];
-        return (
-          <QuestsView
-            onBack={() => setView('selector')}
-            onSelectQuest={handleSelectQuest}
-            quests={allQuests}
-            characters={allCharacters}
-            completedQuestIds={completedQuests}
-            onCreateQuest={() => openQuestCreator()}
-            inProgressQuestIds={inProgressQuestIds}
-            onDeleteQuest={handleDeleteQuest}
-            deletableQuestIds={customQuests.map((quest) => quest.id)}
-          />
-        );
-      }
-      case 'questCreator': {
-        const allChars = [...customCharacters, ...CHARACTERS];
-        const handleBack = () => {
-          setQuestCreatorPrefill(null);
-          setView('selector');
-        };
-        const handleQuestReady = (quest: Quest, character: Character) => {
-          setQuestCreatorPrefill(null);
-          startGeneratedQuest(quest, character);
-        };
-        return (
-          <QuestCreator
-            characters={allChars}
-            onBack={handleBack}
-            onQuestReady={handleQuestReady}
-            onCharacterCreated={(newChar) => {
-              if (!requireAuth('Sign in to save your custom ancient.')) {
-                return;
-              }
-              updateData((prev) => ({
-                ...prev,
-                customCharacters: [newChar, ...prev.customCharacters],
-              }));
-            }}
-            initialGoal={questCreatorPrefill ?? undefined}
-          />
-        );
-      }
-      case 'quiz':
-        return quizQuest ? (
-          <QuestQuiz
-            quest={quizQuest}
-            assessment={quizAssessment}
-            onExit={handleQuizExit}
-            onComplete={handleQuizComplete}
-          />
-        ) : (
-          <div className="text-center text-gray-300">
-            <p className="text-lg">Quiz unavailable. Returning to the hub…</p>
-            <button
-              type="button"
-              onClick={() => setView('selector')}
-              className="mt-4 inline-flex items-center rounded-md bg-amber-600 px-4 py-2 text-sm font-semibold text-black hover:bg-amber-500"
-            >
-              Go back
-            </button>
-          </div>
-        );
-      case 'profile':
-        return (
-          <div className="bg-gray-900/60 border border-gray-800 rounded-2xl p-6 text-left space-y-6 animate-fade-in">
-            <div>
-              <h2 className="text-3xl font-bold text-amber-200">Explorer Profile</h2>
-              <p className="text-sm text-gray-400 mt-1">
-                Chronicle your journey with the ancients and track your learning legacy.
-              </p>
-            </div>
-            {isAuthenticated ? (
-              <div className="space-y-6">
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                  <div className="bg-gray-800/60 border border-gray-700 rounded-xl p-4">
-                    <p className="text-xs uppercase tracking-wide text-gray-400">Custom Ancients</p>
-                    <p className="text-2xl font-semibold text-amber-200 mt-1">{customCharacters.length}</p>
-                  </div>
-                  <div className="bg-gray-800/60 border border-gray-700 rounded-xl p-4">
-                    <p className="text-xs uppercase tracking-wide text-gray-400">Conversations</p>
-                    <p className="text-2xl font-semibold text-amber-200 mt-1">{conversationHistory.length}</p>
-                  </div>
-                  <div className="bg-gray-800/60 border border-gray-700 rounded-xl p-4">
-                    <p className="text-xs uppercase tracking-wide text-gray-400">Quests Complete</p>
-                    <p className="text-2xl font-semibold text-amber-200 mt-1">{completedQuests.length}</p>
-                  </div>
-                </div>
-
-                <div className="bg-gray-800/50 border border-gray-700 rounded-xl p-5 space-y-2">
-                  <p className="text-xs uppercase tracking-wide text-gray-400">Account Email</p>
-                  <p className="text-lg text-gray-100">{userEmail ?? 'Unknown adventurer'}</p>
-                </div>
-
-                <div className="bg-gray-800/50 border border-gray-700 rounded-xl p-5">
-                  <p className="text-sm text-gray-200 leading-relaxed">
-                    Keep creating ancients and embarking on quests to expand your mastery. Each conversation strengthens your
-                    connection to the eras you study.
-                  </p>
-                </div>
-              </div>
-            ) : (
-              <div className="bg-gray-800/60 border border-gray-700 rounded-xl p-6 text-center">
-                <p className="text-lg text-amber-200 font-semibold mb-2">Traveler, you must sign in.</p>
-                <p className="text-sm text-gray-300">
-                  Access your profile, track achievements, and synchronize progress across devices once you are authenticated.
-                </p>
-              </div>
-            )}
-          </div>
-        );
-      case 'settings':
-        return (
-          <div className="bg-gray-900/60 border border-gray-800 rounded-2xl p-6 text-left space-y-6 animate-fade-in">
-            <div>
-              <h2 className="text-3xl font-bold text-amber-200">User Settings</h2>
-              <p className="text-sm text-gray-400 mt-1">
-                Customize how you experience conversations with history&apos;s greatest minds.
-              </p>
-            </div>
-            {isAuthenticated ? (
-              <div className="space-y-5">
-                <label className="flex items-center justify-between gap-4 bg-gray-800/50 border border-gray-700 rounded-xl p-4">
-                  <div>
-                    <span className="text-sm font-semibold text-gray-200">Journey Notifications</span>
-                    <p className="text-xs text-gray-400">Receive alerts when a quest assessment is ready.</p>
-                  </div>
-                  <input
-                    type="checkbox"
-                    className="h-5 w-5 rounded border-gray-600 bg-gray-900 text-amber-500 focus:ring-amber-400"
-                    checked={notificationsEnabled}
-                    onChange={(event) => setNotificationsEnabled(event.target.checked)}
-                  />
-                </label>
-
-                <label className="flex items-center justify-between gap-4 bg-gray-800/50 border border-gray-700 rounded-xl p-4">
-                  <div>
-                    <span className="text-sm font-semibold text-gray-200">Auto-save Transcripts</span>
-                    <p className="text-xs text-gray-400">Keep every exchange stored in your history automatically.</p>
-                  </div>
-                  <input
-                    type="checkbox"
-                    className="h-5 w-5 rounded border-gray-600 bg-gray-900 text-amber-500 focus:ring-amber-400"
-                    checked={autoSaveEnabled}
-                    onChange={(event) => setAutoSaveEnabled(event.target.checked)}
-                  />
-                </label>
-
-                <div className="bg-gray-800/50 border border-gray-700 rounded-xl p-4 space-y-2">
-                  <label htmlFor="theme-select" className="text-sm font-semibold text-gray-200">
-                    Interface Theme
-                  </label>
-                  <p className="text-xs text-gray-400">
-                    Choose the ambiance that best matches your study ritual.
-                  </p>
-                  <select
-                    id="theme-select"
-                    className="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-200 focus:border-amber-400 focus:ring-amber-400"
-                    value={preferredTheme}
-                    onChange={(event) => setPreferredTheme(event.target.value as 'system' | 'light' | 'dark')}
-                  >
-                    <option value="dark">Dark</option>
-                    <option value="light">Light</option>
-                    <option value="system">System</option>
-                  </select>
-                </div>
-
-                <p className="text-xs text-gray-400">
-                  Settings are stored locally for now. Cloud sync will arrive in a future update of School of the Ancients.
-                </p>
-              </div>
-            ) : (
-              <div className="bg-gray-800/60 border border-gray-700 rounded-xl p-6 text-center">
-                <p className="text-lg text-amber-200 font-semibold mb-2">Sign in to tailor your experience.</p>
-                <p className="text-sm text-gray-300">
-                  Manage notifications, transcripts, and appearance preferences once you&apos;re authenticated.
-                </p>
-              </div>
-            )}
-          </div>
-        );
-      case 'selector':
-      default:
-        return (
-          <div className="text-center animate-fade-in">
-            <p className="max-w-3xl mx-auto mb-8 text-gray-400 text-lg">
-              Engage in real-time voice conversations with legendary minds from history, or embark on a guided Learning
-              Quest to master a new subject.
-            </p>
-
-            <div className="max-w-3xl mx-auto mb-8 bg-gray-800/50 border border-gray-700 rounded-lg p-4 text-left">
-              <p className="text-sm text-gray-300 mb-2 font-semibold">Quest Progress</p>
-              <p className="text-xs uppercase tracking-wide text-gray-400 mb-3">
-                {completedQuests.length} of {allQuests.length} quests completed
-              </p>
-              <div className="w-full h-2 bg-gray-700 rounded-full overflow-hidden">
-                <div
-                  className="h-full bg-amber-500 transition-all duration-500"
-                  style={{
-                    width: `${Math.min(
-                      100,
-                      Math.round(
-                        (completedQuests.length / Math.max(allQuests.length, 1)) * 100
-                      )
-                    )}%`,
-                  }}
-                />
-              </div>
-            </div>
-
-            {lastQuestOutcome && (
-              <div
-                className={`max-w-3xl mx-auto mb-8 rounded-lg border p-5 text-left shadow-lg ${
-                  lastQuestOutcome.passed ? 'bg-emerald-900/40 border-emerald-700' : 'bg-red-900/30 border-red-700'
-                }`}
-              >
-                <div className="flex justify-between items-start gap-4">
-                  <div>
-                    <p className="text-xs uppercase tracking-wide text-gray-300 font-semibold">Latest Quest Review</p>
-                    <h3 className="text-2xl font-bold text-amber-200 mt-1">{lastQuestOutcome.questTitle}</h3>
-                  </div>
-                  <span
-                    className={`text-sm font-semibold px-3 py-1 rounded-full ${
-                      lastQuestOutcome.passed ? 'bg-emerald-600 text-emerald-50' : 'bg-red-600 text-red-50'
-                    }`}
-                  >
-                    {lastQuestOutcome.passed ? 'Completed' : 'Needs Review'}
-                  </span>
-                </div>
-
-                <p className="text-gray-200 mt-4 leading-relaxed">{lastQuestOutcome.summary}</p>
-
-                {lastQuestOutcome.evidence.length > 0 && (
-                  <div className="mt-4">
-                    <p className="text-sm font-semibold text-emerald-200 uppercase tracking-wide mb-1">Highlights</p>
-                    <ul className="list-disc list-inside text-gray-100 space-y-1 text-sm">
-                      {lastQuestOutcome.evidence.map((item) => (
-                        <li key={item}>{item}</li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-
-                {!lastQuestOutcome.passed && lastQuestOutcome.improvements.length > 0 && (
-                  <div className="mt-4">
-                    <p className="text-sm font-semibold text-red-200 uppercase tracking-wide mb-1">Next Steps</p>
-                    <ul className="list-disc list-inside text-red-100 space-y-1 text-sm">
-                      {lastQuestOutcome.improvements.map((item) => (
-                        <li key={item}>{item}</li>
-                      ))}
-                    </ul>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        handleCreateQuestFromNextSteps(
-                          lastQuestOutcome.improvements,
-                          lastQuestOutcome.questTitle
-                        )
-                      }
-                      className="mt-3 inline-flex items-center text-sm font-semibold text-teal-200 border border-teal-500/60 px-3 py-1.5 rounded-md hover:bg-teal-600/20 focus:outline-none focus:ring-2 focus:ring-teal-400/60"
-                    >
-                      Turn next steps into a new quest
-                    </button>
-                  </div>
-                )}
-
-                {!lastQuestOutcome.passed && lastQuestOutcome.questId && (
-                  <button
-                    type="button"
-                    onClick={() => handleContinueQuest(lastQuestOutcome.questId)}
-                    className="mt-4 inline-flex items-center text-sm font-semibold text-amber-200 hover:text-amber-100 hover:underline focus:outline-none"
-                  >
-                    Continue quest?
-                  </button>
-                )}
-              </div>
-            )}
-
-            {lastQuizResult && (
-              <div
-                className={`max-w-3xl mx-auto mb-8 rounded-lg border p-5 text-left shadow-lg ${
-                  lastQuizResult.passed ? 'bg-emerald-900/30 border-emerald-700/80' : 'bg-amber-900/30 border-amber-700/80'
-                }`}
-              >
-                <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
-                  <div>
-                    <p className="text-xs uppercase tracking-wide text-gray-300 font-semibold">Latest Quiz Result</p>
-                    <h3 className="text-2xl font-bold text-amber-200 mt-1">
-                      {lastQuizQuest?.title ?? 'Quest Mastery Quiz'}
-                    </h3>
-                  </div>
-                  <span
-                    className={`text-sm font-semibold px-3 py-1 rounded-full ${
-                      lastQuizResult.passed ? 'bg-emerald-600 text-emerald-50' : 'bg-amber-600 text-amber-50'
-                    }`}
-                  >
-                    {lastQuizResult.passed ? 'Mastery Confirmed' : 'Needs Review'}
-                  </span>
-                </div>
-
-                <p className="text-gray-200 mt-4 text-lg font-semibold">
-                  Score: {lastQuizResult.correct} / {lastQuizResult.total} correct ({
-                    Math.round(lastQuizResult.scoreRatio * 100)
-                  }
-                  %)
-                </p>
-
-                {lastQuizResult.missedObjectiveTags.length > 0 && (
-                  <div className="mt-4">
-                    <p className="text-xs uppercase tracking-wide text-amber-200 mb-2">Review focus areas</p>
-                    <div className="flex flex-wrap justify-center gap-2">
-                      {lastQuizResult.missedObjectiveTags.map((tag) => (
-                        <span
-                          key={tag}
-                          className="inline-flex items-center rounded-full border border-amber-500/70 bg-amber-900/30 px-3 py-1 text-xs text-amber-100"
-                        >
-                          {tag}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                <div className="mt-6 flex flex-col sm:flex-row sm:items-center sm:justify-end gap-3">
-                  <button
-                    type="button"
-                    onClick={() => launchQuizForQuest(lastQuizResult.questId)}
-                    className="rounded-lg border border-amber-500/70 px-4 py-2 text-sm font-semibold text-amber-200 hover:bg-amber-500/10"
-                  >
-                    {lastQuizResult.passed ? 'Retake for practice' : 'Retry quiz'}
-                  </button>
-                </div>
-              </div>
-            )}
-
-            <div className="flex flex-col sm:flex-row justify-center items-center gap-4 mb-12">
-              <button
-                onClick={openQuestsView}
-                className="flex items-center gap-3 bg-amber-600 hover:bg-amber-500 text-black font-bold py-3 px-8 rounded-lg transition-colors duration-300 text-lg w-full sm:w-auto"
-              >
-                <QuestIcon className="w-6 h-6" />
-                <span>Learning Quests</span>
-              </button>
-
-              <button
-                onClick={openHistoryView}
-                className="bg-gray-700 hover:bg-gray-600 text-amber-300 font-bold py-3 px-8 rounded-lg transition-colors duration-300 border border-gray-600 w-full sm:w-auto"
-              >
-                View Conversation History
-              </button>
-
-              {/* NEW CTA */}
-              <button
-                onClick={() => openQuestCreator()}
-                className="bg-teal-700 hover:bg-teal-600 text-white font-bold py-3 px-8 rounded-lg transition-colors duration-300 w-full sm:w-auto"
-              >
-                Create Your Quest
-              </button>
-            </div>
-
-            <Instructions />
-
-            <CharacterSelector
-              characters={[...customCharacters, ...CHARACTERS]}
-              onSelectCharacter={handleSelectCharacter}
-              onStartCreation={openCharacterCreatorView}
-              onDeleteCharacter={handleDeleteCharacter}
-            />
-          </div>
-        );
+      navigateWithCharacter(nextPath ?? '/', null, true);
     }
   };
 
@@ -1203,29 +787,29 @@ const App: React.FC = () => {
     if (!requireAuth('Sign in to review your past conversations.')) {
       return;
     }
-    setView('history');
-  }, [requireAuth]);
+    navigateWithCharacter('/history', null);
+  }, [navigateWithCharacter, requireAuth]);
 
   const openQuestsView = useCallback(() => {
     if (!requireAuth('Sign in to manage your quests.')) {
       return;
     }
-    setView('quests');
-  }, [requireAuth]);
+    navigateWithCharacter('/quests', null);
+  }, [navigateWithCharacter, requireAuth]);
 
   const openProfileView = useCallback(() => {
     if (!requireAuth('Sign in to view your explorer profile.')) {
       return;
     }
-    setView('profile');
-  }, [requireAuth]);
+    navigateWithCharacter('/profile', null);
+  }, [navigateWithCharacter, requireAuth]);
 
   const openSettingsView = useCallback(() => {
     if (!requireAuth('Sign in to update your settings.')) {
       return;
     }
-    setView('settings');
-  }, [requireAuth]);
+    navigateWithCharacter('/settings', null);
+  }, [navigateWithCharacter, requireAuth]);
 
   return (
     <div className="relative min-h-screen bg-[#1a1a1a]">
@@ -1282,11 +866,423 @@ const App: React.FC = () => {
             onOpenProfile={openProfileView}
             onOpenSettings={openSettingsView}
             onOpenQuests={openQuestsView}
-            currentView={view}
+            currentPath={currentPath}
             isAuthenticated={isAuthenticated}
             userEmail={userEmail}
           />
-          <div className="flex-1 flex flex-col">{renderContent()}</div>
+          <div className="flex-1 flex flex-col">
+            <Routes>
+              <Route
+                path="/conversation"
+                element={
+                  selectedCharacter ? (
+                    <ConversationView
+                      character={selectedCharacter}
+                      onEndConversation={handleEndConversation}
+                      environmentImageUrl={environmentImageUrl}
+                      onEnvironmentUpdate={setEnvironmentImageUrl}
+                      activeQuest={activeQuest}
+                      isSaving={isSaving}
+                      resumeConversationId={resumeConversationId}
+                      conversationHistory={conversationHistory}
+                      onConversationUpdate={handleConversationUpdate}
+                    />
+                  ) : (
+                    <Navigate to="/" replace />
+                  )
+                }
+              />
+              <Route
+                path="/history"
+                element={
+                  <HistoryView
+                    onBack={() => navigateWithCharacter('/', null)}
+                    onResumeConversation={handleResumeConversation}
+                    onCreateQuestFromNextSteps={handleCreateQuestFromNextSteps}
+                    history={conversationHistory}
+                    onDeleteConversation={handleDeleteConversation}
+                  />
+                }
+              />
+              <Route
+                path="/characters/new"
+                element={
+                  <CharacterCreator
+                    onCharacterCreated={handleCharacterCreated}
+                    onBack={() => navigateWithCharacter('/', null)}
+                  />
+                }
+              />
+              <Route
+                path="/quests"
+                element={
+                  <QuestsView
+                    onBack={() => navigateWithCharacter('/', null)}
+                    onSelectQuest={handleSelectQuest}
+                    quests={allQuests}
+                    characters={availableCharacters}
+                    completedQuestIds={completedQuests}
+                    onCreateQuest={() => openQuestCreator()}
+                    inProgressQuestIds={inProgressQuestIds}
+                    onDeleteQuest={handleDeleteQuest}
+                    deletableQuestIds={customQuests.map((quest) => quest.id)}
+                  />
+                }
+              />
+              <Route
+                path="/quests/create"
+                element={
+                  <QuestCreator
+                    characters={availableCharacters}
+                    onBack={() => {
+                      setQuestCreatorPrefill(null);
+                      navigateWithCharacter('/', null);
+                    }}
+                    onQuestReady={(quest, character) => {
+                      setQuestCreatorPrefill(null);
+                      startGeneratedQuest(quest, character);
+                    }}
+                    onCharacterCreated={(newChar) => {
+                      if (!requireAuth('Sign in to save your custom ancient.')) {
+                        return;
+                      }
+                      updateData((prev) => ({
+                        ...prev,
+                        customCharacters: [newChar, ...prev.customCharacters],
+                      }));
+                    }}
+                    initialGoal={questCreatorPrefill ?? undefined}
+                  />
+                }
+              />
+              <Route
+                path="/quiz"
+                element={
+                  quizQuest ? (
+                    <QuestQuiz
+                      quest={quizQuest}
+                      assessment={quizAssessment}
+                      onExit={handleQuizExit}
+                      onComplete={handleQuizComplete}
+                    />
+                  ) : (
+                    <div className="text-center text-gray-300">
+                      <p className="text-lg">Quiz unavailable. Returning to the hub…</p>
+                      <button
+                        type="button"
+                        onClick={() => navigateWithCharacter('/', null)}
+                        className="mt-4 inline-flex items-center rounded-md bg-amber-600 px-4 py-2 text-sm font-semibold text-black hover:bg-amber-500"
+                      >
+                        Go back
+                      </button>
+                    </div>
+                  )
+                }
+              />
+              <Route
+                path="/profile"
+                element={
+                  <div className="bg-gray-900/60 border border-gray-800 rounded-2xl p-6 text-left space-y-6 animate-fade-in">
+                    <div>
+                      <h2 className="text-3xl font-bold text-amber-200">Explorer Profile</h2>
+                      <p className="text-sm text-gray-400 mt-1">
+                        Chronicle your journey with the ancients and track your learning legacy.
+                      </p>
+                    </div>
+                    {isAuthenticated ? (
+                      <div className="space-y-6">
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                          <div className="bg-gray-800/60 border border-gray-700 rounded-xl p-4">
+                            <p className="text-xs uppercase tracking-wide text-gray-400">Custom Ancients</p>
+                            <p className="text-2xl font-semibold text-amber-200 mt-1">{customCharacters.length}</p>
+                          </div>
+                          <div className="bg-gray-800/60 border border-gray-700 rounded-xl p-4">
+                            <p className="text-xs uppercase tracking-wide text-gray-400">Conversations</p>
+                            <p className="text-2xl font-semibold text-amber-200 mt-1">{conversationHistory.length}</p>
+                          </div>
+                          <div className="bg-gray-800/60 border border-gray-700 rounded-xl p-4">
+                            <p className="text-xs uppercase tracking-wide text-gray-400">Quests Complete</p>
+                            <p className="text-2xl font-semibold text-amber-200 mt-1">{completedQuests.length}</p>
+                          </div>
+                        </div>
+
+                        <div className="bg-gray-800/50 border border-gray-700 rounded-xl p-5 space-y-2">
+                          <p className="text-xs uppercase tracking-wide text-gray-400">Account Email</p>
+                          <p className="text-lg text-gray-100">{userEmail ?? 'Unknown adventurer'}</p>
+                        </div>
+
+                        <div className="bg-gray-800/50 border border-gray-700 rounded-xl p-5">
+                          <p className="text-sm text-gray-200 leading-relaxed">
+                            Keep creating ancients and embarking on quests to expand your mastery. Each conversation strengthens your
+                            connection to the eras you study.
+                          </p>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="bg-gray-800/60 border border-gray-700 rounded-xl p-6 text-center">
+                        <p className="text-lg text-amber-200 font-semibold mb-2">Traveler, you must sign in.</p>
+                        <p className="text-sm text-gray-300">
+                          Access your profile, track achievements, and synchronize progress across devices once you are authenticated.
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                }
+              />
+              <Route
+                path="/settings"
+                element={
+                  <div className="bg-gray-900/60 border border-gray-800 rounded-2xl p-6 text-left space-y-6 animate-fade-in">
+                    <div>
+                      <h2 className="text-3xl font-bold text-amber-200">User Settings</h2>
+                      <p className="text-sm text-gray-400 mt-1">
+                        Customize how you experience conversations with history&apos;s greatest minds.
+                      </p>
+                    </div>
+                    {isAuthenticated ? (
+                      <div className="space-y-5">
+                        <label className="flex items-center justify-between gap-4 bg-gray-800/50 border border-gray-700 rounded-xl p-4">
+                          <div>
+                            <span className="text-sm font-semibold text-gray-200">Journey Notifications</span>
+                            <p className="text-xs text-gray-400">Receive alerts when a quest assessment is ready.</p>
+                          </div>
+                          <input
+                            type="checkbox"
+                            className="h-5 w-5 rounded border-gray-600 bg-gray-900 text-amber-500 focus:ring-amber-400"
+                            checked={notificationsEnabled}
+                            onChange={(event) => setNotificationsEnabled(event.target.checked)}
+                          />
+                        </label>
+
+                        <label className="flex items-center justify-between gap-4 bg-gray-800/50 border border-gray-700 rounded-xl p-4">
+                          <div>
+                            <span className="text-sm font-semibold text-gray-200">Auto-save Transcripts</span>
+                            <p className="text-xs text-gray-400">Keep every exchange stored in your history automatically.</p>
+                          </div>
+                          <input
+                            type="checkbox"
+                            className="h-5 w-5 rounded border-gray-600 bg-gray-900 text-amber-500 focus:ring-amber-400"
+                            checked={autoSaveEnabled}
+                            onChange={(event) => setAutoSaveEnabled(event.target.checked)}
+                          />
+                        </label>
+
+                        <div className="bg-gray-800/50 border border-gray-700 rounded-xl p-4 space-y-2">
+                          <label htmlFor="theme-select" className="text-sm font-semibold text-gray-200">
+                            Interface Theme
+                          </label>
+                          <p className="text-xs text-gray-400">
+                            Choose the ambiance that best matches your study ritual.
+                          </p>
+                          <select
+                            id="theme-select"
+                            className="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-200 focus:border-amber-400 focus:ring-amber-400"
+                            value={preferredTheme}
+                            onChange={(event) => setPreferredTheme(event.target.value as 'system' | 'light' | 'dark')}
+                          >
+                            <option value="dark">Dark</option>
+                            <option value="light">Light</option>
+                            <option value="system">System</option>
+                          </select>
+                        </div>
+
+                        <p className="text-xs text-gray-400">
+                          Settings are stored locally for now. Cloud sync will arrive in a future update of School of the Ancients.
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="bg-gray-800/60 border border-gray-700 rounded-xl p-6 text-center">
+                        <p className="text-lg text-amber-200 font-semibold mb-2">Sign in to tailor your experience.</p>
+                        <p className="text-sm text-gray-300">
+                          Manage notifications, transcripts, and appearance preferences once you&apos;re authenticated.
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                }
+              />
+              <Route
+                path="/"
+                element={
+                  <div className="text-center animate-fade-in">
+                    <p className="max-w-3xl mx-auto mb-8 text-gray-400 text-lg">
+                      Engage in real-time voice conversations with legendary minds from history, or embark on a guided Learning
+                      Quest to master a new subject.
+                    </p>
+
+                    <div className="max-w-3xl mx-auto mb-8 bg-gray-800/50 border border-gray-700 rounded-lg p-4 text-left">
+                      <p className="text-sm text-gray-300 mb-2 font-semibold">Quest Progress</p>
+                      <p className="text-xs uppercase tracking-wide text-gray-400 mb-3">
+                        {completedQuests.length} of {allQuests.length} quests completed
+                      </p>
+                      <div className="w-full h-2 bg-gray-700 rounded-full overflow-hidden">
+                        <div
+                          className="h-full bg-amber-500 transition-all duration-500"
+                          style={{
+                            width: `${Math.min(
+                              100,
+                              Math.round((completedQuests.length / Math.max(allQuests.length, 1)) * 100),
+                            )}%`,
+                          }}
+                        />
+                      </div>
+                    </div>
+
+                    {lastQuestOutcome && (
+                      <div
+                        className={`max-w-3xl mx-auto mb-8 rounded-lg border p-5 text-left shadow-lg ${
+                          lastQuestOutcome.passed ? 'bg-emerald-900/40 border-emerald-700' : 'bg-red-900/30 border-red-700'
+                        }`}
+                      >
+                        <div className="flex justify-between items-start gap-4">
+                          <div>
+                            <p className="text-xs uppercase tracking-wide text-gray-300 font-semibold">Latest Quest Review</p>
+                            <h3 className="text-2xl font-bold text-amber-200 mt-1">{lastQuestOutcome.questTitle}</h3>
+                          </div>
+                          <span
+                            className={`text-sm font-semibold px-3 py-1 rounded-full ${
+                              lastQuestOutcome.passed ? 'bg-emerald-600 text-emerald-50' : 'bg-red-600 text-red-50'
+                            }`}
+                          >
+                            {lastQuestOutcome.passed ? 'Completed' : 'Needs Review'}
+                          </span>
+                        </div>
+
+                        <p className="text-gray-200 mt-4 leading-relaxed">{lastQuestOutcome.summary}</p>
+
+                        {lastQuestOutcome.evidence.length > 0 && (
+                          <div className="mt-4">
+                            <p className="text-sm font-semibold text-emerald-200 uppercase tracking-wide mb-1">Highlights</p>
+                            <ul className="list-disc list-inside text-gray-100 space-y-1 text-sm">
+                              {lastQuestOutcome.evidence.map((item) => (
+                                <li key={item}>{item}</li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+
+                        {!lastQuestOutcome.passed && lastQuestOutcome.improvements.length > 0 && (
+                          <div className="mt-4">
+                            <p className="text-sm font-semibold text-red-200 uppercase tracking-wide mb-1">Next Steps</p>
+                            <ul className="list-disc list-inside text-red-100 space-y-1 text-sm">
+                              {lastQuestOutcome.improvements.map((item) => (
+                                <li key={item}>{item}</li>
+                              ))}
+                            </ul>
+                            <button
+                              type="button"
+                              onClick={() => handleCreateQuestFromNextSteps(lastQuestOutcome.improvements, lastQuestOutcome.questTitle)}
+                              className="mt-3 inline-flex items-center text-sm font-semibold text-teal-200 border border-teal-500/60 px-3 py-1.5 rounded-md hover:bg-teal-600/20 focus:outline-none focus:ring-2 focus:ring-teal-400/60"
+                            >
+                              Turn next steps into a new quest
+                            </button>
+                          </div>
+                        )}
+
+                        {!lastQuestOutcome.passed && lastQuestOutcome.questId && (
+                          <button
+                            type="button"
+                            onClick={() => handleContinueQuest(lastQuestOutcome.questId)}
+                            className="mt-4 inline-flex items-center text-sm font-semibold text-amber-200 hover:text-amber-100 hover:underline focus:outline-none"
+                          >
+                            Continue quest?
+                          </button>
+                        )}
+                      </div>
+                    )}
+
+                    {lastQuizResult && (
+                      <div
+                        className={`max-w-3xl mx-auto mb-8 rounded-lg border p-5 text-left shadow-lg ${
+                          lastQuizResult.passed ? 'bg-emerald-900/30 border-emerald-700/80' : 'bg-amber-900/30 border-amber-700/80'
+                        }`}
+                      >
+                        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+                          <div>
+                            <p className="text-xs uppercase tracking-wide text-gray-300 font-semibold">Latest Quiz Result</p>
+                            <h3 className="text-2xl font-bold text-amber-200 mt-1">
+                              {lastQuizQuest?.title ?? 'Quest Mastery Quiz'}
+                            </h3>
+                          </div>
+                          <span
+                            className={`text-sm font-semibold px-3 py-1 rounded-full ${
+                              lastQuizResult.passed ? 'bg-emerald-600 text-emerald-50' : 'bg-amber-600 text-amber-50'
+                            }`}
+                          >
+                            {lastQuizResult.passed ? 'Mastery Confirmed' : 'Needs Review'}
+                          </span>
+                        </div>
+
+                        <p className="text-gray-200 mt-4 text-lg font-semibold">
+                          Score: {lastQuizResult.correct} / {lastQuizResult.total} correct ({Math.round(lastQuizResult.scoreRatio * 100)}%)
+                        </p>
+
+                        {lastQuizResult.missedObjectiveTags.length > 0 && (
+                          <div className="mt-4">
+                            <p className="text-xs uppercase tracking-wide text-amber-200 mb-2">Review focus areas</p>
+                            <div className="flex flex-wrap justify-center gap-2">
+                              {lastQuizResult.missedObjectiveTags.map((tag) => (
+                                <span
+                                  key={tag}
+                                  className="inline-flex items-center rounded-full border border-amber-500/70 bg-amber-900/30 px-3 py-1 text-xs text-amber-100"
+                                >
+                                  {tag}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        <div className="mt-6 flex flex-col sm:flex-row sm:items-center sm:justify-end gap-3">
+                          <button
+                            type="button"
+                            onClick={() => launchQuizForQuest(lastQuizResult.questId)}
+                            className="rounded-lg border border-amber-500/70 px-4 py-2 text-sm font-semibold text-amber-200 hover:bg-amber-500/10"
+                          >
+                            {lastQuizResult.passed ? 'Retake for practice' : 'Retry quiz'}
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="flex flex-col sm:flex-row justify-center items-center gap-4 mb-12">
+                      <button
+                        onClick={openQuestsView}
+                        className="flex items-center gap-3 bg-amber-600 hover:bg-amber-500 text-black font-bold py-3 px-8 rounded-lg transition-colors duration-300 text-lg w-full sm:w-auto"
+                      >
+                        <QuestIcon className="w-6 h-6" />
+                        <span>Learning Quests</span>
+                      </button>
+
+                      <button
+                        onClick={openHistoryView}
+                        className="bg-gray-700 hover:bg-gray-600 text-amber-300 font-bold py-3 px-8 rounded-lg transition-colors duration-300 border border-gray-600 w-full sm:w-auto"
+                      >
+                        View Conversation History
+                      </button>
+
+                      <button
+                        onClick={() => openQuestCreator()}
+                        className="bg-teal-700 hover:bg-teal-600 text-white font-bold py-3 px-8 rounded-lg transition-colors duration-300 w-full sm:w-auto"
+                      >
+                        Create Your Quest
+                      </button>
+                    </div>
+
+                    <Instructions />
+
+                    <CharacterSelector
+                      characters={availableCharacters}
+                      onSelectCharacter={handleSelectCharacter}
+                      onStartCreation={openCharacterCreatorView}
+                      onDeleteCharacter={handleDeleteCharacter}
+                    />
+                  </div>
+                }
+              />
+              <Route path="*" element={<Navigate to="/" replace />} />
+            </Routes>
+          </div>
         </main>
       </div>
     </div>
