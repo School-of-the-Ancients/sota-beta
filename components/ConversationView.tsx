@@ -75,6 +75,8 @@ const ArtifactDisplay: React.FC<{ artifact: NonNullable<ConversationTurn['artifa
     );
   };
 
+const AUTO_SAVE_DEBOUNCE_MS = 1200;
+
 const ConversationView: React.FC<ConversationViewProps> = ({
   character,
   onEndConversation,
@@ -129,6 +131,8 @@ const ConversationView: React.FC<ConversationViewProps> = ({
 
   const sessionIdRef = useRef(`conv_${character.id}_${Date.now()}`);
   const sessionQuestRef = useRef<{ questId?: string; questTitle?: string }>({});
+  const pendingSaveRef = useRef<SavedConversation | null>(null);
+  const autoSaveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Load existing conversation or start a new one with a greeting
   useEffect(() => {
@@ -458,9 +462,16 @@ ${contextTranscript}
     updateDynamicSuggestions(transcript);
   }, [transcript, updateDynamicSuggestions]);
 
-  // Auto-save conversation on transcript change
+  // Auto-save conversation on transcript change (debounced to prevent rapid Supabase writes)
   useEffect(() => {
-    if (transcript.length === 0 && !environmentImageUrl) return;
+    if (transcript.length === 0 && !environmentImageUrl) {
+      if (autoSaveTimeoutRef.current) {
+        clearTimeout(autoSaveTimeoutRef.current);
+        autoSaveTimeoutRef.current = null;
+      }
+      pendingSaveRef.current = null;
+      return;
+    }
 
     const questMetadata = sessionQuestRef.current;
 
@@ -479,8 +490,48 @@ ${contextTranscript}
           }
         : {}),
     };
-    onConversationUpdate(conversation);
-  }, [transcript, character, environmentImageUrl, activeQuest, onConversationUpdate]);
+
+    pendingSaveRef.current = conversation;
+
+    if (autoSaveTimeoutRef.current) {
+      clearTimeout(autoSaveTimeoutRef.current);
+    }
+
+    autoSaveTimeoutRef.current = setTimeout(() => {
+      if (pendingSaveRef.current) {
+        onConversationUpdate(pendingSaveRef.current);
+        pendingSaveRef.current = null;
+      }
+      autoSaveTimeoutRef.current = null;
+    }, AUTO_SAVE_DEBOUNCE_MS);
+
+    return () => {
+      if (autoSaveTimeoutRef.current) {
+        clearTimeout(autoSaveTimeoutRef.current);
+        autoSaveTimeoutRef.current = null;
+      }
+    };
+  }, [
+    character.id,
+    character.name,
+    character.portraitUrl,
+    environmentImageUrl,
+    onConversationUpdate,
+    transcript,
+  ]);
+
+  useEffect(() => {
+    return () => {
+      if (autoSaveTimeoutRef.current) {
+        clearTimeout(autoSaveTimeoutRef.current);
+        autoSaveTimeoutRef.current = null;
+      }
+      if (pendingSaveRef.current) {
+        onConversationUpdate(pendingSaveRef.current);
+        pendingSaveRef.current = null;
+      }
+    };
+  }, [onConversationUpdate]);
 
   const handleReset = () => {
     if (transcript.length === 0 && !environmentImageUrl) return;
