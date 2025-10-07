@@ -100,15 +100,29 @@ export const UserDataProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const hasMigratedRef = useRef(false);
+  const userIdRef = useRef<string | null>(null);
+  const pendingPersistRef = useRef<UserData | null>(null);
+  const persistTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    userIdRef.current = user?.id ?? null;
+  }, [user]);
 
   const persist = useCallback(
     async (next: UserData) => {
-      if (!user) {
+      if (persistTimeoutRef.current) {
+        clearTimeout(persistTimeoutRef.current);
+        persistTimeoutRef.current = null;
+      }
+      pendingPersistRef.current = null;
+
+      const userId = userIdRef.current;
+      if (!userId) {
         return;
       }
       setSaving(true);
       try {
-        await saveUserData(user.id, next);
+        await saveUserData(userId, next);
         setError(null);
       } catch (err) {
         console.error('Failed to persist user data to Supabase', err);
@@ -117,8 +131,44 @@ export const UserDataProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         setSaving(false);
       }
     },
-    [user]
+    []
   );
+
+  const schedulePersist = useCallback(
+    (next: UserData, options?: { immediate?: boolean }) => {
+      if (persistTimeoutRef.current) {
+        clearTimeout(persistTimeoutRef.current);
+        persistTimeoutRef.current = null;
+      }
+
+      if (options?.immediate) {
+        void persist(next);
+        return;
+      }
+
+      pendingPersistRef.current = next;
+      persistTimeoutRef.current = setTimeout(() => {
+        const payload = pendingPersistRef.current;
+        pendingPersistRef.current = null;
+        persistTimeoutRef.current = null;
+
+        if (payload) {
+          void persist(payload);
+        }
+      }, 750);
+    },
+    [persist]
+  );
+
+  useEffect(() => {
+    return () => {
+      if (persistTimeoutRef.current) {
+        clearTimeout(persistTimeoutRef.current);
+        persistTimeoutRef.current = null;
+      }
+      pendingPersistRef.current = null;
+    };
+  }, []);
 
   const migrateFromLocalStorage = useCallback(
     async (existing: UserData) => {
@@ -186,19 +236,19 @@ export const UserDataProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     (updater: (previous: UserData) => UserData) => {
       setData((prev) => {
         const next = updater(prev);
-        void persist(next);
+        schedulePersist(next);
         return next;
       });
     },
-    [persist]
+    [schedulePersist]
   );
 
   const replaceData = useCallback(
     (next: UserData) => {
       setData(next);
-      void persist(next);
+      schedulePersist(next, { immediate: true });
     },
-    [persist]
+    [schedulePersist]
   );
 
   const value = useMemo<UserDataContextValue>(
