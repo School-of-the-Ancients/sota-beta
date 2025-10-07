@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
 import App from './App';
 import type { Character, UserData } from './types';
 import { ConnectionState } from './types';
@@ -114,10 +115,10 @@ vi.mock('./hooks/useUserData', () => {
     };
   };
 
-  const setUserData = (next: UserData) => {
-    userDataStore.current = next;
-    userDataStore.listeners.forEach((listener) => listener(userDataStore.current));
-  };
+const setUserData = (next: UserData) => {
+  userDataStore.current = next;
+  userDataStore.listeners.forEach((listener) => listener(userDataStore.current));
+};
 
   setUserDataRef.current = setUserData;
 
@@ -129,6 +130,13 @@ vi.mock('./hooks/useUserData', () => {
 });
 
 const __setUserData = (next: UserData) => setUserDataRef.current(next);
+
+const renderApp = (initialEntries: string[] = ['/']) =>
+  render(
+    <MemoryRouter initialEntries={initialEntries}>
+      <App />
+    </MemoryRouter>,
+  );
 
 Object.defineProperty(window, 'history', {
   value: {
@@ -152,6 +160,7 @@ describe('App', () => {
     __setUserData({ ...DEFAULT_USER_DATA });
     vi.clearAllMocks();
     resetLocation();
+    window.scrollTo = vi.fn();
 
     const mockIntersectionObserver = vi.fn();
     mockIntersectionObserver.mockReturnValue({
@@ -193,14 +202,7 @@ describe('App', () => {
       customCharacters: [customCharacter],
     });
 
-    Object.defineProperty(window, 'location', {
-      value: {
-        search: `?character=${customCharacter.id}`,
-      },
-      writable: true,
-    });
-
-    render(<App />);
+    renderApp([`/conversation?character=${customCharacter.id}`]);
 
     await waitFor(() => {
       expect(screen.getByRole('heading', { name: customCharacter.name })).toBeInTheDocument();
@@ -230,7 +232,7 @@ describe('App', () => {
 
     const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
 
-    render(<App />);
+    renderApp();
 
     await waitFor(() => {
       expect(
@@ -274,7 +276,7 @@ describe('App', () => {
       customCharacters: [],
     });
 
-    render(<App />);
+    renderApp();
 
     await waitFor(() => {
       expect(
