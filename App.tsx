@@ -1206,6 +1206,14 @@ const App: React.FC = () => {
     setView('history');
   }, [requireAuth]);
 
+  const openHomeView = useCallback(() => {
+    setView('selector');
+    setSelectedCharacter(null);
+    setEnvironmentImageUrl(null);
+    setActiveQuest(null);
+    setResumeConversationId(null);
+  }, []);
+
   const openQuestsView = useCallback(() => {
     if (!requireAuth('Sign in to manage your quests.')) {
       return;
@@ -1244,31 +1252,55 @@ const App: React.FC = () => {
         className="relative z-10 min-h-screen flex flex-col text-gray-200 font-serif p-4 sm:p-6 lg:p-8"
         style={{ background: environmentImageUrl ? 'transparent' : 'linear-gradient(to bottom right, #1a1a1a, #2b2b2b)' }}
       >
-        <header className="mb-8">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-            <div className="text-center sm:text-left">
-              <h1
-                className="text-4xl sm:text-5xl md:text-6xl font-bold text-amber-300 tracking-wider"
-                style={{ textShadow: '0 0 10px rgba(252, 211, 77, 0.5)' }}
-              >
-                School of the Ancients
-              </h1>
-              <p className="text-gray-400 mt-2 text-lg">Old world wisdom. New world classroom.</p>
+        <header className="mb-10">
+          <div className="relative overflow-hidden rounded-3xl border border-amber-500/20 bg-gradient-to-br from-gray-900/80 via-gray-900/60 to-gray-800/70 p-6 sm:p-10 shadow-[0_25px_60px_rgba(0,0,0,0.35)]">
+            <div className="pointer-events-none absolute -top-24 -right-10 h-56 w-56 rounded-full bg-amber-500/10 blur-3xl" />
+            <div className="pointer-events-none absolute -bottom-32 -left-12 h-72 w-72 rounded-full bg-emerald-500/10 blur-3xl" />
+            <div className="relative flex flex-col gap-6 sm:flex-row sm:items-start sm:justify-between">
+              <div className="max-w-2xl text-center sm:text-left">
+                <span className="inline-flex items-center rounded-full border border-amber-400/30 bg-amber-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.3em] text-amber-200">
+                  Explorer&apos;s Atelier
+                </span>
+                <h1 className="mt-4 text-4xl sm:text-5xl md:text-6xl font-bold text-amber-200 tracking-wide">
+                  School of the Ancients
+                </h1>
+                <p className="mt-3 text-base sm:text-lg text-gray-300">
+                  <span className="font-semibold text-amber-100">Old world wisdom</span> woven into an immersive learning sanctuary. Chart your path from curious novice to seasoned chronicler.
+                </p>
+              </div>
+              <div className="flex flex-col items-center sm:items-end gap-3">
+                {userEmail && <span className="text-sm text-gray-300">Signed in as {userEmail}</span>}
+                <button
+                  type="button"
+                  onClick={handleSignInClick}
+                  className="inline-flex items-center gap-2 rounded-full border border-amber-400/60 bg-black/20 px-5 py-2 text-sm font-semibold text-amber-200 transition-colors hover:bg-amber-500/20"
+                >
+                  {isAuthenticated ? 'Sign out' : 'Sign in'}
+                </button>
+                {!isAuthenticated && authPrompt && (
+                  <p className="text-xs text-amber-200/80 max-w-[220px] text-center sm:text-right">
+                    {authPrompt}
+                  </p>
+                )}
+              </div>
             </div>
-            <div className="flex flex-col sm:items-end gap-2">
-              {userEmail && (
-                <span className="text-sm text-gray-300">Signed in as {userEmail}</span>
-              )}
-              <button
-                type="button"
-                onClick={handleSignInClick}
-                className="self-center sm:self-end inline-flex items-center gap-2 rounded-md border border-amber-400/60 px-4 py-2 text-sm font-semibold text-amber-200 hover:bg-amber-500/10"
-              >
-                {isAuthenticated ? 'Sign out' : 'Sign in'}
-              </button>
-              {!isAuthenticated && authPrompt && (
-                <p className="text-xs text-amber-300 max-w-xs text-center sm:text-right">{authPrompt}</p>
-              )}
+
+            <div className="relative mt-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
+              <div className="rounded-2xl border border-gray-700/60 bg-black/30 p-4 text-left shadow-inner">
+                <p className="text-xs uppercase tracking-widest text-gray-400">Custom Ancients</p>
+                <p className="mt-2 text-2xl font-semibold text-amber-200">{customCharacters.length}</p>
+                <p className="mt-1 text-xs text-gray-400">Legends you&apos;ve invited into your study.</p>
+              </div>
+              <div className="rounded-2xl border border-gray-700/60 bg-black/30 p-4 text-left shadow-inner">
+                <p className="text-xs uppercase tracking-widest text-gray-400">Conversations</p>
+                <p className="mt-2 text-2xl font-semibold text-amber-200">{conversationHistory.length}</p>
+                <p className="mt-1 text-xs text-gray-400">Dialogues archived across your adventures.</p>
+              </div>
+              <div className="rounded-2xl border border-gray-700/60 bg-black/30 p-4 text-left shadow-inner">
+                <p className="text-xs uppercase tracking-widest text-gray-400">Quests Completed</p>
+                <p className="mt-2 text-2xl font-semibold text-amber-200">{completedQuests.length}</p>
+                <p className="mt-1 text-xs text-gray-400">Chapters mastered in the Hall of Knowledge.</p>
+              </div>
             </div>
           </div>
         </header>
@@ -1277,6 +1309,7 @@ const App: React.FC = () => {
           <Sidebar
             recentConversations={recentConversations}
             onSelectConversation={handleResumeConversation}
+            onOpenHome={openHomeView}
             onCreateAncient={openCharacterCreatorView}
             onOpenHistory={openHistoryView}
             onOpenProfile={openProfileView}

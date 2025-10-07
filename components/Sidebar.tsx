@@ -5,6 +5,7 @@ import type { SavedConversation } from '../types';
 type SidebarProps = {
   recentConversations: SavedConversation[];
   onSelectConversation: (conversation: SavedConversation) => void;
+  onOpenHome: () => void;
   onCreateAncient: () => void;
   onOpenHistory: () => void;
   onOpenProfile: () => void;
@@ -18,6 +19,7 @@ type SidebarProps = {
 const Sidebar: React.FC<SidebarProps> = ({
   recentConversations,
   onSelectConversation,
+  onOpenHome,
   onCreateAncient,
   onOpenHistory,
   onOpenProfile,
@@ -28,6 +30,12 @@ const Sidebar: React.FC<SidebarProps> = ({
   userEmail,
 }) => {
   const navigationItems = [
+    {
+      key: 'selector',
+      label: 'Home',
+      description: 'Return to your learning hub overview.',
+      onClick: onOpenHome,
+    },
     {
       key: 'quests',
       label: 'Quest Library',
