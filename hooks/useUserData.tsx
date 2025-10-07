@@ -100,6 +100,8 @@ export const UserDataProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const hasMigratedRef = useRef(false);
+  const latestDataRef = useRef<UserData>({ ...DEFAULT_USER_DATA });
+  const pendingSaveRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const persist = useCallback(
     async (next: UserData) => {
@@ -118,6 +120,25 @@ export const UserDataProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       }
     },
     [user]
+  );
+
+  const schedulePersist = useCallback(
+    (next: UserData) => {
+      if (!user) {
+        return;
+      }
+
+      latestDataRef.current = next;
+      if (pendingSaveRef.current) {
+        clearTimeout(pendingSaveRef.current);
+      }
+
+      pendingSaveRef.current = setTimeout(() => {
+        pendingSaveRef.current = null;
+        void persist(latestDataRef.current);
+      }, 1500);
+    },
+    [persist, user]
   );
 
   const migrateFromLocalStorage = useCallback(
@@ -147,6 +168,7 @@ export const UserDataProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         migratedAt: new Date().toISOString(),
       } as UserData;
 
+      latestDataRef.current = merged;
       await persist(merged);
       clearLocalSnapshot();
       hasMigratedRef.current = true;
@@ -157,7 +179,9 @@ export const UserDataProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   const refresh = useCallback(async () => {
     if (!user) {
-      setData({ ...DEFAULT_USER_DATA });
+      const defaults = { ...DEFAULT_USER_DATA };
+      latestDataRef.current = defaults;
+      setData(defaults);
       setLoading(false);
       return;
     }
@@ -166,12 +190,15 @@ export const UserDataProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     try {
       const remote = await fetchUserData(user.id);
       const withMigration = await migrateFromLocalStorage(remote);
+      latestDataRef.current = withMigration;
       setData(withMigration);
       setError(null);
     } catch (err) {
       console.error('Failed to load user data from Supabase', err);
       setError(err instanceof Error ? err.message : 'Failed to load user data');
-      setData({ ...DEFAULT_USER_DATA });
+      const defaults = { ...DEFAULT_USER_DATA };
+      latestDataRef.current = defaults;
+      setData(defaults);
     } finally {
       setLoading(false);
     }
@@ -182,23 +209,38 @@ export const UserDataProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     refresh();
   }, [refresh]);
 
+  useEffect(() => {
+    if (!user && pendingSaveRef.current) {
+      clearTimeout(pendingSaveRef.current);
+      pendingSaveRef.current = null;
+    }
+  }, [user]);
+
+  useEffect(() => {
+    return () => {
+      if (pendingSaveRef.current) {
+        clearTimeout(pendingSaveRef.current);
+      }
+    };
+  }, []);
+
   const updateData = useCallback(
     (updater: (previous: UserData) => UserData) => {
       setData((prev) => {
         const next = updater(prev);
-        void persist(next);
+        schedulePersist(next);
         return next;
       });
     },
-    [persist]
+    [schedulePersist]
   );
 
   const replaceData = useCallback(
     (next: UserData) => {
       setData(next);
-      void persist(next);
+      schedulePersist(next);
     },
-    [persist]
+    [schedulePersist]
   );
 
   const value = useMemo<UserDataContextValue>(
