@@ -13,6 +13,9 @@ type SidebarProps = {
   currentView: string;
   isAuthenticated: boolean;
   userEmail?: string | null;
+  variant?: 'desktop' | 'mobile';
+  onNavigate?: () => void;
+  onClose?: () => void;
 };
 
 const Sidebar: React.FC<SidebarProps> = ({
@@ -26,6 +29,9 @@ const Sidebar: React.FC<SidebarProps> = ({
   currentView,
   isAuthenticated,
   userEmail,
+  variant = 'desktop',
+  onNavigate,
+  onClose,
 }) => {
   const navigationItems = [
     {
@@ -54,21 +60,54 @@ const Sidebar: React.FC<SidebarProps> = ({
     },
   ];
 
+  const handleNavigate = (callback: () => void) => {
+    callback();
+    if (onNavigate) {
+      onNavigate();
+    }
+  };
+
+  const handleConversationSelect = (conversation: SavedConversation) => {
+    onSelectConversation(conversation);
+    if (onNavigate) {
+      onNavigate();
+    }
+  };
+
+  const panelClasses = [
+    'bg-gray-900/70 border border-gray-800 rounded-2xl p-5 shadow-xl backdrop-blur-sm flex flex-col h-full',
+    variant === 'desktop' ? 'lg:sticky lg:top-4 lg:max-h-[calc(100vh-4rem)]' : '',
+  ]
+    .filter(Boolean)
+    .join(' ');
+
   return (
-    <aside className="w-full lg:w-72 xl:w-80 flex-shrink-0">
-      <div className="bg-gray-900/70 border border-gray-800 rounded-2xl p-5 shadow-xl backdrop-blur-sm">
-        <div className="mb-6">
-          <h2 className="text-lg font-semibold text-amber-300 tracking-wide">Explorer Hub</h2>
-          <p className="text-sm text-gray-400">
-            {isAuthenticated
-              ? userEmail
-                ? `Signed in as ${userEmail}`
-                : 'Signed in traveller'
-              : 'Sign in to unlock personalized features.'}
-          </p>
+    <aside className="w-full flex-shrink-0">
+      <div className={panelClasses}>
+        <div className="mb-6 flex items-start justify-between gap-3">
+          <div>
+            <h2 className="text-lg font-semibold text-amber-300 tracking-wide">Explorer Hub</h2>
+            <p className="text-sm text-gray-400">
+              {isAuthenticated
+                ? userEmail
+                  ? `Signed in as ${userEmail}`
+                  : 'Signed in traveller'
+                : 'Sign in to unlock personalized features.'}
+            </p>
+          </div>
+          {variant === 'mobile' && onClose && (
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-full border border-gray-700 p-2 text-gray-400 hover:text-amber-200 hover:border-amber-500/60 transition"
+              aria-label="Close explorer hub"
+            >
+              <span aria-hidden>&times;</span>
+            </button>
+          )}
         </div>
 
-        <div className="space-y-4">
+        <div className="space-y-4 flex-1 overflow-y-auto pr-1">
           <div>
             <div className="flex items-center justify-between mb-2">
               <h3 className="text-sm font-semibold uppercase tracking-wide text-gray-300">Navigation</h3>
@@ -80,7 +119,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                   <button
                     key={item.key}
                     type="button"
-                    onClick={item.onClick}
+                    onClick={() => handleNavigate(item.onClick)}
                     className={`w-full text-left px-3 py-2 rounded-lg transition-all duration-200 border flex flex-col gap-1 ${
                       isActive
                         ? 'border-amber-500/80 bg-amber-500/10 text-amber-200'
@@ -100,7 +139,7 @@ const Sidebar: React.FC<SidebarProps> = ({
               <h3 className="text-sm font-semibold uppercase tracking-wide text-gray-300">Recent Chats</h3>
               <button
                 type="button"
-                onClick={onOpenHistory}
+                onClick={() => handleNavigate(onOpenHistory)}
                 className="text-xs text-amber-300 hover:text-amber-200"
               >
                 View all
@@ -119,7 +158,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                   <li key={conversation.id}>
                     <button
                       type="button"
-                      onClick={() => onSelectConversation(conversation)}
+                      onClick={() => handleConversationSelect(conversation)}
                       className="w-full text-left px-3 py-2 rounded-lg border border-gray-800 hover:border-amber-500/40 hover:bg-gray-800/70 transition-all duration-200"
                     >
                       <p className="text-sm font-semibold text-gray-100 truncate">
@@ -142,6 +181,12 @@ const Sidebar: React.FC<SidebarProps> = ({
               </ul>
             )}
           </div>
+        </div>
+
+        <div className="pt-5 border-t border-gray-800 mt-5 text-xs text-gray-500">
+          <p>
+            Continue your historical journey wherever you are. Saved progress syncs across devices when you sign in.
+          </p>
         </div>
       </div>
     </aside>

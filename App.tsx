@@ -56,6 +56,7 @@ const App: React.FC = () => {
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const [autoSaveEnabled, setAutoSaveEnabled] = useState(true);
   const [preferredTheme, setPreferredTheme] = useState<'system' | 'light' | 'dark'>('dark');
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   const customCharacters = userData.customCharacters;
   const customQuests = userData.customQuests;
@@ -858,6 +859,44 @@ const App: React.FC = () => {
 
   const userEmail = user?.email ?? (user?.user_metadata as { email?: string })?.email;
 
+  const closeSidebar = useCallback(() => {
+    setIsSidebarOpen(false);
+  }, []);
+
+  const openSidebar = useCallback(() => {
+    setIsSidebarOpen(true);
+  }, []);
+
+  useEffect(() => {
+    if (!isSidebarOpen) {
+      return;
+    }
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        closeSidebar();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [closeSidebar, isSidebarOpen]);
+
+  useEffect(() => {
+    closeSidebar();
+  }, [closeSidebar, location.pathname]);
+
+  useEffect(() => {
+    if (!isSidebarOpen) {
+      return undefined;
+    }
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [isSidebarOpen]);
+
   const openHistoryView = useCallback(() => {
     if (!ensureConversationComplete()) {
       return;
@@ -938,14 +977,19 @@ const App: React.FC = () => {
               </h1>
               <p className="text-gray-400 mt-2 text-lg">Old world wisdom. New world classroom.</p>
             </div>
-            <div className="flex flex-col sm:items-end gap-2">
-              {userEmail && (
-                <span className="text-sm text-gray-300">Signed in as {userEmail}</span>
-              )}
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-end gap-2">
+              <button
+                type="button"
+                onClick={openSidebar}
+                className="sm:hidden inline-flex items-center justify-center gap-2 rounded-md border border-amber-400/60 px-4 py-2 text-sm font-semibold text-amber-200 hover:bg-amber-500/10"
+              >
+                Explorer Hub
+              </button>
+              {userEmail && <span className="text-sm text-gray-300 text-center sm:text-right">Signed in as {userEmail}</span>}
               <button
                 type="button"
                 onClick={handleSignInClick}
-                className="self-center sm:self-end inline-flex items-center gap-2 rounded-md border border-amber-400/60 px-4 py-2 text-sm font-semibold text-amber-200 hover:bg-amber-500/10"
+                className="inline-flex items-center gap-2 rounded-md border border-amber-400/60 px-4 py-2 text-sm font-semibold text-amber-200 hover:bg-amber-500/10"
               >
                 {isAuthenticated ? 'Sign out' : 'Sign in'}
               </button>
@@ -956,19 +1000,49 @@ const App: React.FC = () => {
           </div>
         </header>
 
-        <main className="max-w-7xl w-full mx-auto flex-grow flex flex-col lg:flex-row gap-6">
-          <Sidebar
-            recentConversations={recentConversations}
-            onSelectConversation={handleResumeConversation}
-            onCreateAncient={openCharacterCreatorView}
-            onOpenHistory={openHistoryView}
-            onOpenProfile={openProfileView}
-            onOpenSettings={openSettingsView}
-            onOpenQuests={openQuestsView}
-            currentView={currentView}
-            isAuthenticated={isAuthenticated}
-            userEmail={userEmail}
-          />
+        {isSidebarOpen && (
+          <div className="lg:hidden fixed inset-0 z-40 flex">
+            <button
+              type="button"
+              onClick={closeSidebar}
+              className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+              aria-label="Close explorer hub overlay"
+            />
+            <div className="relative ml-auto h-full w-full max-w-xs sm:max-w-sm p-4">
+              <Sidebar
+                recentConversations={recentConversations}
+                onSelectConversation={handleResumeConversation}
+                onCreateAncient={openCharacterCreatorView}
+                onOpenHistory={openHistoryView}
+                onOpenProfile={openProfileView}
+                onOpenSettings={openSettingsView}
+                onOpenQuests={openQuestsView}
+                currentView={currentView}
+                isAuthenticated={isAuthenticated}
+                userEmail={userEmail}
+                variant="mobile"
+                onNavigate={closeSidebar}
+                onClose={closeSidebar}
+              />
+            </div>
+          </div>
+        )}
+
+        <main className="relative max-w-7xl w-full mx-auto flex-grow flex flex-col lg:flex-row gap-6">
+          <div className="hidden lg:block lg:w-72 xl:w-80 flex-shrink-0">
+            <Sidebar
+              recentConversations={recentConversations}
+              onSelectConversation={handleResumeConversation}
+              onCreateAncient={openCharacterCreatorView}
+              onOpenHistory={openHistoryView}
+              onOpenProfile={openProfileView}
+              onOpenSettings={openSettingsView}
+              onOpenQuests={openQuestsView}
+              currentView={currentView}
+              isAuthenticated={isAuthenticated}
+              userEmail={userEmail}
+            />
+          </div>
           <div className="flex-1 flex flex-col">
             <ScrollToTop />
             <Routes>
@@ -1226,6 +1300,16 @@ const App: React.FC = () => {
             </Routes>
           </div>
         </main>
+        {!isSidebarOpen && (
+          <button
+            type="button"
+            onClick={openSidebar}
+            className="lg:hidden fixed bottom-6 right-6 z-30 inline-flex items-center justify-center rounded-full border border-amber-400/60 bg-gray-900/80 px-4 py-3 text-sm font-semibold text-amber-200 shadow-lg shadow-amber-500/10 backdrop-blur"
+            aria-label="Open explorer hub"
+          >
+            ☰
+          </button>
+        )}
       </div>
     </div>
   );
