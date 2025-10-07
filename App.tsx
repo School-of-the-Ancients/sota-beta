@@ -1001,35 +1001,28 @@ const App: React.FC = () => {
       >
         <div className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-8">
           <header
-            className="sticky top-0 z-30 -mx-4 space-y-4 bg-[#1a1a1a]/90 px-4 pb-4 pt-2 backdrop-blur-sm sm:static sm:mx-0 sm:bg-transparent sm:px-0 sm:pb-0 sm:pt-0 sm:backdrop-blur-none"
+            className="sticky top-0 z-30 -mx-4 bg-[#1a1a1a]/90 px-4 pb-3 pt-2 backdrop-blur-sm sm:static sm:mx-0 sm:bg-transparent sm:px-0 sm:pb-0 sm:pt-0 sm:backdrop-blur-none"
           >
-            <div className="flex items-center justify-between gap-3 sm:hidden">
-              <button
-                type="button"
-                onClick={() => setIsSidebarOpen(true)}
-                className="inline-flex items-center gap-2 rounded-full border border-amber-400/60 bg-amber-500/10 px-4 py-2 text-sm font-semibold text-amber-200 transition hover:bg-amber-500/20"
-                aria-label="Open navigation menu"
-              >
-                <MenuIcon className="h-5 w-5" />
-                <span>Menu</span>
-              </button>
-              {renderAccountSection('flex flex-col items-end gap-1 text-right', 'right')}
-            </div>
-
-            <div className="rounded-3xl border border-gray-800/80 bg-gray-900/60 p-6 shadow-xl backdrop-blur-sm sm:flex sm:items-center sm:justify-between sm:gap-6">
-              <div className="text-center sm:text-left">
-                <h1
-                  className="text-3xl font-bold tracking-wider text-amber-300 sm:text-4xl md:text-5xl"
-                  style={{ textShadow: '0 0 12px rgba(252, 211, 77, 0.45)' }}
+            <div className="flex items-center justify-between rounded-2xl border border-gray-800/80 bg-gray-900/60 px-4 py-3 shadow-lg backdrop-blur-sm">
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => setIsSidebarOpen(true)}
+                  className="inline-flex items-center gap-2 rounded-full border border-amber-400/60 bg-amber-500/10 px-4 py-2 text-sm font-semibold text-amber-200 transition hover:bg-amber-500/20 sm:hidden"
+                  aria-label="Open navigation menu"
                 >
-                  School of the Ancients
-                </h1>
-                <p className="mt-3 text-base text-gray-400 sm:text-lg">Old world wisdom. New world classroom.</p>
-                <p className="mt-2 text-sm text-gray-500 sm:text-base">
-                  Select a historical guide, continue a quest, or review your mastery.
-                </p>
+                  <MenuIcon className="h-5 w-5" />
+                  <span>Menu</span>
+                </button>
+                <span className="hidden text-xs font-semibold uppercase tracking-[0.4em] text-amber-200 sm:inline">Menu</span>
+                <span
+                  className="text-2xl font-bold tracking-[0.4em] text-amber-300 sm:text-3xl"
+                  style={{ textShadow: '0 0 8px rgba(252, 211, 77, 0.35)' }}
+                >
+                  SoTA
+                </span>
               </div>
-              {renderAccountSection('hidden sm:flex flex-col items-end gap-2 text-right', 'right')}
+              {renderAccountSection('flex flex-col items-end gap-1 text-right', 'right')}
             </div>
           </header>
 
