@@ -1,4 +1,4 @@
-# School of the Ancients
+# School of the Ancients 
 
 **Engage in real-time, voice-driven conversations with AI-emulated historical figures and explore their worlds.**
 
