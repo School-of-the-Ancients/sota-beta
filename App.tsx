@@ -1227,6 +1227,17 @@ const App: React.FC = () => {
     setView('settings');
   }, [requireAuth]);
 
+  const openHomeView = useCallback(() => {
+    setView('selector');
+    setSelectedCharacter(null);
+    setActiveQuest(null);
+    setResumeConversationId(null);
+  }, []);
+
+  const totalCompletedQuests = completedQuests.length;
+  const totalActiveQuests = inProgressQuestIds.length;
+  const totalCustomMentors = customCharacters.length;
+
   return (
     <div className="relative min-h-screen bg-[#1a1a1a]">
       <AuthModal
@@ -1245,30 +1256,74 @@ const App: React.FC = () => {
         style={{ background: environmentImageUrl ? 'transparent' : 'linear-gradient(to bottom right, #1a1a1a, #2b2b2b)' }}
       >
         <header className="mb-8">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-            <div className="text-center sm:text-left">
-              <h1
-                className="text-4xl sm:text-5xl md:text-6xl font-bold text-amber-300 tracking-wider"
-                style={{ textShadow: '0 0 10px rgba(252, 211, 77, 0.5)' }}
-              >
-                School of the Ancients
-              </h1>
-              <p className="text-gray-400 mt-2 text-lg">Old world wisdom. New world classroom.</p>
-            </div>
-            <div className="flex flex-col sm:items-end gap-2">
-              {userEmail && (
-                <span className="text-sm text-gray-300">Signed in as {userEmail}</span>
-              )}
-              <button
-                type="button"
-                onClick={handleSignInClick}
-                className="self-center sm:self-end inline-flex items-center gap-2 rounded-md border border-amber-400/60 px-4 py-2 text-sm font-semibold text-amber-200 hover:bg-amber-500/10"
-              >
-                {isAuthenticated ? 'Sign out' : 'Sign in'}
-              </button>
-              {!isAuthenticated && authPrompt && (
-                <p className="text-xs text-amber-300 max-w-xs text-center sm:text-right">{authPrompt}</p>
-              )}
+          <div className="bg-gray-900/60 border border-amber-500/20 rounded-3xl shadow-2xl backdrop-blur-md overflow-hidden">
+            <div className="h-1 bg-gradient-to-r from-amber-400/80 via-amber-200/60 to-transparent" />
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-6 px-6 py-7">
+              <div className="text-center sm:text-left space-y-3">
+                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-500/15 border border-amber-400/30 text-xs uppercase tracking-[0.2em] text-amber-200">
+                  <span>Explorer HQ</span>
+                </div>
+                <div>
+                  <h1
+                    className="text-4xl sm:text-5xl md:text-6xl font-bold text-amber-300 tracking-wider"
+                    style={{ textShadow: '0 0 18px rgba(252, 211, 77, 0.4)' }}
+                  >
+                    School of the Ancients
+                  </h1>
+                  <p className="text-gray-300 mt-3 text-lg max-w-xl">
+                    Engage in guided quests, converse with legendary minds, and chart your own course through history.
+                  </p>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm">
+                  <div className="rounded-2xl border border-amber-500/10 bg-black/20 px-4 py-3 text-left">
+                    <p className="text-xs uppercase tracking-wide text-gray-400">Active Quests</p>
+                    <p className="text-2xl font-semibold text-amber-200">{totalActiveQuests}</p>
+                  </div>
+                  <div className="rounded-2xl border border-amber-500/10 bg-black/20 px-4 py-3 text-left">
+                    <p className="text-xs uppercase tracking-wide text-gray-400">Completed Journeys</p>
+                    <p className="text-2xl font-semibold text-emerald-300">{totalCompletedQuests}</p>
+                  </div>
+                  <div className="rounded-2xl border border-amber-500/10 bg-black/20 px-4 py-3 text-left">
+                    <p className="text-xs uppercase tracking-wide text-gray-400">Custom Mentors</p>
+                    <p className="text-2xl font-semibold text-sky-300">{totalCustomMentors}</p>
+                  </div>
+                </div>
+              </div>
+              <div className="flex flex-col sm:items-end gap-4 w-full sm:w-auto">
+                <div className="flex flex-wrap justify-center sm:justify-end gap-3 w-full">
+                  <button
+                    type="button"
+                    onClick={openHomeView}
+                    className="inline-flex items-center gap-2 rounded-full bg-amber-500/20 px-4 py-2 text-sm font-semibold text-amber-100 hover:bg-amber-500/30 transition-colors"
+                  >
+                    Home Base
+                  </button>
+                  <button
+                    type="button"
+                    onClick={openQuestsView}
+                    className="inline-flex items-center gap-2 rounded-full border border-amber-400/40 px-4 py-2 text-sm font-semibold text-amber-200 hover:bg-amber-500/10 transition-colors"
+                  >
+                    View Quests
+                  </button>
+                </div>
+                <div className="bg-black/30 border border-amber-500/10 rounded-2xl px-4 py-4 shadow-inner text-center sm:text-right space-y-2">
+                  {userEmail && (
+                    <p className="text-sm text-gray-300">Signed in as {userEmail}</p>
+                  )}
+                  <button
+                    type="button"
+                    onClick={handleSignInClick}
+                    className="inline-flex items-center gap-2 rounded-full border border-amber-400/60 px-4 py-2 text-sm font-semibold text-amber-200 hover:bg-amber-500/20 transition-colors"
+                  >
+                    {isAuthenticated ? 'Sign out' : 'Sign in'}
+                  </button>
+                  {!isAuthenticated && authPrompt && (
+                    <p className="text-xs text-amber-300 max-w-[16rem] sm:max-w-xs sm:ml-auto">
+                      {authPrompt}
+                    </p>
+                  )}
+                </div>
+              </div>
             </div>
           </div>
         </header>
@@ -1277,6 +1332,7 @@ const App: React.FC = () => {
           <Sidebar
             recentConversations={recentConversations}
             onSelectConversation={handleResumeConversation}
+            onOpenHome={openHomeView}
             onCreateAncient={openCharacterCreatorView}
             onOpenHistory={openHistoryView}
             onOpenProfile={openProfileView}
