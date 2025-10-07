@@ -1,12 +1,22 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { fetchUserData, DEFAULT_USER_DATA } from './userData';
 
-const { fromMock, selectMock, eqMock, maybeSingleMock, insertMock } = vi.hoisted(() => ({
+const {
+  fromMock,
+  selectMock,
+  selectEqMock,
+  maybeSingleMock,
+  insertMock,
+  updateMock,
+  updateEqMock,
+} = vi.hoisted(() => ({
   fromMock: vi.fn(),
   selectMock: vi.fn(),
-  eqMock: vi.fn(),
+  selectEqMock: vi.fn(),
   maybeSingleMock: vi.fn(),
   insertMock: vi.fn(),
+  updateMock: vi.fn(),
+  updateEqMock: vi.fn(),
 }));
 
 vi.mock('../supabaseClient', () => ({
@@ -17,12 +27,15 @@ vi.mock('../supabaseClient', () => ({
 
 const setupSupabaseResponse = (response: unknown) => {
   maybeSingleMock.mockResolvedValue(response);
-  eqMock.mockReturnValue({ maybeSingle: maybeSingleMock });
-  selectMock.mockReturnValue({ eq: eqMock });
+  selectEqMock.mockReturnValue({ maybeSingle: maybeSingleMock });
+  selectMock.mockReturnValue({ eq: selectEqMock });
   insertMock.mockResolvedValue({ error: null });
+  updateEqMock.mockResolvedValue({ error: null });
+  updateMock.mockReturnValue({ eq: updateEqMock });
   fromMock.mockReturnValue({
     select: selectMock,
     insert: insertMock,
+    update: updateMock,
   });
 };
 
@@ -30,9 +43,11 @@ describe('fetchUserData', () => {
   beforeEach(() => {
     fromMock.mockReset();
     selectMock.mockReset();
-    eqMock.mockReset();
+    selectEqMock.mockReset();
     maybeSingleMock.mockReset();
     insertMock.mockReset();
+    updateMock.mockReset();
+    updateEqMock.mockReset();
   });
 
   it('coerces legacy string API keys to null', async () => {
@@ -50,6 +65,10 @@ describe('fetchUserData', () => {
     const result = await fetchUserData('user-1');
 
     expect(result.apiKey).toBeNull();
+    expect(updateMock).toHaveBeenCalledWith({
+      data: expect.objectContaining({ apiKey: null }),
+    });
+    expect(updateEqMock).toHaveBeenCalledWith('user_id', 'user-1');
   });
 
   it('preserves encrypted API keys with metadata', async () => {
@@ -74,6 +93,7 @@ describe('fetchUserData', () => {
 
     expect(result.apiKey).toEqual(encrypted);
     expect(result.migratedAt).toBe('2024-05-21T09:00:00Z');
+    expect(updateMock).not.toHaveBeenCalled();
   });
 
   it('drops malformed encrypted payloads', async () => {
@@ -91,5 +111,9 @@ describe('fetchUserData', () => {
     const result = await fetchUserData('user-3');
 
     expect(result.apiKey).toBeNull();
+    expect(updateMock).toHaveBeenCalledWith({
+      data: expect.objectContaining({ apiKey: null }),
+    });
+    expect(updateEqMock).toHaveBeenCalledWith('user_id', 'user-3');
   });
 });
