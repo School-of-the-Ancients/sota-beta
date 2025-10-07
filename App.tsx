@@ -1227,8 +1227,13 @@ const App: React.FC = () => {
     setView('settings');
   }, [requireAuth]);
 
+  const openHomeView = useCallback(() => {
+    setView('selector');
+    setEnvironmentImageUrl(null);
+  }, []);
+
   return (
-    <div className="relative min-h-screen bg-[#1a1a1a]">
+    <div className="relative min-h-screen bg-gradient-to-br from-slate-950 via-gray-950 to-black">
       <AuthModal
         isOpen={isAuthModalOpen && !isAuthenticated}
         prompt={authPrompt}
@@ -1242,33 +1247,72 @@ const App: React.FC = () => {
 
       <div
         className="relative z-10 min-h-screen flex flex-col text-gray-200 font-serif p-4 sm:p-6 lg:p-8"
-        style={{ background: environmentImageUrl ? 'transparent' : 'linear-gradient(to bottom right, #1a1a1a, #2b2b2b)' }}
+        style={{
+          background: environmentImageUrl
+            ? 'transparent'
+            : 'radial-gradient(circle at top, rgba(251, 191, 36, 0.08), transparent 45%), linear-gradient(to bottom right, rgba(17, 24, 39, 0.95), rgba(2, 6, 23, 0.94))',
+        }}
       >
         <header className="mb-8">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-            <div className="text-center sm:text-left">
-              <h1
-                className="text-4xl sm:text-5xl md:text-6xl font-bold text-amber-300 tracking-wider"
-                style={{ textShadow: '0 0 10px rgba(252, 211, 77, 0.5)' }}
-              >
-                School of the Ancients
-              </h1>
-              <p className="text-gray-400 mt-2 text-lg">Old world wisdom. New world classroom.</p>
+          <div className="bg-slate-950/70 border border-amber-500/30 rounded-3xl px-6 py-6 shadow-[0_25px_55px_rgba(15,23,42,0.65)] backdrop-blur">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-6">
+              <div className="text-center sm:text-left space-y-2">
+                <p className="text-xs uppercase tracking-[0.4em] text-amber-300/80">The great library awaits</p>
+                <h1 className="text-4xl sm:text-5xl md:text-6xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-amber-200 via-amber-300 to-yellow-100">
+                  School of the Ancients
+                </h1>
+                <p className="text-gray-300 text-base sm:text-lg max-w-2xl mx-auto sm:mx-0">
+                  Engage in guided quests or real-time dialogues with history&apos;s greatest minds in a richly atmospheric study hall.
+                </p>
+              </div>
+              <div className="flex flex-col sm:items-end gap-3">
+                {userEmail && <span className="text-sm text-gray-300">Signed in as {userEmail}</span>}
+                <button
+                  type="button"
+                  onClick={handleSignInClick}
+                  className="self-center sm:self-end inline-flex items-center gap-2 rounded-full border border-amber-400/60 px-5 py-2 text-sm font-semibold text-amber-200 transition-colors hover:bg-amber-500/15"
+                >
+                  {isAuthenticated ? 'Sign out' : 'Sign in'}
+                </button>
+                {!isAuthenticated && authPrompt && (
+                  <p className="text-xs text-amber-200/80 max-w-xs text-center sm:text-right">{authPrompt}</p>
+                )}
+              </div>
             </div>
-            <div className="flex flex-col sm:items-end gap-2">
-              {userEmail && (
-                <span className="text-sm text-gray-300">Signed in as {userEmail}</span>
-              )}
+            <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
               <button
                 type="button"
-                onClick={handleSignInClick}
-                className="self-center sm:self-end inline-flex items-center gap-2 rounded-md border border-amber-400/60 px-4 py-2 text-sm font-semibold text-amber-200 hover:bg-amber-500/10"
+                onClick={openQuestsView}
+                className="group flex items-center justify-between gap-4 rounded-2xl border border-amber-500/30 bg-amber-500/5 px-4 py-3 text-left transition-all duration-200 hover:bg-amber-500/15 hover:border-amber-400/50"
               >
-                {isAuthenticated ? 'Sign out' : 'Sign in'}
+                <div>
+                  <p className="text-sm font-semibold text-amber-100">Quest Library</p>
+                  <p className="text-xs text-amber-100/70">Resume journeys or discover new missions.</p>
+                </div>
+                <span className="text-lg text-amber-200 transition-transform group-hover:translate-x-1">→</span>
               </button>
-              {!isAuthenticated && authPrompt && (
-                <p className="text-xs text-amber-300 max-w-xs text-center sm:text-right">{authPrompt}</p>
-              )}
+              <button
+                type="button"
+                onClick={openHistoryView}
+                className="group flex items-center justify-between gap-4 rounded-2xl border border-slate-700/80 bg-slate-900/60 px-4 py-3 text-left transition-all duration-200 hover:border-amber-400/50 hover:bg-slate-900/80"
+              >
+                <div>
+                  <p className="text-sm font-semibold text-slate-100">Conversation Archive</p>
+                  <p className="text-xs text-slate-300/80">Revisit insights from previous dialogues.</p>
+                </div>
+                <span className="text-lg text-amber-200 transition-transform group-hover:translate-x-1">→</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => openQuestCreator()}
+                className="group flex items-center justify-between gap-4 rounded-2xl border border-purple-500/25 bg-purple-500/10 px-4 py-3 text-left transition-all duration-200 hover:bg-purple-500/20 hover:border-purple-400/40"
+              >
+                <div>
+                  <p className="text-sm font-semibold text-purple-100">Create a Quest</p>
+                  <p className="text-xs text-purple-100/80">Design a custom challenge tailored to you.</p>
+                </div>
+                <span className="text-lg text-purple-100 transition-transform group-hover:translate-x-1">→</span>
+              </button>
             </div>
           </div>
         </header>
@@ -1277,6 +1321,7 @@ const App: React.FC = () => {
           <Sidebar
             recentConversations={recentConversations}
             onSelectConversation={handleResumeConversation}
+            onOpenHome={openHomeView}
             onCreateAncient={openCharacterCreatorView}
             onOpenHistory={openHistoryView}
             onOpenProfile={openProfileView}
@@ -1286,7 +1331,15 @@ const App: React.FC = () => {
             isAuthenticated={isAuthenticated}
             userEmail={userEmail}
           />
-          <div className="flex-1 flex flex-col">{renderContent()}</div>
+          <div className="flex-1 flex flex-col">
+            <div
+              className={`flex-1 rounded-3xl border border-slate-800/70 bg-slate-950/70 shadow-[0_25px_55px_rgba(2,6,23,0.55)] overflow-hidden ${
+                view === 'conversation' ? 'p-0' : 'p-6'
+              }`}
+            >
+              {renderContent()}
+            </div>
+          </div>
         </main>
       </div>
     </div>

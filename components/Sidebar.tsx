@@ -5,6 +5,7 @@ import type { SavedConversation } from '../types';
 type SidebarProps = {
   recentConversations: SavedConversation[];
   onSelectConversation: (conversation: SavedConversation) => void;
+  onOpenHome: () => void;
   onCreateAncient: () => void;
   onOpenHistory: () => void;
   onOpenProfile: () => void;
@@ -18,6 +19,7 @@ type SidebarProps = {
 const Sidebar: React.FC<SidebarProps> = ({
   recentConversations,
   onSelectConversation,
+  onOpenHome,
   onCreateAncient,
   onOpenHistory,
   onOpenProfile,
@@ -28,6 +30,12 @@ const Sidebar: React.FC<SidebarProps> = ({
   userEmail,
 }) => {
   const navigationItems = [
+    {
+      key: 'home',
+      label: 'Home',
+      description: 'Return to the explorer hub overview.',
+      onClick: onOpenHome,
+    },
     {
       key: 'quests',
       label: 'Quest Library',
@@ -56,7 +64,7 @@ const Sidebar: React.FC<SidebarProps> = ({
 
   return (
     <aside className="w-full lg:w-72 xl:w-80 flex-shrink-0">
-      <div className="bg-gray-900/70 border border-gray-800 rounded-2xl p-5 shadow-xl backdrop-blur-sm">
+      <div className="bg-gray-900/80 border border-amber-500/20 rounded-3xl p-6 shadow-[0_20px_45px_rgba(0,0,0,0.35)] backdrop-blur">
         <div className="mb-6">
           <h2 className="text-lg font-semibold text-amber-300 tracking-wide">Explorer Hub</h2>
           <p className="text-sm text-gray-400">
@@ -75,16 +83,17 @@ const Sidebar: React.FC<SidebarProps> = ({
             </div>
             <div className="space-y-3">
               {navigationItems.map((item) => {
-                const isActive = currentView === item.key;
+                const isActive =
+                  item.key === 'home' ? currentView === 'selector' : currentView === item.key;
                 return (
                   <button
                     key={item.key}
                     type="button"
                     onClick={item.onClick}
-                    className={`w-full text-left px-3 py-2 rounded-lg transition-all duration-200 border flex flex-col gap-1 ${
+                    className={`w-full text-left px-3 py-2 rounded-xl transition-all duration-200 border flex flex-col gap-1 shadow-sm ${
                       isActive
-                        ? 'border-amber-500/80 bg-amber-500/10 text-amber-200'
-                        : 'border-gray-800 hover:border-amber-500/40 hover:bg-gray-800/60 text-gray-200'
+                        ? 'border-amber-500/80 bg-amber-500/10 text-amber-100 shadow-[0_10px_25px_rgba(255,193,7,0.18)]'
+                        : 'border-gray-800/80 hover:border-amber-500/40 hover:bg-gray-800/70 text-gray-200 hover:translate-x-1'
                     }`}
                   >
                     <span className="text-sm font-semibold">{item.label}</span>
