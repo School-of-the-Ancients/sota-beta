@@ -49,7 +49,7 @@ describe('App', () => {
 
     // Wait for the app to finish loading data
     await waitFor(() => {
-      expect(screen.getByText('School of the Ancients')).toBeInTheDocument();
+      expect(screen.getByText('Welcome to the School of the Ancients')).toBeInTheDocument();
     });
   });
 

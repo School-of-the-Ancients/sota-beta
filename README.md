@@ -109,12 +109,7 @@ School of the Ancients is a modern web application that pairs immersive visuals 
    ```bash
    npm install
    ```
-3. Create a `.env` file in the project root and add your Gemini credentials:
-   ```bash
-   GEMINI_API_KEY=your_api_key_here
-   ```
-
-4. Configure Supabase authentication and persistence by adding the following Vite environment variables to `.env`:
+3. Configure Supabase authentication and persistence by adding the following Vite environment variables to `.env`:
    ```bash
    VITE_SUPABASE_URL=https://your-project-id.supabase.co
    VITE_SUPABASE_ANON_KEY=your_public_anon_key
@@ -131,6 +126,8 @@ School of the Ancients is a modern web application that pairs immersive visuals 
    ```
 
    The application writes the entire profile (custom characters, quests, conversations, quest progress, and quiz history) into the `data` column. The optional `migrated_at` timestamp marks when a user first migrated from local storage.
+
+After signing in to the app, open **Settings → User Settings** and paste your Google Gemini API key. The key is encrypted locally before syncing to Supabase so only you can decrypt it.
 
 ### Running Locally
 
@@ -157,7 +154,7 @@ Deploy the contents of `dist/` to your static hosting platform of choice.
 
 ## Development Tips
 
-- Vite exposes `process.env.API_KEY` and `process.env.GEMINI_API_KEY` based on the `GEMINI_API_KEY` entry in your `.env` file. Be sure not to commit this file.
+- Gemini access is configured per user in **Settings → User Settings**. The API key is encrypted locally before being stored in Supabase, so the project no longer reads it from `.env`.
 - Shared UI components live in `components/`, while feature views are registered in `App.tsx`.
 - Hooks such as `useGeminiLive` encapsulate audio capture, streaming, and playback logic.
 - Tailwind utility classes handle layout; extend the Tailwind config before introducing custom CSS.

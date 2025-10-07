@@ -4,6 +4,7 @@ import type { Character, PersonaData } from '../types';
 import { AMBIENCE_LIBRARY, AVAILABLE_VOICES } from '../constants';
 import { HISTORICAL_FIGURES_SUGGESTIONS } from '../suggestions';
 import DiceIcon from './icons/DiceIcon';
+import { useApiKey } from '../hooks/useApiKey';
 
 interface CharacterCreatorProps {
   onCharacterCreated: (character: Character) => void;
@@ -38,6 +39,7 @@ function makeFallbackAvatar(name: string, title?: string) {
 }
 
 const CharacterCreator: React.FC<CharacterCreatorProps> = ({ onCharacterCreated, onBack }) => {
+  const { apiKey } = useApiKey();
   const [name, setName] = useState('');
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState('');
@@ -109,11 +111,13 @@ If you are not at least 80% confident in their historicity, set verified to fals
     if (!clean) return setError('Enter a historical figure’s name.');
 
     try {
+      if (!apiKey) {
+        throw new Error('Add your API key in Settings to create new ancients.');
+      }
       setLoading(true);
       setMsg('Verifying historical figure…');
 
-      if (!process.env.API_KEY) throw new Error('API_KEY not set.');
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+      const ai = new GoogleGenAI({ apiKey });
 
       const verification = await verifyHistoricalFigure(ai, clean);
 
@@ -257,6 +261,12 @@ If you are not at least 80% confident in their historicity, set verified to fals
           </button>
         </div>
 
+        {!apiKey && (
+          <div className="bg-amber-500/10 border border-amber-400/60 text-amber-100 text-sm px-4 py-3 rounded-lg mb-6">
+            Add your Gemini API key in Settings to unlock AI-generated mentors and portraits.
+          </div>
+        )}
+
         {error && (
           <div className="bg-red-900/50 border border-red-700 text-red-300 p-3 rounded-lg mb-6">
             {error}
@@ -316,7 +326,8 @@ If you are not at least 80% confident in their historicity, set verified to fals
 
         <button
           onClick={handleCreate}
-          className="w-full bg-amber-600 hover:bg-amber-500 text-black font-bold py-3 px-6 rounded-lg transition-colors text-lg"
+          disabled={loading || !apiKey}
+          className="w-full bg-amber-600 hover:bg-amber-500 text-black font-bold py-3 px-6 rounded-lg transition-colors text-lg disabled:opacity-60 disabled:cursor-not-allowed"
         >
           Create Ancient
         </button>

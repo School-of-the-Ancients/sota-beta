@@ -9,6 +9,7 @@ export const DEFAULT_USER_DATA: UserData = {
   activeQuestId: null,
   lastQuizResult: null,
   migratedAt: null,
+  apiKey: null,
 };
 
 const TABLE = 'user_data';
@@ -38,9 +39,32 @@ export const fetchUserData = async (userId: string): Promise<UserData> => {
   }
 
   const stored = (data.data ?? {}) as Partial<UserData>;
+
+  const sanitizedApiKey = (() => {
+    const raw = stored.apiKey as unknown;
+
+    if (!raw || typeof raw !== 'object') {
+      return null;
+    }
+
+    const maybeCipherText = (raw as { cipherText?: unknown }).cipherText;
+    const maybeIv = (raw as { iv?: unknown }).iv;
+    if (typeof maybeCipherText !== 'string' || typeof maybeIv !== 'string') {
+      return null;
+    }
+
+    const maybeUpdatedAt = (raw as { updatedAt?: unknown }).updatedAt;
+    return {
+      cipherText: maybeCipherText,
+      iv: maybeIv,
+      updatedAt: typeof maybeUpdatedAt === 'string' ? maybeUpdatedAt : null,
+    };
+  })();
+
   return {
     ...DEFAULT_USER_DATA,
     ...stored,
+    apiKey: sanitizedApiKey,
     migratedAt: (data as { migrated_at?: string | null })?.migrated_at ?? stored.migratedAt ?? null,
   };
 };

@@ -12,6 +12,7 @@ import ThinkingIcon from './icons/ThinkingIcon';
 import SendIcon from './icons/SendIcon';
 import MuteIcon from './icons/MuteIcon';
 import UnmuteIcon from './icons/UnmuteIcon';
+import { useApiKey } from '../hooks/useApiKey';
 
 interface ConversationViewProps {
   character: Character;
@@ -86,6 +87,7 @@ const ConversationView: React.FC<ConversationViewProps> = ({
   conversationHistory,
   onConversationUpdate,
 }) => {
+  const { apiKey } = useApiKey();
   const [transcript, setTranscript] = useState<ConversationTurn[]>([]);
   const [textInput, setTextInput] = useState('');
   const [dynamicSuggestions, setDynamicSuggestions] = useState<string[]>([]);
@@ -265,8 +267,8 @@ const ConversationView: React.FC<ConversationViewProps> = ({
     setIsGeneratingVisual(true);
     setGenerationMessage(`Entering ${description}...`);
     try {
-      if (!process.env.API_KEY) throw new Error("API_KEY not set.");
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+      if (!apiKey) throw new Error('Missing API key');
+      const ai = new GoogleGenAI({ apiKey });
       
       const imagePromise = ai.models.generateImages({
         model: 'imagen-4.0-generate-001',
@@ -324,10 +326,15 @@ const ConversationView: React.FC<ConversationViewProps> = ({
         }
         return turn;
     }));
+      if (err instanceof Error && err.message.includes('Missing API key')) {
+        setGenerationMessage('Add your API key in Settings to unlock environment changes.');
+      } else {
+        setGenerationMessage('Unable to generate the environment right now.');
+      }
     } finally {
       setIsGeneratingVisual(false);
     }
-  }, [onEnvironmentUpdate, character, changeAmbienceTrack]);
+  }, [apiKey, onEnvironmentUpdate, character, changeAmbienceTrack]);
 
   const handleArtifactDisplay = useCallback(async (name: string, description: string) => {
     const artifactId = `artifact_${Date.now()}`;
@@ -343,8 +350,8 @@ const ConversationView: React.FC<ConversationViewProps> = ({
     setGenerationMessage(`Creating ${name}...`);
 
     try {
-        if (!process.env.API_KEY) throw new Error("API_KEY not set.");
-        const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+        if (!apiKey) throw new Error('Missing API key');
+        const ai = new GoogleGenAI({ apiKey });
         const response = await ai.models.generateImages({
             model: 'imagen-4.0-generate-001',
             prompt: `A detailed, clear image of: a "${name}". ${description}. The artifact should be rendered in a style authentic to ${character.name}'s era and work (e.g., a da Vinci sketch, a 19th-century diagram, a classical Greek sculpture). Present it on a simple, non-distracting background like aged parchment or a museum display.`,
@@ -382,10 +389,15 @@ const ConversationView: React.FC<ConversationViewProps> = ({
         }
         return turn;
       }));
+      if (err instanceof Error && err.message.includes('Missing API key')) {
+        setGenerationMessage('Add your API key in Settings to create visuals.');
+      } else {
+        setGenerationMessage('Unable to generate that visual right now.');
+      }
     } finally {
         setIsGeneratingVisual(false);
     }
-  }, [character]);
+  }, [apiKey, character]);
 
 
   const {
@@ -409,8 +421,12 @@ const ConversationView: React.FC<ConversationViewProps> = ({
     if (currentTranscript.length === 0) return;
     setIsFetchingSuggestions(true);
     try {
-        if (!process.env.API_KEY) throw new Error("API_KEY not set.");
-        const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+        if (!apiKey) {
+          setDynamicSuggestions([]);
+          setIsFetchingSuggestions(false);
+          return;
+        }
+        const ai = new GoogleGenAI({ apiKey });
 
         const contextTranscript = currentTranscript.slice(-4).map(turn => `${turn.speakerName}: ${turn.text}`).join('\n');
 
@@ -452,7 +468,7 @@ ${contextTranscript}
     } finally {
         setIsFetchingSuggestions(false);
     }
-  }, [character.name]);
+  }, [apiKey, character.name]);
 
   const requestDynamicSuggestions = useCallback(() => {
     updateDynamicSuggestions(transcript);
@@ -549,6 +565,11 @@ ${contextTranscript}
                     <StatusIndicator state={connectionState} isMicActive={isMicActive} />
                 </div>
             </div>
+            {!apiKey && (
+              <div className="mt-6 w-full max-w-xs rounded-lg border border-amber-500/60 bg-amber-500/10 p-3 text-sm text-amber-100">
+                Add your Gemini API key in Settings to enable live dialogue and visual generation.
+              </div>
+            )}
             <h2 className="text-2xl sm:text-3xl font-bold text-amber-200 mt-8">{character.name}</h2>
             <p className="text-gray-400 italic">{character.title}</p>
             
@@ -599,10 +620,10 @@ ${contextTranscript}
                     <button
                     type="button"
                     onClick={requestDynamicSuggestions}
-                    disabled={isFetchingSuggestions}
+                    disabled={isFetchingSuggestions || !apiKey}
                     className="w-full text-sm font-semibold bg-amber-800/70 hover:bg-amber-700 text-amber-100 py-2 px-3 rounded-lg transition-colors duration-200 border border-amber-700 disabled:opacity-60 disabled:cursor-not-allowed"
                     >
-                    {isFetchingSuggestions ? 'Generating suggestions...' : 'Suggest prompts'}
+                    {isFetchingSuggestions ? 'Generating suggestions...' : apiKey ? 'Suggest prompts' : 'API key required'}
                     </button>
                     {isFetchingSuggestions ? (
                     <div className="space-y-2">

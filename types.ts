@@ -128,4 +128,9 @@ export interface UserData {
   activeQuestId: string | null;
   lastQuizResult: QuizResult | null;
   migratedAt?: string | null;
+  apiKey: {
+    cipherText: string;
+    iv: string;
+    updatedAt?: string | null;
+  } | null;
 }
