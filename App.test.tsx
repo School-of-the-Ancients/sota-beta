@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
 import App from './App';
 import type { Character, UserData } from './types';
 import { ConnectionState } from './types';
@@ -138,20 +139,17 @@ Object.defineProperty(window, 'history', {
   writable: true,
 });
 
-const resetLocation = () => {
-  Object.defineProperty(window, 'location', {
-    value: {
-      search: '',
-    },
-    writable: true,
-  });
-};
+const renderApp = (initialEntries: string[] = ['/']) =>
+  render(
+    <MemoryRouter initialEntries={initialEntries}>
+      <App />
+    </MemoryRouter>
+  );
 
 describe('App', () => {
   beforeEach(() => {
     __setUserData({ ...DEFAULT_USER_DATA });
     vi.clearAllMocks();
-    resetLocation();
 
     const mockIntersectionObserver = vi.fn();
     mockIntersectionObserver.mockReturnValue({
@@ -193,14 +191,7 @@ describe('App', () => {
       customCharacters: [customCharacter],
     });
 
-    Object.defineProperty(window, 'location', {
-      value: {
-        search: `?character=${customCharacter.id}`,
-      },
-      writable: true,
-    });
-
-    render(<App />);
+    renderApp([`/conversation?character=${customCharacter.id}`]);
 
     await waitFor(() => {
       expect(screen.getByRole('heading', { name: customCharacter.name })).toBeInTheDocument();
@@ -230,7 +221,7 @@ describe('App', () => {
 
     const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
 
-    render(<App />);
+    renderApp();
 
     await waitFor(() => {
       expect(
@@ -274,7 +265,7 @@ describe('App', () => {
       customCharacters: [],
     });
 
-    render(<App />);
+    renderApp();
 
     await waitFor(() => {
       expect(
