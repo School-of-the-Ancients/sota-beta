@@ -1016,7 +1016,7 @@ const App: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setIsSidebarOpen(true)}
-                className="shrink-0 rounded-full border border-amber-400/60 bg-amber-500/10 px-4 py-2 text-sm font-semibold uppercase tracking-wide text-amber-200 transition hover:bg-amber-500/20"
+                className="shrink-0 rounded-full border border-amber-400/60 bg-amber-500/10 px-4 py-2 text-sm font-semibold uppercase tracking-wide text-amber-200 transition hover:bg-amber-500/20 lg:hidden"
                 aria-label="Open navigation menu"
               >
                 Menu
@@ -1024,7 +1024,7 @@ const App: React.FC = () => {
               <span className="flex-1 text-center text-sm font-semibold uppercase tracking-[0.35em] text-amber-200 sm:text-base">
                 SoTA
               </span>
-              {renderAccountSection('flex shrink-0 items-center justify-end gap-2 text-right', 'right', 'compact')}
+              {renderAccountSection('hidden shrink-0 items-center justify-end gap-2 text-right lg:flex', 'right', 'compact')}
             </div>
           </header>
 
