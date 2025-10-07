@@ -1,6 +1,7 @@
 
 import React from 'react';
 import ReactDOM from 'react-dom/client';
+import { BrowserRouter } from 'react-router-dom';
 import App from './App';
 import { SupabaseAuthProvider } from './hooks/useSupabaseAuth';
 import { UserDataProvider } from './hooks/useUserData';
@@ -15,7 +16,9 @@ root.render(
   <React.StrictMode>
     <SupabaseAuthProvider>
       <UserDataProvider>
-        <App />
+        <BrowserRouter>
+          <App />
+        </BrowserRouter>
       </UserDataProvider>
     </SupabaseAuthProvider>
   </React.StrictMode>

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { GoogleGenAI, Type } from '@google/genai';
 
 import type {
@@ -29,43 +30,62 @@ import { useSupabaseAuth } from './hooks/useSupabaseAuth';
 import { useUserData } from './hooks/useUserData';
 import { DEFAULT_USER_DATA } from './supabase/userData';
 
-const updateCharacterQueryParam = (characterId: string, mode: 'push' | 'replace') => {
-  try {
-    const params = new URLSearchParams(window.location.search);
-    params.set('character', characterId);
-    const pathname = typeof window.location.pathname === 'string' && window.location.pathname
-      ? window.location.pathname
-      : '/';
-    const newSearch = params.toString();
-    const nextUrl = `${pathname}${newSearch ? `?${newSearch}` : ''}`;
-    if (mode === 'push') {
-      window.history.pushState({}, '', nextUrl);
-    } else {
-      window.history.replaceState({}, '', nextUrl);
-    }
-  } catch (error) {
-    console.warn('Failed to update character query parameter:', error);
+const ROUTES = {
+  selector: '/',
+  conversation: '/conversation',
+  history: '/history',
+  creator: '/creator',
+  quests: '/quests',
+  questCreator: '/quest-creator',
+  quiz: '/quiz',
+  profile: '/profile',
+  settings: '/settings',
+} as const;
+
+type ViewRoute = keyof typeof ROUTES;
+
+const getViewFromPathname = (pathname: string): ViewRoute => {
+  const normalized = pathname.replace(/\/+$/, '') || '/';
+  switch (normalized) {
+    case ROUTES.conversation:
+      return 'conversation';
+    case ROUTES.history:
+      return 'history';
+    case ROUTES.creator:
+      return 'creator';
+    case ROUTES.quests:
+      return 'quests';
+    case ROUTES.questCreator:
+      return 'questCreator';
+    case ROUTES.quiz:
+      return 'quiz';
+    case ROUTES.profile:
+      return 'profile';
+    case ROUTES.settings:
+      return 'settings';
+    default:
+      return 'selector';
   }
 };
 
 // ---- App -------------------------------------------------------------------
 
 const App: React.FC = () => {
+  const navigate = useNavigate();
+  const location = useLocation();
   const { user, loading: authLoading, signOut } = useSupabaseAuth();
   const { data: userData, loading: dataLoading, saving: dataSaving, updateData } = useUserData();
 
   const [selectedCharacter, setSelectedCharacter] = useState<Character | null>(null);
-  const [view, setView] = useState<
-    | 'selector'
-    | 'conversation'
-    | 'history'
-    | 'creator'
-    | 'quests'
-    | 'questCreator'
-    | 'quiz'
-    | 'profile'
-    | 'settings'
-  >('selector');
+  const currentView = useMemo(() => getViewFromPathname(location.pathname), [location.pathname]);
+
+  useEffect(() => {
+    const normalized = location.pathname.replace(/\/+$/, '') || '/';
+    const knownPaths = Object.values(ROUTES) as string[];
+    if (!knownPaths.includes(normalized)) {
+      navigate(ROUTES.selector, { replace: true });
+    }
+  }, [location.pathname, navigate]);
 
   const [environmentImageUrl, setEnvironmentImageUrl] = useState<string | null>(null);
   const [activeQuest, setActiveQuest] = useState<Quest | null>(null);
@@ -92,6 +112,36 @@ const App: React.FC = () => {
   const isSaving = isSavingConversation || dataSaving;
   const isAuthenticated = Boolean(user);
   const isAppLoading = authLoading || dataLoading;
+
+  const updateCharacterRoute = useCallback(
+    (characterId: string, mode: 'push' | 'replace') => {
+      try {
+        const params = new URLSearchParams();
+        params.set('character', characterId);
+        navigate(
+          {
+            pathname: ROUTES.conversation,
+            search: `?${params.toString()}`,
+          },
+          { replace: mode === 'replace' },
+        );
+      } catch (error) {
+        console.warn('Failed to update character query parameter:', error);
+      }
+    },
+    [navigate],
+  );
+
+  const navigateToView = useCallback(
+    (view: ViewRoute, options?: { replace?: boolean }) => {
+      const path = ROUTES[view];
+      if (location.pathname === path && !options?.replace) {
+        return;
+      }
+      navigate(path, { replace: options?.replace });
+    },
+    [location.pathname, navigate],
+  );
 
   const requireAuth = useCallback(
     (message?: string) => {
@@ -212,7 +262,7 @@ const App: React.FC = () => {
       }
 
       if (!characterToSelect) {
-        const urlParams = new URLSearchParams(window.location.search);
+        const urlParams = new URLSearchParams(location.search);
         const characterId = urlParams.get('character');
         if (characterId) {
           characterToSelect = allCharacters.find((c) => c.id === characterId) ?? null;
@@ -221,8 +271,9 @@ const App: React.FC = () => {
 
       if (characterToSelect) {
         setSelectedCharacter(characterToSelect);
-        setView('conversation');
-        updateCharacterQueryParam(characterToSelect.id, 'replace');
+        updateCharacterRoute(characterToSelect.id, 'replace');
+      } else if (currentView === 'conversation') {
+        navigateToView('selector', { replace: true });
       }
     }
 
@@ -231,20 +282,24 @@ const App: React.FC = () => {
     customCharacters,
     customQuests,
     isAppLoading,
+    currentView,
+    location.search,
     selectedCharacter,
     syncQuestProgress,
     userData.activeQuestId,
+    navigateToView,
+    updateCharacterRoute,
   ]);
 
   useEffect(() => {
     if (!isAuthenticated) {
       setSelectedCharacter(null);
       setActiveQuest(null);
-      setView('selector');
       setResumeConversationId(null);
       setEnvironmentImageUrl(null);
+      navigateToView('selector', { replace: true });
     }
-  }, [isAuthenticated]);
+  }, [isAuthenticated, navigateToView]);
 
   // ---- Navigation helpers ----
 
@@ -253,14 +308,13 @@ const App: React.FC = () => {
       return;
     }
     setSelectedCharacter(character);
-    setView('conversation');
     setActiveQuest(null); // clear any quest when directly picking a character
     updateData((prev) => ({
       ...prev,
       activeQuestId: null,
     }));
     setResumeConversationId(null);
-    updateCharacterQueryParam(character.id, 'push');
+    updateCharacterRoute(character.id, 'push');
   };
 
   const handleSelectQuest = (quest: Quest) => {
@@ -276,9 +330,8 @@ const App: React.FC = () => {
         activeQuestId: quest.id,
       }));
       setSelectedCharacter(characterForQuest);
-      setView('conversation');
       setResumeConversationId(null);
-      updateCharacterQueryParam(characterForQuest.id, 'push');
+      updateCharacterRoute(characterForQuest.id, 'push');
     } else {
       console.error(`Character with ID ${quest.characterId} not found for the selected quest.`);
     }
@@ -339,9 +392,7 @@ const App: React.FC = () => {
       }));
     }
 
-    setView('conversation');
-
-    updateCharacterQueryParam(characterToResume.id, 'push');
+    updateCharacterRoute(characterToResume.id, 'push');
   };
 
   const handleConversationUpdate = useCallback(
@@ -384,10 +435,9 @@ const App: React.FC = () => {
       activeQuestId: null,
     }));
     setSelectedCharacter(newCharacter);
-    setView('conversation');
     setActiveQuest(null);
     setResumeConversationId(null);
-    updateCharacterQueryParam(newCharacter.id, 'push');
+    updateCharacterRoute(newCharacter.id, 'push');
   };
 
   const handleDeleteCharacter = (characterId: string) => {
@@ -470,15 +520,15 @@ const App: React.FC = () => {
       return;
     }
     setQuestCreatorPrefill(goal ?? null);
-    setView('questCreator');
+    navigateToView('questCreator');
   };
 
   const openCharacterCreatorView = useCallback(() => {
     if (!requireAuth('Sign in to create a new ancient.')) {
       return;
     }
-    setView('creator');
-  }, [requireAuth]);
+    navigateToView('creator');
+  }, [navigateToView, requireAuth]);
 
   const handleCreateQuestFromNextSteps = (steps: string[], questTitle?: string) => {
     if (!requireAuth('Sign in to turn feedback into new quests.')) {
@@ -522,22 +572,21 @@ const App: React.FC = () => {
     });
     setActiveQuest(quest);
     setSelectedCharacter(mentor);
-    setView('conversation');
     setResumeConversationId(null);
-    updateCharacterQueryParam(mentor.id, 'push');
+    updateCharacterRoute(mentor.id, 'push');
   };
 
   const handleQuizExit = () => {
     setQuizQuest(null);
     setQuizAssessment(null);
-    setView('selector');
+    navigateToView('selector');
   };
 
   const handleQuizComplete = (result: QuizResult) => {
     if (!requireAuth('Sign in to track quiz results.')) {
       setQuizQuest(null);
       setQuizAssessment(null);
-      setView('selector');
+      navigateToView('selector');
       return;
     }
     const quest = quizQuest;
@@ -561,14 +610,14 @@ const App: React.FC = () => {
     });
     setQuizQuest(null);
     setQuizAssessment(null);
-    setView('selector');
+    navigateToView('selector');
   };
 
   const launchQuizForQuest = (questId: string) => {
     const quest = allQuests.find((q) => q.id === questId);
     if (!quest) {
       console.warn(`Unable to launch quiz: quest with ID ${questId} not found.`);
-      setView('selector');
+      navigateToView('selector');
       return;
     }
 
@@ -578,11 +627,11 @@ const App: React.FC = () => {
     } else {
       setQuizAssessment(null);
     }
-    setView('quiz');
+    navigateToView('quiz');
   };
 
   // ---- End conversation: summarize & (if quest) evaluate mastery ----
-    const handleEndConversation = async (transcript: ConversationTurn[], sessionId: string) => {
+  const handleEndConversation = async (transcript: ConversationTurn[], sessionId: string) => {
     if (!selectedCharacter) return;
     if (!requireAuth('Sign in to save your conversation.')) {
       return;
@@ -761,12 +810,12 @@ const App: React.FC = () => {
         if (questAssessment.passed && questForSession) {
           setQuizQuest(questForSession);
           setQuizAssessment(questAssessment);
-          setView('quiz');
+          navigateToView('quiz');
         } else {
-          setView('selector');
+          navigateToView('selector');
         }
       } else {
-        setView('selector');
+        navigateToView('selector');
       }
       setSelectedCharacter(null);
       setEnvironmentImageUrl(null);
@@ -776,14 +825,13 @@ const App: React.FC = () => {
         activeQuestId: null,
       }));
       setResumeConversationId(null);
-      window.history.pushState({}, '', window.location.pathname);
     }
   };
 
   // ---- View switcher ----
 
   const renderContent = () => {
-    switch (view) {
+    switch (currentView) {
       case 'conversation':
         return selectedCharacter ? (
           <ConversationView
@@ -801,7 +849,7 @@ const App: React.FC = () => {
       case 'history':
         return (
           <HistoryView
-            onBack={() => setView('selector')}
+            onBack={() => navigateToView('selector')}
             onResumeConversation={handleResumeConversation}
             onCreateQuestFromNextSteps={handleCreateQuestFromNextSteps}
             history={conversationHistory}
@@ -809,12 +857,12 @@ const App: React.FC = () => {
           />
         );
       case 'creator':
-        return <CharacterCreator onCharacterCreated={handleCharacterCreated} onBack={() => setView('selector')} />;
+        return <CharacterCreator onCharacterCreated={handleCharacterCreated} onBack={() => navigateToView('selector')} />;
       case 'quests': {
         const allCharacters = [...customCharacters, ...CHARACTERS];
         return (
           <QuestsView
-            onBack={() => setView('selector')}
+            onBack={() => navigateToView('selector')}
             onSelectQuest={handleSelectQuest}
             quests={allQuests}
             characters={allCharacters}
@@ -830,7 +878,7 @@ const App: React.FC = () => {
         const allChars = [...customCharacters, ...CHARACTERS];
         const handleBack = () => {
           setQuestCreatorPrefill(null);
-          setView('selector');
+          navigateToView('selector');
         };
         const handleQuestReady = (quest: Quest, character: Character) => {
           setQuestCreatorPrefill(null);
@@ -867,7 +915,7 @@ const App: React.FC = () => {
             <p className="text-lg">Quiz unavailable. Returning to the hub…</p>
             <button
               type="button"
-              onClick={() => setView('selector')}
+              onClick={() => navigateToView('selector')}
               className="mt-4 inline-flex items-center rounded-md bg-amber-600 px-4 py-2 text-sm font-semibold text-black hover:bg-amber-500"
             >
               Go back
@@ -1203,29 +1251,29 @@ const App: React.FC = () => {
     if (!requireAuth('Sign in to review your past conversations.')) {
       return;
     }
-    setView('history');
-  }, [requireAuth]);
+    navigateToView('history');
+  }, [navigateToView, requireAuth]);
 
   const openQuestsView = useCallback(() => {
     if (!requireAuth('Sign in to manage your quests.')) {
       return;
     }
-    setView('quests');
-  }, [requireAuth]);
+    navigateToView('quests');
+  }, [navigateToView, requireAuth]);
 
   const openProfileView = useCallback(() => {
     if (!requireAuth('Sign in to view your explorer profile.')) {
       return;
     }
-    setView('profile');
-  }, [requireAuth]);
+    navigateToView('profile');
+  }, [navigateToView, requireAuth]);
 
   const openSettingsView = useCallback(() => {
     if (!requireAuth('Sign in to update your settings.')) {
       return;
     }
-    setView('settings');
-  }, [requireAuth]);
+    navigateToView('settings');
+  }, [navigateToView, requireAuth]);
 
   return (
     <div className="relative min-h-screen bg-[#1a1a1a]">
@@ -1282,7 +1330,7 @@ const App: React.FC = () => {
             onOpenProfile={openProfileView}
             onOpenSettings={openSettingsView}
             onOpenQuests={openQuestsView}
-            currentView={view}
+            currentView={currentView}
             isAuthenticated={isAuthenticated}
             userEmail={userEmail}
           />

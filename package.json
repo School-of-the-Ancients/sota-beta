@@ -13,7 +13,8 @@
     "@google/genai": "^1.22.0",
     "@supabase/supabase-js": "^2.58.0",
     "react": "^19.1.1",
-    "react-dom": "^19.1.1"
+    "react-dom": "^19.1.1",
+    "react-router-dom": "^6.30.1"
   },
   "devDependencies": {
     "@testing-library/jest-dom": "^6.9.1",
