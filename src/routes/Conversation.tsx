@@ -15,6 +15,7 @@ interface ConversationRouteProps {
   onEndConversation: (transcript: ConversationTurn[], sessionId: string) => Promise<void> | void;
   onHydrateFromParams: (characterId: string | null, resumeId: string | null) => void;
   isAppLoading: boolean;
+  apiKey: string | null;
 }
 
 const ConversationRoute: React.FC<ConversationRouteProps> = ({
@@ -29,6 +30,7 @@ const ConversationRoute: React.FC<ConversationRouteProps> = ({
   onEndConversation,
   onHydrateFromParams,
   isAppLoading,
+  apiKey,
 }) => {
   const [searchParams] = useSearchParams();
 
@@ -60,6 +62,7 @@ const ConversationRoute: React.FC<ConversationRouteProps> = ({
       resumeConversationId={resumeConversationId}
       conversationHistory={conversationHistory}
       onConversationUpdate={onConversationUpdate}
+      apiKey={apiKey}
     />
   );
 };

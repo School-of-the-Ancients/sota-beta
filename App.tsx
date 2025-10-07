@@ -33,7 +33,15 @@ const App: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { user, loading: authLoading, signOut } = useSupabaseAuth();
-  const { data: userData, loading: dataLoading, saving: dataSaving, updateData } = useUserData();
+  const {
+    data: userData,
+    loading: dataLoading,
+    saving: dataSaving,
+    updateData,
+    apiKey,
+    setApiKey,
+    apiKeyError,
+  } = useUserData();
 
   const [selectedCharacter, setSelectedCharacter] = useState<Character | null>(null);
   const [environmentImageUrl, setEnvironmentImageUrl] = useState<string | null>(null);
@@ -52,9 +60,9 @@ const App: React.FC = () => {
   const [quizAssessment, setQuizAssessment] = useState<QuestAssessment | null>(null);
   const [authPrompt, setAuthPrompt] = useState<string | null>(null);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
-  const [notificationsEnabled, setNotificationsEnabled] = useState(true);
-  const [autoSaveEnabled, setAutoSaveEnabled] = useState(true);
-  const [preferredTheme, setPreferredTheme] = useState<'system' | 'light' | 'dark'>('dark');
+  const [apiKeyDraft, setApiKeyDraft] = useState('');
+  const [apiKeyStatus, setApiKeyStatus] = useState<string | null>(null);
+  const [isApiKeyVisible, setIsApiKeyVisible] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   const customCharacters = userData.customCharacters;
@@ -107,12 +115,32 @@ const App: React.FC = () => {
     [isAuthenticated]
   );
 
+  const requireApiKey = useCallback(
+    (message?: string) => {
+      if (apiKey) {
+        return true;
+      }
+
+      const promptMessage =
+        message ?? 'Add your Gemini API key in Settings to unlock conversations and quest tools.';
+      window.alert(promptMessage);
+      navigate('/settings');
+      return false;
+    },
+    [apiKey, navigate]
+  );
+
   useEffect(() => {
     if (isAuthenticated) {
       setAuthPrompt(null);
       setIsAuthModalOpen(false);
     }
   }, [isAuthenticated]);
+
+  useEffect(() => {
+    setApiKeyDraft(apiKey ?? '');
+    setApiKeyStatus(null);
+  }, [apiKey]);
 
   const combinedCharacters = useMemo(() => [...customCharacters, ...CHARACTERS], [customCharacters]);
   const allQuests = useMemo(() => [...customQuests, ...QUESTS], [customQuests]);
@@ -604,6 +632,9 @@ const App: React.FC = () => {
     if (!requireAuth('Sign in to design new quests.')) {
       return;
     }
+    if (!requireApiKey('Add your Gemini API key in Settings to design new quests.')) {
+      return;
+    }
     setQuestCreatorPrefill(goal ?? null);
     navigate('/quest/new');
   };
@@ -615,8 +646,11 @@ const App: React.FC = () => {
     if (!requireAuth('Sign in to create a new ancient.')) {
       return;
     }
+    if (!requireApiKey('Add your Gemini API key in Settings to craft custom ancients.')) {
+      return;
+    }
     navigate('/character/new');
-  }, [ensureConversationComplete, navigate, requireAuth]);
+  }, [ensureConversationComplete, navigate, requireApiKey, requireAuth]);
 
   const handleCreateQuestFromNextSteps = (steps: string[], questTitle?: string) => {
     if (!ensureConversationComplete()) {
@@ -645,6 +679,9 @@ const App: React.FC = () => {
       return;
     }
     if (!requireAuth('Sign in to embark on your generated quest.')) {
+      return;
+    }
+    if (!requireApiKey('Add your Gemini API key in Settings to continue this generated quest.')) {
       return;
     }
     setQuestCreatorPrefill(null);
@@ -723,6 +760,48 @@ const App: React.FC = () => {
     navigate(links.quiz(questId));
   };
 
+  const handleApiKeySubmit = useCallback(
+    async (event?: React.FormEvent<HTMLFormElement>) => {
+      if (event) {
+        event.preventDefault();
+      }
+      if (!requireAuth('Sign in to store your API key.')) {
+        return;
+      }
+
+      try {
+        const trimmed = apiKeyDraft.trim();
+        setApiKeyStatus(trimmed ? 'Saving API key…' : 'Removing API key…');
+        await setApiKey(trimmed || null);
+        if (trimmed) {
+          setApiKeyStatus('API key saved securely.');
+        } else {
+          setApiKeyStatus('API key removed. Gemini features are disabled until you add a key.');
+        }
+      } catch (error) {
+        console.error('Failed to save API key', error);
+        setApiKeyStatus('Failed to save API key. Please try again.');
+      }
+    },
+    [apiKeyDraft, requireAuth, setApiKey]
+  );
+
+  const handleApiKeyClear = useCallback(async () => {
+    if (!requireAuth('Sign in to manage your API key.')) {
+      return;
+    }
+
+    try {
+      setApiKeyStatus('Removing API key…');
+      await setApiKey(null);
+      setApiKeyDraft('');
+      setApiKeyStatus('API key removed. Gemini features are disabled until you add a key.');
+    } catch (error) {
+      console.error('Failed to remove API key', error);
+      setApiKeyStatus('Failed to remove API key. Please try again.');
+    }
+  }, [requireAuth, setApiKey]);
+
   const handleEndConversation = async (transcript: ConversationTurn[], sessionId: string) => {
     if (!selectedCharacter) return;
     if (!requireAuth('Sign in to save your conversation.')) {
@@ -757,51 +836,54 @@ const App: React.FC = () => {
       };
 
       if (questForSession) {
-        const ai = new GoogleGenAI({ apiKey: process.env.API_KEY ?? '' });
-        const questTranscriptText = transcript
-          .map((turn) => `${turn.speakerName || turn.speaker}: ${turn.text}`)
-          .join('\n');
+        if (apiKey) {
+          const ai = new GoogleGenAI({ apiKey });
+          const questTranscriptText = transcript
+            .map((turn) => `${turn.speakerName || turn.speaker}: ${turn.text}`)
+            .join('\n');
 
-        const evaluationPrompt = `You are a precise mentor at the School of the Ancients. Assess whether the learner has mastered the quest goal. Respond as JSON with:\n{\n  \\"passed\\": boolean, // true if the learner clearly demonstrates mastery, false otherwise\n  \\"summary\\": string, // 2-3 sentence summary of the learner's performance\n  \\"evidence\\": string[], // key quotes or reasoning that show understanding\n  \\"improvements\\": string[], // actionable suggestions if the student has gaps (empty if passed)\n}\n\nFocus only on the student's contributions. Mark passed=true only if the learner clearly articulates key ideas from the objective.`;
+          const evaluationPrompt = `You are a precise mentor at the School of the Ancients. Assess whether the learner has mastered the quest goal. Respond as JSON with:\n{\n  \\"passed\\": boolean, // true if the learner clearly demonstrates mastery, false otherwise\n  \\"summary\\": string, // 2-3 sentence summary of the learner's performance\n  \\"evidence\\": string[], // key quotes or reasoning that show understanding\n  \\"improvements\\": string[], // actionable suggestions if the student has gaps (empty if passed)\n}\n\nFocus only on the student's contributions. Mark passed=true only if the learner clearly articulates key ideas from the objective.`;
 
-        const evaluationResponse = await ai.models.generateContent({
-          model: 'gemini-2.5-flash',
-          contents: evaluationPrompt + `\n\nTranscript:\n${questTranscriptText}`,
-          config: {
-            responseMimeType: 'application/json',
-            responseSchema: {
-              type: Type.OBJECT,
-              properties: {
-                passed: { type: Type.BOOLEAN },
-                summary: { type: Type.STRING },
-                evidence: { type: Type.ARRAY, items: { type: Type.STRING } },
-                improvements: { type: Type.ARRAY, items: { type: Type.STRING } },
+          const evaluationResponse = await ai.models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: evaluationPrompt + `\n\nTranscript:\n${questTranscriptText}`,
+            config: {
+              responseMimeType: 'application/json',
+              responseSchema: {
+                type: Type.OBJECT,
+                properties: {
+                  passed: { type: Type.BOOLEAN },
+                  summary: { type: Type.STRING },
+                  evidence: { type: Type.ARRAY, items: { type: Type.STRING } },
+                  improvements: { type: Type.ARRAY, items: { type: Type.STRING } },
+                },
+                required: ['passed', 'summary', 'evidence', 'improvements'],
               },
-              required: ['passed', 'summary', 'evidence', 'improvements'],
             },
-          },
-        });
+          });
 
-        const evaluation = JSON.parse(evaluationResponse.text);
-        questAssessment = {
-          questId: questForSession.id,
-          questTitle: questForSession.title,
-          passed: Boolean(evaluation.passed),
-          summary: evaluation.summary || '',
-          evidence: Array.isArray(evaluation.evidence) ? evaluation.evidence : [],
-          improvements: Array.isArray(evaluation.improvements) ? evaluation.improvements : [],
-        };
+          const evaluation = JSON.parse(evaluationResponse.text);
+          questAssessment = {
+            questId: questForSession.id,
+            questTitle: questForSession.title,
+            passed: Boolean(evaluation.passed),
+            summary: evaluation.summary || '',
+            evidence: Array.isArray(evaluation.evidence) ? evaluation.evidence : [],
+            improvements: Array.isArray(evaluation.improvements) ? evaluation.improvements : [],
+          };
 
-        updatedConversation = {
-          ...updatedConversation,
-          questAssessment,
-        };
-      } else if (questForSession) {
-        updatedConversation = {
-          ...updatedConversation,
-          questId: questForSession.id,
-          questTitle: questForSession.title,
-        };
+          updatedConversation = {
+            ...updatedConversation,
+            questAssessment,
+          };
+        } else {
+          window.alert('Add your Gemini API key in Settings to receive automated quest feedback.');
+          updatedConversation = {
+            ...updatedConversation,
+            questId: questForSession.id,
+            questTitle: questForSession.title,
+          };
+        }
       }
 
       updateData((prev) => {
@@ -1140,6 +1222,7 @@ const App: React.FC = () => {
                         customCharacters: [newChar, ...prev.customCharacters],
                       }));
                     }}
+                    apiKey={apiKey}
                   />
                 }
               />
@@ -1151,6 +1234,7 @@ const App: React.FC = () => {
                     assessment={quizAssessment}
                     onExit={handleQuizExit}
                     onComplete={handleQuizComplete}
+                    apiKey={apiKey}
                   />
                 }
               />
@@ -1169,6 +1253,7 @@ const App: React.FC = () => {
                     onEndConversation={handleEndConversation}
                     onHydrateFromParams={hydrateConversationFromParams}
                     isAppLoading={isAppLoading}
+                    apiKey={apiKey}
                   />
                 }
               />
@@ -1190,6 +1275,7 @@ const App: React.FC = () => {
                   <CharacterCreatorRoute
                     onCharacterCreated={handleCharacterCreated}
                     onBack={() => navigate('/')}
+                    apiKey={apiKey}
                   />
                 }
               />
@@ -1256,61 +1342,91 @@ const App: React.FC = () => {
                     </div>
                     {isAuthenticated ? (
                       <div className="space-y-5">
-                        <label className="flex items-center justify-between gap-4 bg-gray-800/50 border border-gray-700 rounded-xl p-4">
-                          <div>
-                            <span className="text-sm font-semibold text-gray-200">Journey Notifications</span>
-                            <p className="text-xs text-gray-400">Receive alerts when a quest assessment is ready.</p>
+                        <form
+                          onSubmit={handleApiKeySubmit}
+                          className="bg-gray-800/50 border border-gray-700 rounded-xl p-5 space-y-5"
+                        >
+                          <div className="space-y-2">
+                            <label htmlFor="api-key-input" className="text-sm font-semibold text-gray-200">
+                              Gemini API Key
+                            </label>
+                            <p className="text-xs text-gray-400">
+                              Paste the key from Google AI Studio. It is encrypted locally before syncing to Supabase so only
+                              your devices can read it.
+                            </p>
+                            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                              <input
+                                id="api-key-input"
+                                type={isApiKeyVisible ? 'text' : 'password'}
+                                value={apiKeyDraft}
+                                onChange={(event) => setApiKeyDraft(event.target.value)}
+                                className="flex-1 bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-200 focus:border-amber-400 focus:ring-amber-400"
+                                placeholder="ai-xxxxxxxxxxxxxxxx"
+                                autoComplete="off"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => setIsApiKeyVisible((prev) => !prev)}
+                                className="inline-flex items-center justify-center rounded-lg border border-gray-600 px-3 py-2 text-xs font-semibold text-gray-200 transition-colors hover:border-amber-400 hover:text-amber-300"
+                              >
+                                {isApiKeyVisible ? 'Hide' : 'Show'}
+                              </button>
+                            </div>
                           </div>
-                          <input
-                            type="checkbox"
-                            className="h-5 w-5 rounded border-gray-600 bg-gray-900 text-amber-500 focus:ring-amber-400"
-                            checked={notificationsEnabled}
-                            onChange={(event) => setNotificationsEnabled(event.target.checked)}
-                          />
-                        </label>
-
-                        <label className="flex items-center justify-between gap-4 bg-gray-800/50 border border-gray-700 rounded-xl p-4">
-                          <div>
-                            <span className="text-sm font-semibold text-gray-200">Auto-save Transcripts</span>
-                            <p className="text-xs text-gray-400">Keep every exchange stored in your history automatically.</p>
+                          {apiKeyError ? (
+                            <div className="rounded-lg border border-red-500/40 bg-red-500/10 px-3 py-2 text-xs text-red-200">
+                              {apiKeyError}
+                            </div>
+                          ) : (
+                            <p className={`text-xs ${apiKeyStatus ? 'text-emerald-300' : 'text-gray-400'}`}>
+                              {apiKeyStatus ||
+                                (apiKey
+                                  ? 'API key stored securely. Update it any time to rotate credentials.'
+                                  : 'No API key stored yet. Gemini-powered tools will stay disabled until you add one.')}
+                            </p>
+                          )}
+                          {userData.apiKeyUpdatedAt ? (
+                            <p className="text-xs text-gray-500">
+                              Last updated {new Date(userData.apiKeyUpdatedAt).toLocaleString()}.
+                            </p>
+                          ) : null}
+                          <div className="flex flex-wrap gap-3">
+                            <button
+                              type="submit"
+                              className="inline-flex items-center justify-center rounded-lg bg-amber-500 px-4 py-2 text-sm font-semibold text-gray-900 shadow hover:bg-amber-400 focus:outline-none focus:ring-2 focus:ring-amber-400 disabled:cursor-not-allowed disabled:opacity-60"
+                              disabled={isSaving}
+                            >
+                              Save API Key
+                            </button>
+                            {apiKey ? (
+                              <button
+                                type="button"
+                                onClick={handleApiKeyClear}
+                                className="inline-flex items-center justify-center rounded-lg border border-red-500/60 px-4 py-2 text-sm font-semibold text-red-300 transition-colors hover:border-red-400 hover:text-red-200 focus:outline-none focus:ring-2 focus:ring-red-400/60 disabled:cursor-not-allowed disabled:opacity-60"
+                                disabled={isSaving}
+                              >
+                                Remove Key
+                              </button>
+                            ) : null}
                           </div>
-                          <input
-                            type="checkbox"
-                            className="h-5 w-5 rounded border-gray-600 bg-gray-900 text-amber-500 focus:ring-amber-400"
-                            checked={autoSaveEnabled}
-                            onChange={(event) => setAutoSaveEnabled(event.target.checked)}
-                          />
-                        </label>
+                        </form>
 
-                        <div className="bg-gray-800/50 border border-gray-700 rounded-xl p-4 space-y-2">
-                          <label htmlFor="theme-select" className="text-sm font-semibold text-gray-200">
-                            Interface Theme
-                          </label>
+                        <div className="bg-gray-800/50 border border-gray-700 rounded-xl p-5 space-y-3">
+                          <h3 className="text-sm font-semibold text-gray-200">Why store it here?</h3>
                           <p className="text-xs text-gray-400">
-                            Choose the ambiance that best matches your study ritual.
+                            Your key never leaves your device unencrypted. We generate a device-specific secret to lock the key
+                            before syncing it to Supabase, so even our database only sees ciphertext.
                           </p>
-                          <select
-                            id="theme-select"
-                            className="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-200 focus:border-amber-400 focus:ring-amber-400"
-                            value={preferredTheme}
-                            onChange={(event) => setPreferredTheme(event.target.value as 'system' | 'light' | 'dark')}
-                          >
-                            <option value="dark">Dark</option>
-                            <option value="light">Light</option>
-                            <option value="system">System</option>
-                          </select>
+                          <p className="text-xs text-gray-500">
+                            Rotate the key regularly and revoke it immediately if you suspect it has been exposed.
+                          </p>
                         </div>
-
-                        <p className="text-xs text-gray-400">
-                          Settings are stored locally for now. Cloud sync will arrive in a future update of School of the
-                          Ancients.
-                        </p>
                       </div>
                     ) : (
                       <div className="bg-gray-800/60 border border-gray-700 rounded-xl p-6 text-center">
                         <p className="text-lg text-amber-200 font-semibold mb-2">Sign in to tailor your experience.</p>
                         <p className="text-sm text-gray-300">
-                          Manage notifications, transcripts, and appearance preferences once you&apos;re authenticated.
+                          Securely store your Gemini API key and personalize future tools once you&apos;re authenticated.
                         </p>
                       </div>
                     )}

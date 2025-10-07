@@ -127,5 +127,7 @@ export interface UserData {
   completedQuestIds: string[];
   activeQuestId: string | null;
   lastQuizResult: QuizResult | null;
+  encryptedApiKey: string | null;
+  apiKeyUpdatedAt: string | null;
   migratedAt?: string | null;
 }

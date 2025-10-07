@@ -2,15 +2,19 @@ import React, { createContext, useCallback, useContext, useEffect, useMemo, useR
 import type { UserData } from '../types';
 import { useSupabaseAuth } from './useSupabaseAuth';
 import { DEFAULT_USER_DATA, fetchUserData, saveUserData } from '../supabase/userData';
+import { decryptForUser, encryptForUser } from '../supabase/encryption';
 
 interface UserDataContextValue {
   data: UserData;
   loading: boolean;
   saving: boolean;
   error: string | null;
+  apiKey: string | null;
+  apiKeyError: string | null;
   updateData: (updater: (previous: UserData) => UserData) => void;
   replaceData: (next: UserData) => void;
   refresh: () => Promise<void>;
+  setApiKey: (value: string | null) => Promise<void>;
 }
 
 const UserDataContext = createContext<UserDataContextValue | undefined>(undefined);
@@ -99,6 +103,8 @@ export const UserDataProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [apiKey, setApiKeyState] = useState<string | null>(null);
+  const [apiKeyError, setApiKeyError] = useState<string | null>(null);
   const hasMigratedRef = useRef(false);
   const pendingPersistRef = useRef<UserData | null>(null);
   const persistTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -200,6 +206,8 @@ export const UserDataProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const refresh = useCallback(async () => {
     if (!user) {
       setData({ ...DEFAULT_USER_DATA });
+      setApiKeyState(null);
+      setApiKeyError(null);
       setLoading(false);
       return;
     }
@@ -209,11 +217,26 @@ export const UserDataProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       const remote = await fetchUserData(user.id);
       const withMigration = await migrateFromLocalStorage(remote);
       setData(withMigration);
+      if (withMigration.encryptedApiKey) {
+        const decrypted = await decryptForUser(user.id, withMigration.encryptedApiKey);
+        if (decrypted) {
+          setApiKeyState(decrypted);
+          setApiKeyError(null);
+        } else {
+          setApiKeyState(null);
+          setApiKeyError('Failed to decrypt your API key. Please re-enter it.');
+        }
+      } else {
+        setApiKeyState(null);
+        setApiKeyError(null);
+      }
       setError(null);
     } catch (err) {
       console.error('Failed to load user data from Supabase', err);
       setError(err instanceof Error ? err.message : 'Failed to load user data');
       setData({ ...DEFAULT_USER_DATA });
+      setApiKeyState(null);
+      setApiKeyError(null);
     } finally {
       setLoading(false);
     }
@@ -243,17 +266,81 @@ export const UserDataProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     [schedulePersist]
   );
 
+  const setApiKey = useCallback(
+    async (next: string | null) => {
+      if (!user) {
+        setApiKeyState(null);
+        setApiKeyError('Sign in to store your API key securely.');
+        return;
+      }
+
+      if (!next) {
+        setApiKeyState(null);
+        setApiKeyError(null);
+        setData((prev) => {
+          const nextData = {
+            ...prev,
+            encryptedApiKey: null,
+            apiKeyUpdatedAt: null,
+          };
+          schedulePersist(nextData);
+          return nextData;
+        });
+        return;
+      }
+
+      try {
+        const trimmed = next.trim();
+        if (!trimmed) {
+          setApiKeyState(null);
+          setApiKeyError(null);
+          setData((prev) => {
+            const nextData = {
+              ...prev,
+              encryptedApiKey: null,
+              apiKeyUpdatedAt: null,
+            };
+            schedulePersist(nextData);
+            return nextData;
+          });
+          return;
+        }
+
+        const encrypted = await encryptForUser(user.id, trimmed);
+        setApiKeyState(trimmed);
+        setApiKeyError(null);
+        setData((prev) => {
+          const nextData = {
+            ...prev,
+            encryptedApiKey: encrypted,
+            apiKeyUpdatedAt: new Date().toISOString(),
+          };
+          schedulePersist(nextData);
+          return nextData;
+        });
+      } catch (err) {
+        console.error('Failed to encrypt API key', err);
+        setApiKeyError(err instanceof Error ? err.message : 'Failed to save API key');
+        throw err;
+      }
+    },
+    [schedulePersist, user]
+  );
+
   const value = useMemo<UserDataContextValue>(
     () => ({
       data,
       loading,
       saving,
       error,
+      apiKey,
+      apiKeyError,
       updateData,
       replaceData,
       refresh,
+      setApiKey,
     }),
-    [data, error, loading, replaceData, saving, updateData, refresh]
+    [apiKey, apiKeyError, data, error, loading, replaceData, saving, setApiKey, updateData, refresh]
   );
 
   useEffect(() => {

@@ -109,10 +109,8 @@ School of the Ancients is a modern web application that pairs immersive visuals 
    ```bash
    npm install
    ```
-3. Create a `.env` file in the project root and add your Gemini credentials:
-   ```bash
-   GEMINI_API_KEY=your_api_key_here
-   ```
+3. Generate a Gemini API key in [Google AI Studio](https://aistudio.google.com/app/apikey) and keep it handy. After you sign in
+   to the app, open **Settings → Gemini API Key** and paste it there—the value is encrypted locally before syncing to Supabase.
 
 4. Configure Supabase authentication and persistence by adding the following Vite environment variables to `.env`:
    ```bash
@@ -157,7 +155,6 @@ Deploy the contents of `dist/` to your static hosting platform of choice.
 
 ## Development Tips
 
-- Vite exposes `process.env.API_KEY` and `process.env.GEMINI_API_KEY` based on the `GEMINI_API_KEY` entry in your `.env` file. Be sure not to commit this file.
 - Shared UI components live in `components/`, while feature views are registered in `App.tsx`.
 - Hooks such as `useGeminiLive` encapsulate audio capture, streaming, and playback logic.
 - Tailwind utility classes handle layout; extend the Tailwind config before introducing custom CSS.
@@ -172,7 +169,7 @@ Deploy the contents of `dist/` to your static hosting platform of choice.
 
 ## Troubleshooting
 
-- **"API_KEY not set" errors**: Ensure your `.env` file is present and you restarted `npm run dev` after adding it.
+- **No Gemini responses?** Make sure you’ve added your Gemini API key under **Settings → Gemini API Key** after signing in.
 - **Microphone permissions**: Clear browser permissions if you accidentally deny access; audio capture is required for real-time chat.
 - **Slow or missing visuals**: Imagen requests can take a few seconds. Watch the developer console for network errors if images do not appear.
 

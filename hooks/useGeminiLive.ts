@@ -120,6 +120,7 @@ const changeEnvironmentFunctionDeclaration: FunctionDeclaration = {
   };
 
 export const useGeminiLive = (
+    apiKey: string | null,
     systemInstruction: string,
     voiceName: string,
     voiceAccent?: string,
@@ -306,14 +307,14 @@ export const useGeminiLive = (
 
         handledFunctionCallIdsRef.current.clear();
 
-        if (!process.env.API_KEY) {
-            console.error("API_KEY environment variable not set.");
+        if (!apiKey) {
+            console.error("Gemini API key not provided.");
             setConnectionState(ConnectionState.ERROR);
             return;
         }
 
         try {
-            const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+            const ai = new GoogleGenAI({ apiKey });
 
             const sanitizedAccent = voiceAccent?.trim();
             let baseInstruction = systemInstruction.trim();
@@ -598,7 +599,7 @@ export const useGeminiLive = (
             console.error('Failed to connect to Gemini Live:', error);
             setConnectionState(ConnectionState.ERROR);
         }
-    }, [systemInstruction, voiceName, voiceAccent, activeQuest, disconnect]);
+    }, [apiKey, systemInstruction, voiceName, voiceAccent, activeQuest, disconnect]);
 
     useEffect(() => {
         connect();

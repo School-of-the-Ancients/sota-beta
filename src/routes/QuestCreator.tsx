@@ -8,6 +8,7 @@ interface QuestCreatorRouteProps {
   onBack: () => void;
   onQuestReady: (quest: Quest, character: Character) => void;
   onCharacterCreated: (character: Character) => void;
+  apiKey: string | null;
 }
 
 const QuestCreatorRoute: React.FC<QuestCreatorRouteProps> = ({
@@ -16,6 +17,7 @@ const QuestCreatorRoute: React.FC<QuestCreatorRouteProps> = ({
   onBack,
   onQuestReady,
   onCharacterCreated,
+  apiKey,
 }) => {
   return (
     <QuestCreator
@@ -24,6 +26,7 @@ const QuestCreatorRoute: React.FC<QuestCreatorRouteProps> = ({
       onQuestReady={onQuestReady}
       onCharacterCreated={onCharacterCreated}
       initialGoal={initialGoal ?? undefined}
+      apiKey={apiKey}
     />
   );
 };

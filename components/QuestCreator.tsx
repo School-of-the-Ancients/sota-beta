@@ -19,6 +19,7 @@ interface QuestCreatorProps {
   onQuestReady: (quest: Quest, character: Character) => void;
   onCharacterCreated: (character: Character) => void;
   initialGoal?: string;
+  apiKey: string | null;
 }
 
 /** Pretty, branded SVG fallback if portrait generation fails */
@@ -54,12 +55,15 @@ const QuestCreator: React.FC<QuestCreatorProps> = ({
   onQuestReady,
   onCharacterCreated,
   initialGoal,
+  apiKey,
 }) => {
   const [goal, setGoal] = useState(initialGoal ?? '');
   const [prefs, setPrefs] = useState({ difficulty: 'auto', style: 'auto', time: 'auto' });
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState('');
   const [error, setError] = useState<string | null>(null);
+
+  const isApiKeyMissing = !apiKey;
 
   useEffect(() => {
     setGoal(initialGoal ?? '');
@@ -72,8 +76,10 @@ const QuestCreator: React.FC<QuestCreatorProps> = ({
 
   /** Persona generator reused from your character creator, with a SAFE portrait step */
   const createPersonaFor = async (name: string): Promise<Character> => {
-    if (!process.env.API_KEY) throw new Error('API_KEY not set.');
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    if (!apiKey) {
+      throw new Error('Add your Gemini API key to create new mentors.');
+    }
+    const ai = new GoogleGenAI({ apiKey });
 
     const availableAmbienceTags = AMBIENCE_LIBRARY.map(a => a.tag).join(', ');
     const voiceOptions = AVAILABLE_VOICES.map(
@@ -174,8 +180,10 @@ const QuestCreator: React.FC<QuestCreatorProps> = ({
   };
 
   const ensureMeaningfulGoal = async (cleanGoal: string) => {
-    if (!process.env.API_KEY) throw new Error('API_KEY not set.');
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    if (!apiKey) {
+      throw new Error('Add your Gemini API key to design quests.');
+    }
+    const ai = new GoogleGenAI({ apiKey });
 
     const validationPrompt = `You are the Gatekeeper for a learning quest generator. Decide if the user's goal is specific, meaningful, and actionable. If the text is gibberish, a single repeated word, or otherwise not a legitimate learning objective, reject it.\n\nReturn JSON with { "meaningful": boolean, "reason": string }. Use meaningful=false for gibberish, nonsense, or empty goals.`;
 
@@ -244,14 +252,18 @@ const QuestCreator: React.FC<QuestCreatorProps> = ({
       return;
     }
 
+    if (!apiKey) {
+      setError('Add your Gemini API key in Settings to generate quests.');
+      return;
+    }
+
     try {
       setLoading(true);
       setMsg('Designing your quest…');
 
       await ensureMeaningfulGoal(clean);
 
-      if (!process.env.API_KEY) throw new Error('API_KEY not set.');
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+      const ai = new GoogleGenAI({ apiKey });
 
       const draftPrompt = `You are the Quest Architect. Convert this learner goal into a concise quest and pick the most appropriate historical mentor.
 
@@ -444,9 +456,16 @@ Return JSON with:
           </div>
         </div>
 
+        {!apiKey && (
+          <div className="mb-4 bg-amber-900/40 border border-amber-600/60 text-amber-200 text-sm px-4 py-3 rounded-lg">
+            Add your Gemini API key in Settings to enable quest generation.
+          </div>
+        )}
+
         <button
           onClick={handleCreate}
-          className="w-full bg-amber-600 hover:bg-amber-500 text-black font-bold py-3 px-6 rounded-lg transition-colors text-lg"
+          className="w-full bg-amber-600 hover:bg-amber-500 text-black font-bold py-3 px-6 rounded-lg transition-colors text-lg disabled:cursor-not-allowed disabled:opacity-60"
+          disabled={loading || isApiKeyMissing}
         >
           Create Quest
         </button>

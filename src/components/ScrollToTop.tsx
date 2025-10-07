@@ -14,12 +14,22 @@ const ScrollToTop: React.FC = () => {
     ) as HTMLElement | null;
 
     if (scrollContainer) {
-      scrollContainer.scrollTo({ top: 0, behavior: 'auto' });
-      scrollContainer.scrollTop = 0;
+      if (typeof scrollContainer.scrollTo === 'function') {
+        scrollContainer.scrollTo({ top: 0, behavior: 'auto' });
+      } else {
+        scrollContainer.scrollTop = 0;
+      }
       return;
     }
 
-    window.scrollTo({ top: 0, behavior: 'auto' });
+    if (typeof window.scrollTo === 'function') {
+      window.scrollTo({ top: 0, behavior: 'auto' });
+      return;
+    }
+
+    if (document?.documentElement) {
+      document.documentElement.scrollTop = 0;
+    }
   }, [pathname]);
 
   return null;

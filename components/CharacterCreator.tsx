@@ -8,6 +8,7 @@ import DiceIcon from './icons/DiceIcon';
 interface CharacterCreatorProps {
   onCharacterCreated: (character: Character) => void;
   onBack: () => void;
+  apiKey: string | null;
 }
 
 /** Pretty, branded SVG fallback if portrait generation fails */
@@ -37,7 +38,7 @@ function makeFallbackAvatar(name: string, title?: string) {
   return `data:image/svg+xml;charset=utf-8,${svg}`;
 }
 
-const CharacterCreator: React.FC<CharacterCreatorProps> = ({ onCharacterCreated, onBack }) => {
+const CharacterCreator: React.FC<CharacterCreatorProps> = ({ onCharacterCreated, onBack, apiKey }) => {
   const [name, setName] = useState('');
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState('');
@@ -45,6 +46,7 @@ const CharacterCreator: React.FC<CharacterCreatorProps> = ({ onCharacterCreated,
   const [verificationSummary, setVerificationSummary] = useState<string | null>(null);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const suggestionsRef = useRef<HTMLDivElement | null>(null);
+  const canUseGemini = Boolean(apiKey);
 
   const filteredSuggestions = useMemo(() => {
     const query = name.trim().toLowerCase();
@@ -112,8 +114,14 @@ If you are not at least 80% confident in their historicity, set verified to fals
       setLoading(true);
       setMsg('Verifying historical figure…');
 
-      if (!process.env.API_KEY) throw new Error('API_KEY not set.');
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+      if (!apiKey) {
+        setError('Add your Gemini API key in Settings to craft new ancients.');
+        setLoading(false);
+        setMsg('');
+        return;
+      }
+
+      const ai = new GoogleGenAI({ apiKey });
 
       const verification = await verifyHistoricalFigure(ai, clean);
 
@@ -263,6 +271,12 @@ If you are not at least 80% confident in their historicity, set verified to fals
           </div>
         )}
 
+        {!canUseGemini && (
+          <div className="bg-amber-900/40 border border-amber-700 text-amber-200 text-sm p-3 rounded-lg mb-4">
+            Add your Gemini API key in Settings to verify figures and generate portraits.
+          </div>
+        )}
+
         <label className="block text-sm font-medium text-gray-300 mb-2">Whom shall we invite to the academy?</label>
         <div className="relative mb-4" onFocus={() => setShowSuggestions(true)}>
           <input
@@ -316,7 +330,8 @@ If you are not at least 80% confident in their historicity, set verified to fals
 
         <button
           onClick={handleCreate}
-          className="w-full bg-amber-600 hover:bg-amber-500 text-black font-bold py-3 px-6 rounded-lg transition-colors text-lg"
+          className="w-full bg-amber-600 hover:bg-amber-500 text-black font-bold py-3 px-6 rounded-lg transition-colors text-lg disabled:opacity-60 disabled:cursor-not-allowed"
+          disabled={loading || !canUseGemini}
         >
           Create Ancient
         </button>

@@ -8,6 +8,8 @@ export const DEFAULT_USER_DATA: UserData = {
   completedQuestIds: [],
   activeQuestId: null,
   lastQuizResult: null,
+  encryptedApiKey: null,
+  apiKeyUpdatedAt: null,
   migratedAt: null,
 };
 

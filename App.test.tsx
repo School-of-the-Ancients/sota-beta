@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import App from './App';
 import { UserDataProvider } from './hooks/useUserData';
@@ -48,9 +48,8 @@ describe('App', () => {
     );
 
     // Wait for the app to finish loading data
-    await waitFor(() => {
-      expect(screen.getByText('School of the Ancients')).toBeInTheDocument();
-    });
+    const headings = await screen.findAllByText('School of the Ancients');
+    expect(headings.length).toBeGreaterThan(0);
   });
 
   it('renders the History view when navigating to /history', async () => {
@@ -62,9 +61,7 @@ describe('App', () => {
       </MemoryRouter>
     );
 
-    await waitFor(() => {
-      expect(screen.getByText('Conversation History')).toBeInTheDocument();
-    });
+    expect(await screen.findByText('Conversation History')).toBeInTheDocument();
   });
 
   it('renders the Quests view when navigating to /quests', async () => {
@@ -76,8 +73,6 @@ describe('App', () => {
       </MemoryRouter>
     );
 
-    await waitFor(() => {
-      expect(screen.getByText('Learning Quests')).toBeInTheDocument();
-    });
+    expect(await screen.findByText('Learning Quests')).toBeInTheDocument();
   });
 });
