@@ -35,7 +35,29 @@
 </head>
   <body class="bg-[#1a1a1a] text-white font-sans">
     <div id="root"></div>
+    <script>
+        (function restoreSpaLocation() {
+          const storageKey = 'sota-spa-redirect';
+          const redirectUrl = window.sessionStorage.getItem(storageKey);
+          if (!redirectUrl) {
+            return;
+          }
+
+          window.sessionStorage.removeItem(storageKey);
+        try {
+          const preservedUrl = new URL(redirectUrl, window.location.origin);
+          const targetPath = `${preservedUrl.pathname}${preservedUrl.search}${preservedUrl.hash}`;
+          const currentPath = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+
+          if (targetPath && targetPath !== currentPath) {
+            window.history.replaceState(null, '', targetPath);
+          }
+        } catch (error) {
+          console.error('Failed to restore preserved SPA location', error);
+        }
+      })();
+    </script>
     <script type="module" src="./index.tsx"></script>
-  <script type="module" src="/index.tsx"></script>
-</body>
+    <script type="module" src="/index.tsx"></script>
+  </body>
 </html>

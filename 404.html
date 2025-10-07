@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Redirecting...</title>
+    <script>
+      (function persistSpaLocation() {
+        if (window.top !== window.self) {
+          return;
+        }
+
+        var storageKey = 'sota-spa-redirect';
+        var redirectUrl = window.location.href;
+        try {
+          window.sessionStorage.setItem(storageKey, redirectUrl);
+        } catch (error) {
+          console.error('Failed to persist SPA location for redirect', error);
+        }
+
+        if (window.location.pathname !== '/') {
+          window.location.replace('/');
+        }
+      })();
+    </script>
+  </head>
+  <body></body>
+</html>
