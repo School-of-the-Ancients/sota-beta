@@ -1418,8 +1418,7 @@ const App: React.FC = () => {
                               Gemini API Key
                             </label>
                             <p className="text-xs text-gray-400 mt-1">
-                              Paste the key from Google AI Studio. It is encrypted locally before syncing to Supabase.
-                            
+                                                         
                             Need a key? Create one from{' '}
                             <a
                               href="https://aistudio.google.com/app/apikey"
