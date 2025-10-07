@@ -22,6 +22,7 @@ import QuestIcon from './components/icons/QuestIcon';
 import QuestCreator from './components/QuestCreator';
 import QuestQuiz from './components/QuestQuiz';
 import AuthModal from './components/AuthModal';
+import Sidebar from './components/Sidebar';
 
 import { CHARACTERS, QUESTS } from './constants';
 import { useSupabaseAuth } from './hooks/useSupabaseAuth';
@@ -80,6 +81,10 @@ const App: React.FC = () => {
   const isSaving = isSavingConversation || dataSaving;
   const isAuthenticated = Boolean(user);
   const isAppLoading = authLoading || dataLoading;
+  const recentConversations = useMemo(
+    () => conversationHistory.slice(0, 5),
+    [conversationHistory]
+  );
 
   const requireAuth = useCallback(
     (message?: string) => {
@@ -1079,6 +1084,20 @@ const App: React.FC = () => {
     setView('quests');
   }, [requireAuth]);
 
+  const handleOpenProfile = useCallback(() => {
+    if (!requireAuth('Sign in to view your profile.')) {
+      return;
+    }
+    window.alert('User profiles are coming soon. Stay tuned!');
+  }, [requireAuth]);
+
+  const handleOpenSettings = useCallback(() => {
+    if (!requireAuth('Sign in to adjust your settings.')) {
+      return;
+    }
+    window.alert('User settings are coming soon.');
+  }, [requireAuth]);
+
   return (
     <div className="relative min-h-screen bg-[#1a1a1a]">
       <AuthModal
@@ -1125,7 +1144,23 @@ const App: React.FC = () => {
           </div>
         </header>
 
-        <main className="max-w-7xl w-full mx-auto flex-grow flex flex-col">{renderContent()}</main>
+        <main className="max-w-7xl w-full mx-auto flex-grow flex flex-col lg:flex-row gap-8">
+          <section className="flex-1 space-y-8">
+            {renderContent()}
+          </section>
+          <Sidebar
+            isAuthenticated={isAuthenticated}
+            userEmail={userEmail}
+            onSignInClick={handleSignInClick}
+            onCreateAncient={openCharacterCreatorView}
+            onOpenHistory={openHistoryView}
+            onOpenQuests={openQuestsView}
+            onResumeConversation={handleResumeConversation}
+            onOpenProfile={handleOpenProfile}
+            onOpenSettings={handleOpenSettings}
+            recentConversations={recentConversations}
+          />
+        </main>
       </div>
     </div>
   );
