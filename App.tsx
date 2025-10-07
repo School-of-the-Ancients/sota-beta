@@ -1037,7 +1037,7 @@ const App: React.FC = () => {
                   </h1>
                   <p className="mt-3 text-base text-gray-400 sm:text-lg">Old world wisdom. New world classroom.</p>
                   <p className="mt-2 text-sm text-gray-500 sm:text-base">
-                    Select a historical guide, continue a quest, or review your mastery—now in a layout that feels at home on any screen.
+                    Select a historical guide, continue a quest, or review your mastery.
                   </p>
                 </div>
                 {renderAccountSection('sm:flex flex-col items-end gap-2 text-right', 'right')}
