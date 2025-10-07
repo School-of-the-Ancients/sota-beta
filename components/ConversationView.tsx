@@ -12,6 +12,7 @@ import ThinkingIcon from './icons/ThinkingIcon';
 import SendIcon from './icons/SendIcon';
 import MuteIcon from './icons/MuteIcon';
 import UnmuteIcon from './icons/UnmuteIcon';
+import { useApiKey } from '../hooks/useApiKey';
 
 interface ConversationViewProps {
   character: Character;
@@ -86,6 +87,7 @@ const ConversationView: React.FC<ConversationViewProps> = ({
   conversationHistory,
   onConversationUpdate,
 }) => {
+  const { apiKey } = useApiKey();
   const [transcript, setTranscript] = useState<ConversationTurn[]>([]);
   const [textInput, setTextInput] = useState('');
   const [dynamicSuggestions, setDynamicSuggestions] = useState<string[]>([]);
@@ -247,145 +249,202 @@ const ConversationView: React.FC<ConversationViewProps> = ({
     });
   }, [character.name]);
 
-  const handleEnvironmentChange = useCallback(async (description: string) => {
-    const environmentArtifactId = `env_${Date.now()}`;
-    
-    setTranscript(prev => [...prev, {
-      speaker: 'model',
-      speakerName: 'Matrix Operator',
-      text: `Loading Environment: ${description}`,
-      artifact: {
-        id: environmentArtifactId,
-        name: description,
-        imageUrl: '',
-        loading: true,
-      }
-    }]);
+  const handleEnvironmentChange = useCallback(
+    async (description: string) => {
+      const environmentArtifactId = `env_${Date.now()}`;
 
-    setIsGeneratingVisual(true);
-    setGenerationMessage(`Entering ${description}...`);
-    try {
-      if (!process.env.API_KEY) throw new Error("API_KEY not set.");
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-      
-      const imagePromise = ai.models.generateImages({
-        model: 'imagen-4.0-generate-001',
-        prompt: `A photorealistic, atmospheric, wide-angle background of: ${description}, depicted authentically for the era of ${character.name} (${character.timeframe}). Cinematic and dramatic lighting. The scene should be evocative and immersive, without people or text.`,
-        config: { numberOfImages: 1, outputMimeType: 'image/jpeg', aspectRatio: '16:9' },
-      });
+      setTranscript((prev) => [
+        ...prev,
+        {
+          speaker: 'model',
+          speakerName: 'Matrix Operator',
+          text: `Loading Environment: ${description}`,
+          artifact: {
+            id: environmentArtifactId,
+            name: description,
+            imageUrl: '',
+            loading: true,
+          },
+        },
+      ]);
 
-      const availableTags = AMBIENCE_LIBRARY.map(a => a.tag).join(', ');
-      const audioTagPromise = ai.models.generateContent({
-        model: "gemini-2.5-flash",
-        contents: `Based on the environment description: "${description}", select the single most fitting keyword from this list: ${availableTags}. Return ONLY the keyword.`
-      });
+      setIsGeneratingVisual(true);
+      setGenerationMessage(`Entering ${description}...`);
 
-      const [imageResponse, audioTagResponse] = await Promise.all([imagePromise, audioTagPromise]);
-      
-      const newTag = audioTagResponse.text.trim();
-      const newAudioSrc = AMBIENCE_LIBRARY.find(a => a.tag === newTag)?.audioSrc;
-      if (newAudioSrc) {
-        changeAmbienceTrack(newAudioSrc);
-      }
-      
-      if (imageResponse.generatedImages && imageResponse.generatedImages.length > 0) {
-        const url = `data:image/jpeg;base64,${imageResponse.generatedImages[0].image.imageBytes}`;
-        onEnvironmentUpdate(url);
-        setTranscript(prev => prev.map(turn => {
-          if (turn.artifact?.id === environmentArtifactId) {
-            return {
-              ...turn,
-              text: `Environment Set: ${description}`,
-              artifact: { ...turn.artifact, imageUrl: url, loading: false }
-            };
-          }
-          return turn;
-        }));
-      } else {
-        console.error("Environment generation returned no images.");
-        setTranscript(prev => prev.map(turn => {
+      if (!apiKey) {
+        setIsGeneratingVisual(false);
+        setGenerationMessage('Add your Google API key in Settings to generate environments.');
+        setTranscript((prev) =>
+          prev.map((turn) => {
             if (turn.artifact?.id === environmentArtifactId) {
+              const newTurn = { ...turn };
+              delete newTurn.artifact;
+              newTurn.text = 'Environment change unavailable without your API key.';
+              return newTurn;
+            }
+            return turn;
+          })
+        );
+        return;
+      }
+
+      try {
+        const ai = new GoogleGenAI({ apiKey });
+
+        const imagePromise = ai.models.generateImages({
+          model: 'imagen-4.0-generate-001',
+          prompt: `A photorealistic, atmospheric, wide-angle background of: ${description}, depicted authentically for the era of ${character.name} (${character.timeframe}). Cinematic and dramatic lighting. The scene should be evocative and immersive, without people or text.`,
+          config: { numberOfImages: 1, outputMimeType: 'image/jpeg', aspectRatio: '16:9' },
+        });
+
+        const availableTags = AMBIENCE_LIBRARY.map((a) => a.tag).join(', ');
+        const audioTagPromise = ai.models.generateContent({
+          model: 'gemini-2.5-flash',
+          contents: `Based on the environment description: "${description}", select the single most fitting keyword from this list: ${availableTags}. Return ONLY the keyword.`,
+        });
+
+        const [imageResponse, audioTagResponse] = await Promise.all([imagePromise, audioTagPromise]);
+
+        const newTag = audioTagResponse.text.trim();
+        const newAudioSrc = AMBIENCE_LIBRARY.find((a) => a.tag === newTag)?.audioSrc;
+        if (newAudioSrc) {
+          changeAmbienceTrack(newAudioSrc);
+        }
+
+        if (imageResponse.generatedImages && imageResponse.generatedImages.length > 0) {
+          const url = `data:image/jpeg;base64,${imageResponse.generatedImages[0].image.imageBytes}`;
+          onEnvironmentUpdate(url);
+          setTranscript((prev) =>
+            prev.map((turn) => {
+              if (turn.artifact?.id === environmentArtifactId) {
+                return {
+                  ...turn,
+                  text: `Environment Set: ${description}`,
+                  artifact: { ...turn.artifact, imageUrl: url, loading: false },
+                };
+              }
+              return turn;
+            })
+          );
+        } else {
+          console.error('Environment generation returned no images.');
+          setTranscript((prev) =>
+            prev.map((turn) => {
+              if (turn.artifact?.id === environmentArtifactId) {
                 const newTurn = { ...turn };
                 delete newTurn.artifact;
                 newTurn.text = `Failed to load environment: ${description}`;
                 return newTurn;
+              }
+              return turn;
+            })
+          );
+        }
+      } catch (err) {
+        console.error('Failed to generate environment:', err);
+        setTranscript((prev) =>
+          prev.map((turn) => {
+            if (turn.artifact?.id === environmentArtifactId) {
+              const newTurn = { ...turn };
+              delete newTurn.artifact;
+              newTurn.text = `Error loading environment: ${description}`;
+              return newTurn;
             }
             return turn;
-        }));
+          })
+        );
+      } finally {
+        setIsGeneratingVisual(false);
       }
-    } catch (err) {
-      console.error("Failed to generate environment:", err);
-      setTranscript(prev => prev.map(turn => {
-        if (turn.artifact?.id === environmentArtifactId) {
-            const newTurn = { ...turn };
-            delete newTurn.artifact;
-            newTurn.text = `Error loading environment: ${description}`;
-            return newTurn;
-        }
-        return turn;
-    }));
-    } finally {
-      setIsGeneratingVisual(false);
-    }
-  }, [onEnvironmentUpdate, character, changeAmbienceTrack]);
+    },
+    [apiKey, onEnvironmentUpdate, character, changeAmbienceTrack]
+  );
 
-  const handleArtifactDisplay = useCallback(async (name: string, description: string) => {
-    const artifactId = `artifact_${Date.now()}`;
-    
-    setTranscript(prev => [...prev, {
-        speaker: 'model',
-        speakerName: 'Matrix Operator',
-        text: `Displaying: ${name}`,
-        artifact: { id: artifactId, name, imageUrl: '', loading: true }
-    }]);
+  const handleArtifactDisplay = useCallback(
+    async (name: string, description: string) => {
+      const artifactId = `artifact_${Date.now()}`;
 
-    setIsGeneratingVisual(true);
-    setGenerationMessage(`Creating ${name}...`);
+      setTranscript((prev) => [
+        ...prev,
+        {
+          speaker: 'model',
+          speakerName: 'Matrix Operator',
+          text: `Displaying: ${name}`,
+          artifact: { id: artifactId, name, imageUrl: '', loading: true },
+        },
+      ]);
 
-    try {
-        if (!process.env.API_KEY) throw new Error("API_KEY not set.");
-        const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+      setIsGeneratingVisual(true);
+      setGenerationMessage(`Creating ${name}...`);
+
+      if (!apiKey) {
+        setIsGeneratingVisual(false);
+        setGenerationMessage('Add your Google API key in Settings to generate artifacts.');
+        setTranscript((prev) =>
+          prev.map((turn) => {
+            if (turn.artifact?.id === artifactId) {
+              const newTurn = { ...turn };
+              delete newTurn.artifact;
+              newTurn.text = 'Visual artifact generation requires your API key.';
+              return newTurn;
+            }
+            return turn;
+          })
+        );
+        return;
+      }
+
+      try {
+        const ai = new GoogleGenAI({ apiKey });
         const response = await ai.models.generateImages({
-            model: 'imagen-4.0-generate-001',
-            prompt: `A detailed, clear image of: a "${name}". ${description}. The artifact should be rendered in a style authentic to ${character.name}'s era and work (e.g., a da Vinci sketch, a 19th-century diagram, a classical Greek sculpture). Present it on a simple, non-distracting background like aged parchment or a museum display.`,
-            config: { numberOfImages: 1, outputMimeType: 'image/jpeg', aspectRatio: '4:3' },
+          model: 'imagen-4.0-generate-001',
+          prompt: `A detailed, clear image of: a "${name}". ${description}. The artifact should be rendered in a style authentic to ${character.name}'s era and work (e.g., a da Vinci sketch, a 19th-century diagram, a classical Greek sculpture). Present it on a simple, non-distracting background like aged parchment or a museum display.`,
+          config: { numberOfImages: 1, outputMimeType: 'image/jpeg', aspectRatio: '4:3' },
         });
 
         if (response.generatedImages && response.generatedImages.length > 0) {
-            const url = `data:image/jpeg;base64,${response.generatedImages[0].image.imageBytes}`;
-            setTranscript(prev => prev.map(turn => {
-                if (turn.artifact?.id === artifactId) {
-                    return { ...turn, text: name, artifact: { ...turn.artifact, imageUrl: url, loading: false } };
-                }
-                return turn;
-            }));
+          const url = `data:image/jpeg;base64,${response.generatedImages[0].image.imageBytes}`;
+          setTranscript((prev) =>
+            prev.map((turn) => {
+              if (turn.artifact?.id === artifactId) {
+                return { ...turn, text: name, artifact: { ...turn.artifact, imageUrl: url, loading: false } };
+              }
+              return turn;
+            })
+          );
         } else {
-            console.error("Artifact generation returned no images.");
-            setTranscript(prev => prev.map(turn => {
-                if (turn.artifact?.id === artifactId) {
-                  const newTurn = { ...turn };
-                  delete newTurn.artifact;
-                  newTurn.text = `Failed to create visual for ${name}`;
-                  return newTurn;
-                }
-                return turn;
-            }));
+          console.error('Artifact generation returned no images.');
+          setTranscript((prev) =>
+            prev.map((turn) => {
+              if (turn.artifact?.id === artifactId) {
+                const newTurn = { ...turn };
+                delete newTurn.artifact;
+                newTurn.text = `Failed to create visual for ${name}`;
+                return newTurn;
+              }
+              return turn;
+            })
+          );
         }
-    } catch (err) {
-      console.error("Failed to generate artifact:", err);
-      setTranscript(prev => prev.map(turn => {
-        if (turn.artifact?.id === artifactId) {
-          const newTurn = { ...turn };
-          delete newTurn.artifact;
-          newTurn.text = `Error creating visual for ${name}`;
-          return newTurn;
-        }
-        return turn;
-      }));
-    } finally {
+      } catch (err) {
+        console.error('Failed to generate artifact:', err);
+        setTranscript((prev) =>
+          prev.map((turn) => {
+            if (turn.artifact?.id === artifactId) {
+              const newTurn = { ...turn };
+              delete newTurn.artifact;
+              newTurn.text = `Error creating visual for ${name}`;
+              return newTurn;
+            }
+            return turn;
+          })
+        );
+      } finally {
         setIsGeneratingVisual(false);
-    }
-  }, [character]);
+      }
+    },
+    [apiKey, character]
+  );
 
 
   const {
@@ -407,10 +466,14 @@ const ConversationView: React.FC<ConversationViewProps> = ({
 
   const updateDynamicSuggestions = useCallback(async (currentTranscript: ConversationTurn[]) => {
     if (currentTranscript.length === 0) return;
+    if (!apiKey) {
+      setDynamicSuggestions([]);
+      setIsFetchingSuggestions(false);
+      return;
+    }
     setIsFetchingSuggestions(true);
     try {
-        if (!process.env.API_KEY) throw new Error("API_KEY not set.");
-        const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+        const ai = new GoogleGenAI({ apiKey });
 
         const contextTranscript = currentTranscript.slice(-4).map(turn => `${turn.speakerName}: ${turn.text}`).join('\n');
 
@@ -452,7 +515,7 @@ ${contextTranscript}
     } finally {
         setIsFetchingSuggestions(false);
     }
-  }, [character.name]);
+  }, [apiKey, character.name]);
 
   const requestDynamicSuggestions = useCallback(() => {
     updateDynamicSuggestions(transcript);

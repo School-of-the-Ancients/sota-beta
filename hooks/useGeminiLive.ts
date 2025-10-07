@@ -2,6 +2,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { GoogleGenAI, LiveServerMessage, Modality, Blob, FunctionDeclaration, Type, SessionResumptionConfig } from '@google/genai';
 import { ConnectionState, Quest } from '../types';
+import { useApiKey } from './useApiKey';
 
 // Audio Encoding & Decoding functions
 function encode(bytes: Uint8Array): string {
@@ -132,6 +133,7 @@ export const useGeminiLive = (
     const [userTranscription, setUserTranscription] = useState<string>('');
     const [modelTranscription, setModelTranscription] = useState<string>('');
     const [isMicActive, setIsMicActive] = useState(true);
+    const { apiKey } = useApiKey();
 
     // FIX: Using `any` for the session promise type as `LiveSession` is not an exported type from the library.
     const sessionPromiseRef = useRef<Promise<any> | null>(null);
@@ -306,14 +308,14 @@ export const useGeminiLive = (
 
         handledFunctionCallIdsRef.current.clear();
 
-        if (!process.env.API_KEY) {
-            console.error("API_KEY environment variable not set.");
+        if (!apiKey) {
+            console.error("Google API key not available. Add it in Settings to start live conversations.");
             setConnectionState(ConnectionState.ERROR);
             return;
         }
 
         try {
-            const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+            const ai = new GoogleGenAI({ apiKey });
 
             const sanitizedAccent = voiceAccent?.trim();
             let baseInstruction = systemInstruction.trim();
@@ -598,7 +600,7 @@ export const useGeminiLive = (
             console.error('Failed to connect to Gemini Live:', error);
             setConnectionState(ConnectionState.ERROR);
         }
-    }, [systemInstruction, voiceName, voiceAccent, activeQuest, disconnect]);
+    }, [systemInstruction, voiceName, voiceAccent, activeQuest, disconnect, apiKey]);
 
     useEffect(() => {
         connect();

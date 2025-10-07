@@ -9,6 +9,8 @@ export const DEFAULT_USER_DATA: UserData = {
   activeQuestId: null,
   lastQuizResult: null,
   migratedAt: null,
+  encryptedApiKey: null,
+  apiKeyIv: null,
 };
 
 const TABLE = 'user_data';

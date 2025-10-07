@@ -157,7 +157,7 @@ Deploy the contents of `dist/` to your static hosting platform of choice.
 
 ## Development Tips
 
-- Vite exposes `process.env.API_KEY` and `process.env.GEMINI_API_KEY` based on the `GEMINI_API_KEY` entry in your `.env` file. Be sure not to commit this file.
+- Add your personal Google Gemini API key from the in-app **Settings** view. The key is encrypted client-side before syncing to Supabase.
 - Shared UI components live in `components/`, while feature views are registered in `App.tsx`.
 - Hooks such as `useGeminiLive` encapsulate audio capture, streaming, and playback logic.
 - Tailwind utility classes handle layout; extend the Tailwind config before introducing custom CSS.
@@ -172,7 +172,7 @@ Deploy the contents of `dist/` to your static hosting platform of choice.
 
 ## Troubleshooting
 
-- **"API_KEY not set" errors**: Ensure your `.env` file is present and you restarted `npm run dev` after adding it.
+- **"API key not available" errors**: Open **Settings** in the app, paste your Google Gemini API key, and save it. Keys are encrypted before they sync to Supabase.
 - **Microphone permissions**: Clear browser permissions if you accidentally deny access; audio capture is required for real-time chat.
 - **Slow or missing visuals**: Imagen requests can take a few seconds. Watch the developer console for network errors if images do not appear.
 

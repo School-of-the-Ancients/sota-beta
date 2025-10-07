@@ -1,6 +1,7 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import CharacterCreator from './CharacterCreator';
+import { ApiKeyProvider } from '../hooks/useApiKey';
 
 // Mock suggestions for a controlled test environment
 vi.mock('../suggestions', () => ({
@@ -31,14 +32,20 @@ vi.mock('@google/genai', () => ({
   },
 }));
 
+const renderWithProvider = () =>
+  render(
+    <ApiKeyProvider apiKey="test-api-key">
+      <CharacterCreator onCharacterCreated={mockOnCharacterCreated} onBack={mockOnBack} />
+    </ApiKeyProvider>
+  );
+
 describe('CharacterCreator', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    process.env.API_KEY = 'test-api-key';
   });
 
   it('renders correctly and shows initial suggestions on focus', async () => {
-    render(<CharacterCreator onCharacterCreated={mockOnCharacterCreated} onBack={mockOnBack} />);
+    renderWithProvider();
 
     expect(screen.getByText('Create an Ancient')).toBeInTheDocument();
     const input = screen.getByPlaceholderText('Begin typing a historical figure…');
@@ -53,7 +60,7 @@ describe('CharacterCreator', () => {
 
   it('filters suggestions based on user input', async () => {
     const user = userEvent.setup();
-    render(<CharacterCreator onCharacterCreated={mockOnCharacterCreated} onBack={mockOnBack} />);
+    renderWithProvider();
 
     const input = screen.getByPlaceholderText('Begin typing a historical figure…');
     await user.type(input, 'Alex');
@@ -66,7 +73,7 @@ describe('CharacterCreator', () => {
 
   it('fills the input when a suggestion is clicked', async () => {
     const user = userEvent.setup();
-    render(<CharacterCreator onCharacterCreated={mockOnCharacterCreated} onBack={mockOnBack} />);
+    renderWithProvider();
 
     const input = screen.getByPlaceholderText('Begin typing a historical figure…');
     fireEvent.focus(input);
@@ -79,7 +86,7 @@ describe('CharacterCreator', () => {
 
   it('selects a random character when the randomize button is clicked', async () => {
     const user = userEvent.setup();
-    render(<CharacterCreator onCharacterCreated={mockOnCharacterCreated} onBack={mockOnBack} />);
+    renderWithProvider();
 
     const randomizeButton = screen.getByLabelText('Roll the dice for a random historical figure');
     await user.click(randomizeButton);

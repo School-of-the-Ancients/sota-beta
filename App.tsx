@@ -28,6 +28,8 @@ import ConversationRoute from './src/routes/Conversation';
 import HistoryRoute from './src/routes/History';
 import CharacterCreatorRoute from './src/routes/CharacterCreator';
 import { links } from './src/lib/links';
+import { encryptApiKeyForUser, decryptApiKeyForUser, clearStoredSecret } from './src/lib/encryption';
+import { ApiKeyProvider } from './hooks/useApiKey';
 
 const App: React.FC = () => {
   const navigate = useNavigate();
@@ -52,9 +54,12 @@ const App: React.FC = () => {
   const [quizAssessment, setQuizAssessment] = useState<QuestAssessment | null>(null);
   const [authPrompt, setAuthPrompt] = useState<string | null>(null);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
-  const [notificationsEnabled, setNotificationsEnabled] = useState(true);
-  const [autoSaveEnabled, setAutoSaveEnabled] = useState(true);
-  const [preferredTheme, setPreferredTheme] = useState<'system' | 'light' | 'dark'>('dark');
+  const [apiKey, setApiKey] = useState<string | null>(null);
+  const [apiKeyInput, setApiKeyInput] = useState('');
+  const [isApiKeyVisible, setIsApiKeyVisible] = useState(false);
+  const [isSavingApiKey, setIsSavingApiKey] = useState(false);
+  const [apiKeyMessage, setApiKeyMessage] = useState<string | null>(null);
+  const [apiKeyStatus, setApiKeyStatus] = useState<'idle' | 'saved' | 'error'>('idle');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   const customCharacters = userData.customCharacters;
@@ -113,6 +118,137 @@ const App: React.FC = () => {
       setIsAuthModalOpen(false);
     }
   }, [isAuthenticated]);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const hydrateApiKey = async () => {
+      if (!user) {
+        if (isMounted) {
+          setApiKey(null);
+          setApiKeyInput('');
+          setApiKeyMessage(null);
+          setApiKeyStatus('idle');
+        }
+        return;
+      }
+
+      if (!userData.encryptedApiKey || !userData.apiKeyIv) {
+        if (isMounted) {
+          setApiKey(null);
+          setApiKeyInput('');
+          setApiKeyStatus('idle');
+        }
+        return;
+      }
+
+      try {
+        const decrypted = await decryptApiKeyForUser(user.id, userData.encryptedApiKey, userData.apiKeyIv);
+        if (isMounted) {
+          setApiKey(decrypted);
+          setApiKeyInput(decrypted);
+          setApiKeyMessage(null);
+          setApiKeyStatus('idle');
+        }
+      } catch (error) {
+        console.error('Failed to decrypt stored API key', error);
+        if (isMounted) {
+          setApiKey(null);
+          setApiKeyInput('');
+          setApiKeyMessage('We could not decrypt your stored API key on this device. Re-enter it to continue.');
+          setApiKeyStatus('error');
+        }
+      }
+    };
+
+    void hydrateApiKey();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [user, userData.encryptedApiKey, userData.apiKeyIv]);
+
+  const handleApiKeyInputChange = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
+    setApiKeyInput(event.target.value);
+    setApiKeyStatus('idle');
+    setApiKeyMessage(null);
+  }, []);
+
+  const toggleApiKeyVisibility = useCallback(() => {
+    setIsApiKeyVisible((previous) => !previous);
+  }, []);
+
+  const handleRemoveApiKey = useCallback(async () => {
+    if (!user) {
+      setApiKey(null);
+      setApiKeyInput('');
+      return;
+    }
+
+    setIsSavingApiKey(true);
+    try {
+      updateData((prev) => ({
+        ...prev,
+        encryptedApiKey: null,
+        apiKeyIv: null,
+      }));
+      clearStoredSecret(user.id);
+      setApiKey(null);
+      setApiKeyInput('');
+      setApiKeyStatus('saved');
+      setApiKeyMessage('API key removed from your account.');
+    } catch (error) {
+      console.error('Failed to remove API key', error);
+      setApiKeyStatus('error');
+      setApiKeyMessage('Failed to remove API key. Try again.');
+    } finally {
+      setIsSavingApiKey(false);
+    }
+  }, [updateData, user]);
+
+  const handleSaveApiKey = useCallback(
+    async (event: React.FormEvent<HTMLFormElement>) => {
+      event.preventDefault();
+
+      if (!user) {
+        requireAuth('Sign in to store your Google API key securely.');
+        return;
+      }
+
+      const clean = apiKeyInput.trim();
+      setApiKeyStatus('idle');
+      setApiKeyMessage(null);
+
+      if (!clean) {
+        await handleRemoveApiKey();
+        return;
+      }
+
+      setIsSavingApiKey(true);
+      try {
+        const { ciphertext, iv } = await encryptApiKeyForUser(user.id, clean);
+        updateData((prev) => ({
+          ...prev,
+          encryptedApiKey: ciphertext,
+          apiKeyIv: iv,
+        }));
+        setApiKey(clean);
+        setApiKeyStatus('saved');
+        setApiKeyMessage('Your API key is encrypted and saved to your account.');
+      } catch (error) {
+        console.error('Failed to save API key', error);
+        setApiKeyStatus('error');
+        setApiKeyMessage(
+          error instanceof Error
+            ? error.message
+            : 'Failed to save API key. Ensure your browser supports secure storage.'
+        );
+      } finally {
+        setIsSavingApiKey(false);
+      }
+    },
+    [apiKeyInput, handleRemoveApiKey, requireAuth, updateData, user]
+  );
 
   const combinedCharacters = useMemo(() => [...customCharacters, ...CHARACTERS], [customCharacters]);
   const allQuests = useMemo(() => [...customQuests, ...QUESTS], [customQuests]);
@@ -756,8 +892,8 @@ const App: React.FC = () => {
         timestamp: Date.now(),
       };
 
-      if (questForSession) {
-        const ai = new GoogleGenAI({ apiKey: process.env.API_KEY ?? '' });
+      if (questForSession && apiKey) {
+        const ai = new GoogleGenAI({ apiKey });
         const questTranscriptText = transcript
           .map((turn) => `${turn.speakerName || turn.speaker}: ${turn.text}`)
           .join('\n');
@@ -960,12 +1096,13 @@ const App: React.FC = () => {
   }, [location.pathname]);
 
   return (
-    <div className="relative min-h-screen bg-[#1a1a1a]">
-      <AuthModal
-        isOpen={isAuthModalOpen && !isAuthenticated}
-        prompt={authPrompt}
-        onClose={() => setIsAuthModalOpen(false)}
-      />
+    <ApiKeyProvider apiKey={apiKey}>
+      <div className="relative min-h-screen bg-[#1a1a1a]">
+        <AuthModal
+          isOpen={isAuthModalOpen && !isAuthenticated}
+          prompt={authPrompt}
+          onClose={() => setIsAuthModalOpen(false)}
+        />
       <div
         className="absolute inset-0 z-0 bg-cover bg-center transition-opacity duration-1000"
         style={{ backgroundImage: environmentImageUrl ? `url(${environmentImageUrl})` : 'none' }}
@@ -1251,66 +1388,79 @@ const App: React.FC = () => {
                     <div>
                       <h2 className="text-3xl font-bold text-amber-200">User Settings</h2>
                       <p className="text-sm text-gray-400 mt-1">
-                        Customize how you experience conversations with history&apos;s greatest minds.
+                        Securely manage how you authenticate with Google Gemini during your studies.
                       </p>
                     </div>
                     {isAuthenticated ? (
-                      <div className="space-y-5">
-                        <label className="flex items-center justify-between gap-4 bg-gray-800/50 border border-gray-700 rounded-xl p-4">
-                          <div>
-                            <span className="text-sm font-semibold text-gray-200">Journey Notifications</span>
-                            <p className="text-xs text-gray-400">Receive alerts when a quest assessment is ready.</p>
-                          </div>
-                          <input
-                            type="checkbox"
-                            className="h-5 w-5 rounded border-gray-600 bg-gray-900 text-amber-500 focus:ring-amber-400"
-                            checked={notificationsEnabled}
-                            onChange={(event) => setNotificationsEnabled(event.target.checked)}
-                          />
-                        </label>
-
-                        <label className="flex items-center justify-between gap-4 bg-gray-800/50 border border-gray-700 rounded-xl p-4">
-                          <div>
-                            <span className="text-sm font-semibold text-gray-200">Auto-save Transcripts</span>
-                            <p className="text-xs text-gray-400">Keep every exchange stored in your history automatically.</p>
-                          </div>
-                          <input
-                            type="checkbox"
-                            className="h-5 w-5 rounded border-gray-600 bg-gray-900 text-amber-500 focus:ring-amber-400"
-                            checked={autoSaveEnabled}
-                            onChange={(event) => setAutoSaveEnabled(event.target.checked)}
-                          />
-                        </label>
-
-                        <div className="bg-gray-800/50 border border-gray-700 rounded-xl p-4 space-y-2">
-                          <label htmlFor="theme-select" className="text-sm font-semibold text-gray-200">
-                            Interface Theme
-                          </label>
+                      <form onSubmit={handleSaveApiKey} className="space-y-5">
+                        <label className="block space-y-2">
+                          <span className="text-sm font-semibold text-gray-200">Google API Key</span>
                           <p className="text-xs text-gray-400">
-                            Choose the ambiance that best matches your study ritual.
+                            Provide your personal Gemini API key. We encrypt it before it syncs to Supabase.
                           </p>
-                          <select
-                            id="theme-select"
-                            className="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-200 focus:border-amber-400 focus:ring-amber-400"
-                            value={preferredTheme}
-                            onChange={(event) => setPreferredTheme(event.target.value as 'system' | 'light' | 'dark')}
+                          <div className="relative">
+                            <input
+                              type={isApiKeyVisible ? 'text' : 'password'}
+                              className="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-200 focus:border-amber-400 focus:ring-amber-400 pr-24"
+                              value={apiKeyInput}
+                              onChange={handleApiKeyInputChange}
+                              placeholder="AIza..."
+                              autoComplete="off"
+                            />
+                            <button
+                              type="button"
+                              onClick={toggleApiKeyVisibility}
+                              className="absolute inset-y-0 right-2 flex items-center px-3 text-xs font-semibold text-amber-300 hover:text-amber-200"
+                            >
+                              {isApiKeyVisible ? 'Hide' : 'Show'}
+                            </button>
+                          </div>
+                        </label>
+
+                        {apiKeyMessage && (
+                          <div
+                            className={`text-sm ${apiKeyStatus === 'error' ? 'text-red-400' : 'text-emerald-300'}`}
                           >
-                            <option value="dark">Dark</option>
-                            <option value="light">Light</option>
-                            <option value="system">System</option>
-                          </select>
+                            {apiKeyMessage}
+                          </div>
+                        )}
+
+                        <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+                          <button
+                            type="submit"
+                            className="inline-flex items-center justify-center rounded-lg bg-amber-500 px-4 py-2 text-sm font-semibold text-gray-900 hover:bg-amber-400 disabled:cursor-not-allowed disabled:opacity-60"
+                            disabled={isSavingApiKey}
+                          >
+                            {isSavingApiKey ? 'Saving…' : 'Save API Key'}
+                          </button>
+                          <button
+                            type="button"
+                            className="inline-flex items-center justify-center rounded-lg border border-gray-700 px-4 py-2 text-sm font-semibold text-gray-200 hover:border-amber-400 hover:text-amber-200 disabled:cursor-not-allowed disabled:opacity-60"
+                            onClick={() => {
+                              void handleRemoveApiKey();
+                            }}
+                            disabled={isSavingApiKey || (!apiKey && !userData.encryptedApiKey)}
+                          >
+                            Remove Stored Key
+                          </button>
                         </div>
 
                         <p className="text-xs text-gray-400">
-                          Settings are stored locally for now. Cloud sync will arrive in a future update of School of the
-                          Ancients.
+                          Keys are decrypted only in your browser using a secret stored on this device. Remove the key above if
+                          you are on a shared computer.
                         </p>
-                      </div>
+
+                        {!apiKey && (
+                          <p className="text-xs text-amber-300">
+                            Add your Google API key to unlock conversations, visual generations, and quest assessments.
+                          </p>
+                        )}
+                      </form>
                     ) : (
                       <div className="bg-gray-800/60 border border-gray-700 rounded-xl p-6 text-center">
                         <p className="text-lg text-amber-200 font-semibold mb-2">Sign in to tailor your experience.</p>
                         <p className="text-sm text-gray-300">
-                          Manage notifications, transcripts, and appearance preferences once you&apos;re authenticated.
+                          Save your Gemini API key securely and sync it across devices once you&apos;re authenticated.
                         </p>
                       </div>
                     )}
@@ -1325,7 +1475,7 @@ const App: React.FC = () => {
           </main>
         </div>
       </div>
-    </div>
+    </ApiKeyProvider>
   );
 };
 

@@ -128,4 +128,6 @@ export interface UserData {
   activeQuestId: string | null;
   lastQuizResult: QuizResult | null;
   migratedAt?: string | null;
+  encryptedApiKey: string | null;
+  apiKeyIv: string | null;
 }
