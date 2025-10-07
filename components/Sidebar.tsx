@@ -10,7 +10,7 @@ type SidebarProps = {
   onOpenProfile: () => void;
   onOpenSettings: () => void;
   onOpenQuests: () => void;
-  currentView: string;
+  currentPath: string;
   isAuthenticated: boolean;
   userEmail?: string | null;
 };
@@ -23,7 +23,7 @@ const Sidebar: React.FC<SidebarProps> = ({
   onOpenProfile,
   onOpenSettings,
   onOpenQuests,
-  currentView,
+  currentPath,
   isAuthenticated,
   userEmail,
 }) => {
@@ -32,24 +32,28 @@ const Sidebar: React.FC<SidebarProps> = ({
       key: 'quests',
       label: 'Quest Library',
       description: 'Browse and continue active quests.',
+      path: '/quests',
       onClick: onOpenQuests,
     },
     {
       key: 'creator',
       label: 'Create Ancient',
       description: 'Design a new historical guide.',
+      path: '/characters/new',
       onClick: onCreateAncient,
     },
     {
       key: 'profile',
       label: 'User Profile',
       description: 'Review your explorer identity.',
+      path: '/profile',
       onClick: onOpenProfile,
     },
     {
       key: 'settings',
       label: 'User Settings',
       description: 'Adjust preferences and saved options.',
+      path: '/settings',
       onClick: onOpenSettings,
     },
   ];
@@ -75,7 +79,8 @@ const Sidebar: React.FC<SidebarProps> = ({
             </div>
             <div className="space-y-3">
               {navigationItems.map((item) => {
-                const isActive = currentView === item.key;
+                const isActive =
+                  currentPath === item.path || (item.key === 'quests' && currentPath.startsWith('/quests'));
                 return (
                   <button
                     key={item.key}
