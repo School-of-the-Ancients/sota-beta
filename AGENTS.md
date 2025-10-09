@@ -1,19 +1,36 @@
 # Repository Guidelines
 
 ## Project Structure & Module Organization
-Keep the SPA entry point in `index.tsx`, which mounts `App.tsx` for routing between conversation, history, and quest flows. Feature UI lives under `components/` with icons in `components/icons/`; shared helpers such as typing, constants, and persona suggestions live in `types.ts`, `constants.ts`, and `suggestions.ts`. Side-effectful logic (audio capture, realtime updates) belongs in `hooks/` like `useGeminiLive.ts`. Persist static media in `img/` and `audio/`, reference deep-dive notes in `docs/implementation.md`, and put automation or diagnostics under `tests/`.
+- `index.tsx` boots the SPA and mounts `App.tsx` for routing between conversation, history, and quest flows.
+- Feature views and shared widgets live under `components/`; icons stay in `components/icons/`.
+- Route-specific logic sits in `src/routes/`, while cross-cutting utilities stay in `src/lib/`.
+- Hooks covering Supabase auth, Gemini Live audio, and realtime state belong under `hooks/`, and Supabase helpers stay in `supabaseClient.ts`.
+- Static media belongs in `img/` and `audio/`; deep-dive notes stay in `docs/implementation.md`; automation helpers live under `tests/` when added.
 
 ## Build, Test, and Development Commands
-Run `npm install` once per clone to sync dependencies. Use `npm run dev` to start Vite on http://localhost:3000 with hot reload. Execute `npm run test` (or `npm run test -- --coverage`) to run Vitest with React Testing Library and produce v8 coverage. Ship-ready bundles come from `npm run build`, while `npm run preview` serves that bundle for smoke testing.
+- `npm install` — install dependencies after cloning.
+- `npm run dev` — launch the Vite dev server on http://localhost:3000.
+- `npm run build` — create a production bundle.
+- `npm run preview` — serve the built bundle for smoke checks.
+- `npm run test` / `npm run test -- --coverage` — run Vitest with React Testing Library, optionally collecting v8 coverage.
 
 ## Coding Style & Naming Conventions
-Use TypeScript functional components with 2-space indentation, single quotes, and explicit prop typing when non-trivial. Name components in PascalCase (`ConversationView.tsx`), hooks with a `use` prefix (`useGeminiLive`), and utilities with clear camelCase verbs. Prefer Tailwind utility classes; extend `tailwind.config` before adding custom CSS, and import shared modules via the `@/` alias.
+- Write TypeScript functional components with 2-space indents, single quotes, and explicit prop types for anything non-trivial.
+- Name components in PascalCase (`ConversationView.tsx`), hooks with a `use*` prefix (`useGeminiLive`), and utilities in descriptive camelCase verbs.
+- Favor Tailwind utility classes; extend `tailwind.config.js` rather than adding ad-hoc CSS.
+- Import shared modules via the `@/` alias and keep side effects (Supabase, audio, realtime) confined to hooks.
 
 ## Testing Guidelines
-Co-locate specs beside sources as `*.test.tsx` or `*.test.ts`; see `App.test.tsx` and `vitest.setup.ts` for patterns. Focus coverage on microphone permissions, persona lifecycle edges, and error flashes prior to merging. Document manual browser checks (e.g., microphone prompts) in PR descriptions until end-to-end automation lands.
+- Use Vitest + React Testing Library; co-locate specs as `*.test.tsx` next to their sources (see `components/CharacterCreator.test.tsx`).
+- Target edge cases around microphone permissions, persona lifecycle, quest persistence, and error flashes.
+- Document manual browser checks (e.g., microphone prompts, Supabase auth flows) in PR descriptions until end-to-end coverage exists.
 
 ## Commit & Pull Request Guidelines
-Follow Conventional Commits such as `feat: add Cleopatra persona artifacts`, keeping each change scoped and revert-safe. Pull requests should provide a concise summary, link related issues, enumerate environment variable touches (like `GEMINI_API_KEY`), include UI screenshots when visuals shift, and share an executed test plan.
+- Follow Conventional Commits (`feat: ...`, `fix: ...`, etc.) and keep each change scoped and revert-safe.
+- PRs should include a concise summary, linked issues, environment variable callouts (such as `GEMINI_API_KEY`), screenshots for UI shifts, and the executed test plan.
+- Note any Supabase schema or security-sensitive adjustments and coordinate rotations for exposed secrets.
 
 ## Security & Configuration Tips
-Keep secrets in `.env`; Vite exposes selected values through `process.env`. Never commit transcripts, tokens, or `localStorage` snapshots, and scrub logs before sharing externally. Rotate or revoke exposed keys immediately.
+- Store secrets in `.env`; Vite exposes approved keys via `import.meta.env`.
+- Never commit transcripts, API tokens, or `localStorage` snapshots; scrub logs before sharing.
+- Rotate or revoke any leaked keys immediately and confirm Supabase policies stay least-privilege.
