@@ -1,5 +1,7 @@
 # Repository Guidelines
 
+refer to the living document execplan.md
+
 ## Project Structure & Module Organization
 - `index.tsx` boots the SPA and mounts `App.tsx` for routing between conversation, history, and quest flows.
 - Feature views and shared widgets live under `components/`; icons stay in `components/icons/`.
