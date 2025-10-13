@@ -58,6 +58,7 @@ const App: React.FC = () => {
   const [decryptedApiKey, setDecryptedApiKey] = useState<string | null>(null);
   const [apiKeyInput, setApiKeyInput] = useState('');
   const [isDecryptingApiKey, setIsDecryptingApiKey] = useState(false);
+  const [isDerivingDeviceKeyId, setIsDerivingDeviceKeyId] = useState(false);
   const [apiKeyError, setApiKeyError] = useState<string | null>(null);
   const [isSavingApiKey, setIsSavingApiKey] = useState(false);
   const [apiKeyStatus, setApiKeyStatus] = useState<'idle' | 'saved' | 'cleared'>('idle');
@@ -130,10 +131,12 @@ const App: React.FC = () => {
   useEffect(() => {
     if (!encryptionSupported) {
       setDeviceKeyId(null);
+      setIsDerivingDeviceKeyId(false);
       return;
     }
 
     let isMounted = true;
+    setIsDerivingDeviceKeyId(true);
 
     getDeviceKeyIdentifier()
       .then((identifier) => {
@@ -148,12 +151,28 @@ const App: React.FC = () => {
           return;
         }
         setDeviceKeyId(null);
+        if (hasStoredApiKey) {
+          setDecryptedApiKey(null);
+          setApiKeyInput('');
+          setApiKeyError(
+            'We could not unlock your stored API key on this device. Update your browser settings or enter it again to continue.'
+          );
+          setApiKeyStatus('idle');
+          setActiveApiKeyUpdatedAt(null);
+        }
+        setIsDecryptingApiKey(false);
+      })
+      .finally(() => {
+        if (!isMounted) {
+          return;
+        }
+        setIsDerivingDeviceKeyId(false);
       });
 
     return () => {
       isMounted = false;
     };
-  }, [encryptionSupported]);
+  }, [encryptionSupported, hasStoredApiKey]);
 
   useEffect(() => {
     if (!encryptionSupported) {
@@ -181,7 +200,7 @@ const App: React.FC = () => {
     }
 
     if (!deviceKeyId) {
-      setIsDecryptingApiKey(true);
+      setIsDecryptingApiKey(isDerivingDeviceKeyId && hasStoredApiKey);
       return;
     }
 
@@ -243,7 +262,14 @@ const App: React.FC = () => {
     return () => {
       isMounted = false;
     };
-  }, [deviceKeyId, encryptionSupported, hasStoredApiKey, userData.apiKey, userData.apiKeys]);
+  }, [
+    deviceKeyId,
+    encryptionSupported,
+    hasStoredApiKey,
+    isDerivingDeviceKeyId,
+    userData.apiKey,
+    userData.apiKeys,
+  ]);
 
   useEffect(() => {
     if (!isAuthenticated) {
