@@ -3,6 +3,8 @@ const DEVICE_SECRET_STORAGE_KEY = 'sota-device-secret';
 const textEncoder = new TextEncoder();
 const textDecoder = new TextDecoder();
 
+let cachedDeviceIdentifier: string | null = null;
+
 const toBase64 = (buffer: ArrayBuffer): string => {
   const bytes = new Uint8Array(buffer);
   let binary = '';
@@ -44,6 +46,22 @@ const getOrCreateDeviceSecret = (): Uint8Array => {
 const getDeviceKey = async (): Promise<CryptoKey> => {
   const rawSecret = getOrCreateDeviceSecret();
   return window.crypto.subtle.importKey('raw', rawSecret, { name: 'AES-GCM' }, false, ['encrypt', 'decrypt']);
+};
+
+export const getDeviceKeyIdentifier = async (): Promise<string> => {
+  if (cachedDeviceIdentifier) {
+    return cachedDeviceIdentifier;
+  }
+
+  if (!canUseBrowserCrypto()) {
+    throw new Error('Browser cryptography is not available.');
+  }
+
+  const secret = getOrCreateDeviceSecret();
+  const digest = await window.crypto.subtle.digest('SHA-256', secret);
+  const identifier = toBase64(digest);
+  cachedDeviceIdentifier = identifier;
+  return identifier;
 };
 
 export interface EncryptedPayload {
@@ -94,6 +112,7 @@ export const clearDeviceSecret = () => {
     return;
   }
   window.localStorage.removeItem(DEVICE_SECRET_STORAGE_KEY);
+  cachedDeviceIdentifier = null;
 };
 
 export const isEncryptionAvailable = () => canUseBrowserCrypto();
