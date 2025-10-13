@@ -1421,7 +1421,7 @@ const App: React.FC = () => {
                             </label>
                             <p className="text-xs text-gray-400 mt-1">
                                                          
-                            Need a key? Create one from{' '}
+                            Need a key? Create a free api key from{' '}
                             <a
                               href="https://aistudio.google.com/app/apikey"
                               target="_blank"
