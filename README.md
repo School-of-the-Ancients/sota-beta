@@ -56,7 +56,7 @@ Find Goal → Create Quest → Summon Mentor → Dialogue → Reflect → Assess
 | **Frontend** | React, Tailwind, Vite |
 | **AI Integration** | Google Gemini (2.5 Flash / Imagen 4.0) |
 | **Backend** | Supabase (Auth, DB, Storage) |
-| **Data Storage** | Encrypted local storage + cloud sync |
+| **Data Storage** | Encrypted local storage + cloud sync supabase |
 | **Environment Engine** | Imagen 4.0 for visual scenes + ambient audio |
 | **Voice** | Gemini Live + custom hooks (`useGeminiLive`, `useAmbientAudio`) |
 
