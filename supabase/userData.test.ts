@@ -65,8 +65,9 @@ describe('fetchUserData', () => {
     const result = await fetchUserData('user-1');
 
     expect(result.apiKey).toBeNull();
+    expect(result.apiKeys).toEqual({});
     expect(updateMock).toHaveBeenCalledWith({
-      data: expect.objectContaining({ apiKey: null }),
+      data: expect.objectContaining({ apiKey: null, apiKeys: {} }),
       migrated_at: null,
     });
     expect(updateEqMock).toHaveBeenCalledWith('user_id', 'user-1');
@@ -77,6 +78,7 @@ describe('fetchUserData', () => {
       cipherText: 'cipher',
       iv: 'iv-value',
       updatedAt: '2024-05-20T12:00:00Z',
+      deviceId: 'device-a',
     } as const;
 
     setupSupabaseResponse({
@@ -93,6 +95,7 @@ describe('fetchUserData', () => {
     const result = await fetchUserData('user-2');
 
     expect(result.apiKey).toEqual(encrypted);
+    expect(result.apiKeys).toEqual({});
     expect(result.migratedAt).toBe('2024-05-21T09:00:00Z');
     expect(updateMock).not.toHaveBeenCalled();
   });
@@ -112,10 +115,60 @@ describe('fetchUserData', () => {
     const result = await fetchUserData('user-3');
 
     expect(result.apiKey).toBeNull();
+    expect(result.apiKeys).toEqual({});
     expect(updateMock).toHaveBeenCalledWith({
-      data: expect.objectContaining({ apiKey: null }),
+      data: expect.objectContaining({ apiKey: null, apiKeys: {} }),
       migrated_at: null,
     });
     expect(updateEqMock).toHaveBeenCalledWith('user_id', 'user-3');
+  });
+
+  it('sanitizes multi-device API key entries', async () => {
+    setupSupabaseResponse({
+      data: {
+        data: {
+          ...DEFAULT_USER_DATA,
+          apiKeys: {
+            'device-a': { cipherText: 'cipher-a', iv: 'iv-a', updatedAt: '2024-06-01T00:00:00Z' },
+            'device-b': { cipherText: 'cipher-b', iv: 'iv-b', updatedAt: 'not-a-date', deviceId: 'device-b' },
+          },
+        },
+        migrated_at: null,
+      },
+      error: null,
+    });
+
+    const result = await fetchUserData('user-4');
+
+    expect(result.apiKeys).toEqual({
+      'device-a': { cipherText: 'cipher-a', iv: 'iv-a', updatedAt: '2024-06-01T00:00:00Z', deviceId: null },
+      'device-b': { cipherText: 'cipher-b', iv: 'iv-b', updatedAt: null, deviceId: 'device-b' },
+    });
+    expect(updateMock).not.toHaveBeenCalled();
+  });
+
+  it('drops malformed multi-device entries and persists the cleanup', async () => {
+    setupSupabaseResponse({
+      data: {
+        data: {
+          ...DEFAULT_USER_DATA,
+          apiKeys: {
+            'device-a': null,
+            'device-b': { cipherText: 123, iv: 'iv-b' },
+          },
+        },
+        migrated_at: null,
+      },
+      error: null,
+    });
+
+    const result = await fetchUserData('user-5');
+
+    expect(result.apiKeys).toEqual({});
+    expect(updateMock).toHaveBeenCalledWith({
+      data: expect.objectContaining({ apiKeys: {} }),
+      migrated_at: null,
+    });
+    expect(updateEqMock).toHaveBeenCalledWith('user_id', 'user-5');
   });
 });
