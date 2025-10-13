@@ -66,10 +66,10 @@ Find Goal → Create Quest → Summon Mentor → Dialogue → Reflect → Assess
 
 | File | Purpose |
 |------|----------|
-| [`MANIFESTO.md`](.docs/MANIFESTO.md) | The philosophical foundation — “A Living Educational OS.” |
-| [`CAREER_PATHFINDER.md`](.docs/CAREER_PATHFINDER.md) | Maps learning data to ideal careers and new quests. |
-| [`LEARNING_METHOD.md`](.docs/LEARNING_METHOD.md) | Connects SotA to the scientific method — learning as experimentation. |
-| [`ROADMAP.md`](.docs/ROADMAP.md) | Version milestones and implementation plan. |
+| [`MANIFESTO.md`](./docs/MANIFESTO.md) | The philosophical foundation — “A Living Educational OS.” |
+| [`CAREER_PATHFINDER.md`](./docs/CAREER_PATHFINDER.md) | Maps learning data to ideal careers and new quests. |
+| [`LEARNING_METHOD.md`](./docs/LEARNING_METHOD.md) | Connects SotA to the scientific method — learning as experimentation. |
+| [`ROADMAP.md`](./docs/ROADMAP.md) | Version milestones and implementation plan. |
 
 
 ---
