@@ -67,9 +67,12 @@ Find Goal → Create Quest → Summon Mentor → Dialogue → Reflect → Assess
 | File | Purpose |
 |------|----------|
 | [`MANIFESTO.md`](./docs/MANIFESTO.md) | The philosophical foundation — “A Living Educational OS.” |
-| [`CAREER_PATHFINDER.md`](./docs/CAREER_PATHFINDER.md) | Maps learning data to ideal careers and new quests. |
+| [`SOTA_CORE_GOAL.md`](./docs/SOTA_CORE_GOAL.md) | Defines SotA’s goal, problems solved, and unique value. |
+| [`SOTA_MISSION_STATEMENT.md`](./docs/SOTA_MISSION_STATEMENT.md) | Mission, solution, and vision overview. |
+| [`LIVING_EDUCATIONAL_OS.md`](./docs/LIVING_EDUCATIONAL_OS.md) | Explains SotA as a Living Operating System for learning. |
+| [`CAREER_PATHFINDER.md`](./docs/CAREER_PATHFINDER.md) | Translates learning data into ideal careers and next-step quests. |
 | [`LEARNING_METHOD.md`](./docs/LEARNING_METHOD.md) | Connects SotA to the scientific method — learning as experimentation. |
-| [`ROADMAP.md`](./docs/ROADMAP.md) | Version milestones and implementation plan. |
+| [`ROADMAP.md`](./docs/ROADMAP.md) | Implementation timeline and version goals. | 
 
 
 ---
