@@ -9,9 +9,9 @@ This folder is the **source of truth for specs** that define how the app should 
 ## What lives here
 
 - **[ROADMAP.md](./ROADMAP.md)** — high‑level milestones (Beta Stabilization, MVP v0.1, Post‑MVP) and what “done” means for each.
-- **[QUEST_FLOW.md](./QUEST_FLOW.md)** — the state machine from *start → teach → reflect → quiz → complete*; events, UI contracts, and suggestion cadence.
-- **[PROGRESS_MODEL.md](./PROGRESS_MODEL.md)** — data model, persistence rules (local → cloud), recompute logic, and badges.
-- **[QUIZ_MVP_SPEC.md](./QUIZ_MVP_SPEC.md)** — 3–5 question mastery check with pass/fail, review & retry.
+- **[QUEST_FLOW.md](./quests/QUEST_FLOW.md)** — the state machine from *start → teach → reflect → quiz → complete*; events, UI contracts, and suggestion cadence.
+- **[PROGRESS_MODEL.md](./quests/PROGRESS_MODEL.md)** — data model, persistence rules (local → cloud), recompute logic, and badges.
+- **[QUIZ_MVP_SPEC.md](./quests/QUIZ_MVP_SPEC.md)** — 3–5 question mastery check with pass/fail, review & retry.
 
 > If you’re adding a new capability, place its spec here and link it from this README.
 
