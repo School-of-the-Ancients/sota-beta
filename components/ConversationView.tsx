@@ -69,8 +69,8 @@ const ArtifactDisplay: React.FC<{ artifact: NonNullable<ConversationTurn['artifa
             <div className="w-8 h-8 border-2 border-teal-400 border-t-transparent rounded-full animate-spin"></div>
           </div>
         )}
-        {artifact.imageUrl && !artifact.loading && (
-          <img src={artifact.imageUrl} alt={artifact.name} className="w-full rounded-lg" />
+        {artifact.Url && !artifact.loading && (
+          <img src={artifact.Url} alt={artifact.name} className="w-full rounded-lg" />
         )}
       </div>
     );
@@ -79,7 +79,7 @@ const ArtifactDisplay: React.FC<{ artifact: NonNullable<ConversationTurn['artifa
 const ConversationView: React.FC<ConversationViewProps> = ({
   character,
   onEndConversation,
-  environmentImageUrl,
+  environmentUrl,
   onEnvironmentUpdate,
   activeQuest,
   isSaving,
@@ -145,7 +145,7 @@ const ConversationView: React.FC<ConversationViewProps> = ({
     const hydrateFromConversation = (conversation: SavedConversation | undefined) => {
       if (conversation && conversation.transcript.length > 0) {
         setTranscript(conversation.transcript);
-        onEnvironmentUpdate(conversation.environmentImageUrl || null);
+        onEnvironmentUpdate(conversation.environmentUrl || null);
         sessionIdRef.current = conversation.id;
         sessionQuestRef.current = conversation.questId
           ? {
@@ -259,7 +259,7 @@ const ConversationView: React.FC<ConversationViewProps> = ({
       artifact: {
         id: environmentArtifactId,
         name: description,
-        imageUrl: '',
+        Url: '',
         loading: true,
       }
     }]);
@@ -271,7 +271,7 @@ const ConversationView: React.FC<ConversationViewProps> = ({
       const ai = new GoogleGenAI({ apiKey });
       
       const imagePromise = ai.models.generateImages({
-        model: 'gemini-2.5-flash-image',
+        model: 'gemini-2.5-flash-preview-image',
         prompt: `A photorealistic, atmospheric, wide-angle background of: ${description}, depicted authentically for the era of ${character.name} (${character.timeframe}). Cinematic and dramatic lighting. The scene should be evocative and immersive, without people or text.`,
         config: { numberOfImages: 1, outputMimeType: 'image/jpeg', aspectRatio: '16:9' },
       });
