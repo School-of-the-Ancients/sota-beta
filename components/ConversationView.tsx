@@ -79,7 +79,7 @@ const ArtifactDisplay: React.FC<{ artifact: NonNullable<ConversationTurn['artifa
 const ConversationView: React.FC<ConversationViewProps> = ({
   character,
   onEndConversation,
-  environmentUrl,
+  environmentImageUrl,
   onEnvironmentUpdate,
   activeQuest,
   isSaving,
@@ -145,7 +145,7 @@ const ConversationView: React.FC<ConversationViewProps> = ({
     const hydrateFromConversation = (conversation: SavedConversation | undefined) => {
       if (conversation && conversation.transcript.length > 0) {
         setTranscript(conversation.transcript);
-        onEnvironmentUpdate(conversation.environmentUrl || null);
+        onEnvironmentUpdate(conversation.environmentImageUrl || null);
         sessionIdRef.current = conversation.id;
         sessionQuestRef.current = conversation.questId
           ? {
@@ -259,7 +259,7 @@ const ConversationView: React.FC<ConversationViewProps> = ({
       artifact: {
         id: environmentArtifactId,
         name: description,
-        Url: '',
+        imageUrl: '',
         loading: true,
       }
     }]);
