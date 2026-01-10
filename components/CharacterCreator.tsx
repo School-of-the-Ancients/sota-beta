@@ -79,7 +79,7 @@ const CharacterCreator: React.FC<CharacterCreatorProps> = ({ onCharacterCreated,
 If you are not at least 80% confident in their historicity, set verified to false.`;
 
     const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
+      model: 'gemini-3-flash',
       contents: prompt,
       config: {
         responseMimeType: 'application/json',
@@ -148,7 +148,7 @@ If you are not at least 80% confident in their historicity, set verified to fals
         - ambienceTag: Based on the character's typical environment, select the most fitting keyword from this list: ${availableAmbienceTags}.`;
 
       const personaResp = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
+        model: 'gemini-3-flash',
         config: {
           responseMimeType: 'application/json',
           responseSchema: {
@@ -191,7 +191,7 @@ If you are not at least 80% confident in their historicity, set verified to fals
       try {
         setMsg('Painting portrait…');
         const imgResp = await ai.models.generateImages({
-          model: 'imagen-4.0-generate-001',
+          model: 'gemini-2.5-flash-preview-image',
           prompt: `A realistic, academic portrait of ${clean}, ${persona.title}. Dignified, historical lighting, 1:1, museum catalogue style.`,
           config: { numberOfImages: 1, outputMimeType: 'image/jpeg', aspectRatio: '1:1' },
         });

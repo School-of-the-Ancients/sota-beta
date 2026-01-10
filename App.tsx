@@ -1037,7 +1037,7 @@ const App: React.FC = () => {
             const evaluationPrompt = `You are a precise mentor at the School of the Ancients. Assess whether the learner has mastered the quest goal. Respond as JSON with:\n{\n  \\"passed\\": boolean, // true if the learner clearly demonstrates mastery, false otherwise\n  \\"summary\\": string, // 2-3 sentence summary of the learner's performance\n  \\"evidence\\": string[], // key quotes or reasoning that show understanding\n  \\"improvements\\": string[], // actionable suggestions if the student has gaps (empty if passed)\n}\n\nFocus only on the student's contributions. Mark passed=true only if the learner clearly articulates key ideas from the objective.`;
 
             const evaluationResponse = await ai.models.generateContent({
-              model: 'gemini-2.5-flash',
+              model: 'gemini-3-flash',
               contents: evaluationPrompt + `\n\nTranscript:\n${questTranscriptText}`,
               config: {
                 responseMimeType: 'application/json',
