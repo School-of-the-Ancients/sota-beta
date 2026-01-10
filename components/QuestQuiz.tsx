@@ -166,7 +166,7 @@ Return JSON with this schema:
 Ensure questions are rigorous but clear, avoid trick questions, and keep the answer index within bounds.`;
 
         const response = await ai.models.generateContent({
-          model: 'gemini-3-flash-preview',
+          model: 'gemini-3-flash',
           contents: prompt,
           config: {
             responseMimeType: 'application/json',
