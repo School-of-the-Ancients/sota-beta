@@ -271,7 +271,7 @@ const ConversationView: React.FC<ConversationViewProps> = ({
       const ai = new GoogleGenAI({ apiKey });
       
       const imagePromise = ai.models.generateImages({
-        model: 'gemini-2.5-flash-preview-image',
+        model: 'gemini-2.5-flash-image',
         prompt: `A photorealistic, atmospheric, wide-angle background of: ${description}, depicted authentically for the era of ${character.name} (${character.timeframe}). Cinematic and dramatic lighting. The scene should be evocative and immersive, without people or text.`,
         config: { numberOfImages: 1, outputMimeType: 'image/jpeg', aspectRatio: '16:9' },
       });
@@ -353,7 +353,7 @@ const ConversationView: React.FC<ConversationViewProps> = ({
         if (!apiKey) throw new Error('Missing API key');
         const ai = new GoogleGenAI({ apiKey });
         const response = await ai.models.generateImages({
-            model: 'gemini-2.5-flash-preview-image',
+            model: 'gemini-2.5-flash-image',
             prompt: `A detailed, clear image of: a "${name}". ${description}. The artifact should be rendered in a style authentic to ${character.name}'s era and work (e.g., a da Vinci sketch, a 19th-century diagram, a classical Greek sculpture). Present it on a simple, non-distracting background like aged parchment or a museum display.`,
             config: { numberOfImages: 1, outputMimeType: 'image/jpeg', aspectRatio: '4:3' },
         });
