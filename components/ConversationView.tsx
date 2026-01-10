@@ -278,7 +278,7 @@ const ConversationView: React.FC<ConversationViewProps> = ({
 
       const availableTags = AMBIENCE_LIBRARY.map(a => a.tag).join(', ');
       const audioTagPromise = ai.models.generateContent({
-        model: "gemini-3-flash-preview",
+        model: "gemini-3-flash",
         contents: `Based on the environment description: "${description}", select the single most fitting keyword from this list: ${availableTags}. Return ONLY the keyword.`
       });
 
@@ -441,7 +441,7 @@ ${contextTranscript}
 `;
 
         const response = await ai.models.generateContent({
-            model: "gemini-3-flash-preview",
+            model: "gemini-3-flash",
             contents: prompt,
             config: {
                 responseMimeType: "application/json",
