@@ -94,7 +94,7 @@ const QuestCreator: React.FC<QuestCreatorProps> = ({
         - ambienceTag: Based on the character's typical environment, select the most fitting keyword from this list: ${availableAmbienceTags}.`;
 
     const personaResp = await ai.models.generateContent({
-      model: 'gemini-3-flash-preview',
+      model: 'gemini-3-flash',
       config: {
         responseMimeType: 'application/json',
         responseSchema: {
@@ -182,7 +182,7 @@ const QuestCreator: React.FC<QuestCreatorProps> = ({
     const validationPrompt = `You are the Gatekeeper for a learning quest generator. Decide if the user's goal is specific, meaningful, and actionable. If the text is gibberish, a single repeated word, or otherwise not a legitimate learning objective, reject it.\n\nReturn JSON with { "meaningful": boolean, "reason": string }. Use meaningful=false for gibberish, nonsense, or empty goals.`;
 
     const validationResp = await ai.models.generateContent({
-      model: 'gemini-3-flash-preview',
+      model: 'gemini-3-flash',
       config: {
         responseMimeType: 'application/json',
         responseSchema: {
@@ -275,7 +275,7 @@ Return JSON with:
 }`;
 
       const draftResp = await ai.models.generateContent({
-        model: 'gemini-3-flash-preview',
+        model: 'gemini-3-flash',
         config: {
           responseMimeType: 'application/json',
           responseSchema: {
@@ -301,7 +301,7 @@ Return JSON with:
       const matcherPrompt = `You are the Mentor Matcher. Your job is to ensure the mentor is a legendary master of the requested learning goal.\n\nGoal: "${clean}"\nDraft mentor: ${draft.mentorName}\nAlternate candidates: ${(draft.alternates && draft.alternates.length > 0 ? draft.alternates.join(', ') : 'none provided')}\n\nRules:\n- Select a historical (or widely known contemporary) person celebrated for deep expertise in this exact topic.\n- If the draft mentor already fits, keep them.\n- If not, replace them with a better-suited mentor. Prefer candidates from the alternate list before suggesting a new one.\n- Never choose someone whose accomplishments are unrelated to the goal.\n- Respond in JSON with { "mentorName": string, "reason": string } and nothing else.`;
 
       const matcherResp = await ai.models.generateContent({
-        model: 'gemini-3-flash-preview',
+        model: 'gemini-3-flash',
         config: {
           responseMimeType: 'application/json',
           responseSchema: {
