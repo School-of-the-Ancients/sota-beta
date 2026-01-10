@@ -271,14 +271,14 @@ const ConversationView: React.FC<ConversationViewProps> = ({
       const ai = new GoogleGenAI({ apiKey });
       
       const imagePromise = ai.models.generateImages({
-        model: 'imagen-4.0-generate-001',
+        model: 'gemini-2.5-flash-image',
         prompt: `A photorealistic, atmospheric, wide-angle background of: ${description}, depicted authentically for the era of ${character.name} (${character.timeframe}). Cinematic and dramatic lighting. The scene should be evocative and immersive, without people or text.`,
         config: { numberOfImages: 1, outputMimeType: 'image/jpeg', aspectRatio: '16:9' },
       });
 
       const availableTags = AMBIENCE_LIBRARY.map(a => a.tag).join(', ');
       const audioTagPromise = ai.models.generateContent({
-        model: "gemini-2.5-flash",
+        model: "gemini-3-flash-preview",
         contents: `Based on the environment description: "${description}", select the single most fitting keyword from this list: ${availableTags}. Return ONLY the keyword.`
       });
 
@@ -353,7 +353,7 @@ const ConversationView: React.FC<ConversationViewProps> = ({
         if (!apiKey) throw new Error('Missing API key');
         const ai = new GoogleGenAI({ apiKey });
         const response = await ai.models.generateImages({
-            model: 'imagen-4.0-generate-001',
+            model: 'gemini-2.5-flash-image',
             prompt: `A detailed, clear image of: a "${name}". ${description}. The artifact should be rendered in a style authentic to ${character.name}'s era and work (e.g., a da Vinci sketch, a 19th-century diagram, a classical Greek sculpture). Present it on a simple, non-distracting background like aged parchment or a museum display.`,
             config: { numberOfImages: 1, outputMimeType: 'image/jpeg', aspectRatio: '4:3' },
         });
@@ -441,7 +441,7 @@ ${contextTranscript}
 `;
 
         const response = await ai.models.generateContent({
-            model: "gemini-2.5-flash",
+            model: "gemini-3-flash-preview",
             contents: prompt,
             config: {
                 responseMimeType: "application/json",
