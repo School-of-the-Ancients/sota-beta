@@ -135,20 +135,17 @@ const QuestCreator: React.FC<QuestCreatorProps> = ({
     // --- SAFE portrait generation with fallback ---
     let portraitUrl = makeFallbackAvatar(name, persona.title);
     try {
-      const imgResp = await ai.models.generateImages({
+      const imgResp = await ai.models.generateContent({
         model: 'gemini-2.5-flash-image',
-        prompt: `A realistic, academic portrait of ${name}, ${persona.title}. Dignified, historical lighting, 1:1, museum catalogue style.`,
-        config: { numberOfImages: 1, outputMimeType: 'image/jpeg', aspectRatio: '1:1' },
+        contents: `A realistic, academic portrait of ${name}, ${persona.title}. Dignified, historical lighting, 1:1, museum catalogue style.`,
       });
 
-      const maybe = (imgResp as any)?.generatedImages?.[0];
-      const bytes =
-        maybe?.image?.imageBytes ??
-        (maybe as any)?.b64Json ??
-        (maybe as any)?.content?.image?.imageBytes;
+      const part = imgResp.candidates?.[0]?.content?.parts?.[0];
+      const bytes = part?.inlineData?.data;
+      const mimeType = part?.inlineData?.mimeType || 'image/png';
 
       if (bytes) {
-        portraitUrl = `data:image/jpeg;base64,${bytes}`;
+        portraitUrl = `data:${mimeType};base64,${bytes}`;
       } else {
         console.warn('Portrait generation returned no bytes; using fallback avatar.');
       }
