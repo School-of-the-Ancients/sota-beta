@@ -136,7 +136,7 @@ const QuestCreator: React.FC<QuestCreatorProps> = ({
     let portraitUrl = makeFallbackAvatar(name, persona.title);
     try {
       const imgResp = await ai.models.generateImages({
-        model: 'gemini-2.5-flash-image',
+        model: 'gemini-2.5-flash-preview-image',
         prompt: `A realistic, academic portrait of ${name}, ${persona.title}. Dignified, historical lighting, 1:1, museum catalogue style.`,
         config: { numberOfImages: 1, outputMimeType: 'image/jpeg', aspectRatio: '1:1' },
       });
