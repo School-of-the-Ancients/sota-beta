@@ -13,6 +13,7 @@ import SendIcon from './icons/SendIcon';
 import MuteIcon from './icons/MuteIcon';
 import UnmuteIcon from './icons/UnmuteIcon';
 import { useApiKey } from '../hooks/useApiKey';
+import { extractInlineImageData } from '@/src/lib/geminiImage';
 
 interface ConversationViewProps {
   character: Character;
@@ -270,10 +271,9 @@ const ConversationView: React.FC<ConversationViewProps> = ({
       if (!apiKey) throw new Error('Missing API key');
       const ai = new GoogleGenAI({ apiKey });
       
-      const imagePromise = ai.models.generateImages({
+      const imagePromise = ai.models.generateContent({
         model: 'gemini-2.5-flash-image',
-        prompt: `A photorealistic, atmospheric, wide-angle background of: ${description}, depicted authentically for the era of ${character.name} (${character.timeframe}). Cinematic and dramatic lighting. The scene should be evocative and immersive, without people or text.`,
-        config: { numberOfImages: 1, outputMimeType: 'image/jpeg', aspectRatio: '16:9' },
+        contents: `A photorealistic, atmospheric, wide-angle background of: ${description}, depicted authentically for the era of ${character.name} (${character.timeframe}). Cinematic and dramatic lighting. The scene should be evocative and immersive, without people or text.`,
       });
 
       const availableTags = AMBIENCE_LIBRARY.map(a => a.tag).join(', ');
@@ -290,8 +290,9 @@ const ConversationView: React.FC<ConversationViewProps> = ({
         changeAmbienceTrack(newAudioSrc);
       }
       
-      if (imageResponse.generatedImages && imageResponse.generatedImages.length > 0) {
-        const url = `data:image/jpeg;base64,${imageResponse.generatedImages[0].image.imageBytes}`;
+      const imageBytes = extractInlineImageData(imageResponse);
+      if (imageBytes) {
+        const url = `data:image/jpeg;base64,${imageBytes}`;
         onEnvironmentUpdate(url);
         setTranscript(prev => prev.map(turn => {
           if (turn.artifact?.id === environmentArtifactId) {
@@ -352,14 +353,14 @@ const ConversationView: React.FC<ConversationViewProps> = ({
     try {
         if (!apiKey) throw new Error('Missing API key');
         const ai = new GoogleGenAI({ apiKey });
-        const response = await ai.models.generateImages({
+        const response = await ai.models.generateContent({
             model: 'gemini-2.5-flash-image',
-            prompt: `A detailed, clear image of: a "${name}". ${description}. The artifact should be rendered in a style authentic to ${character.name}'s era and work (e.g., a da Vinci sketch, a 19th-century diagram, a classical Greek sculpture). Present it on a simple, non-distracting background like aged parchment or a museum display.`,
-            config: { numberOfImages: 1, outputMimeType: 'image/jpeg', aspectRatio: '4:3' },
+            contents: `A detailed, clear image of: a "${name}". ${description}. The artifact should be rendered in a style authentic to ${character.name}'s era and work (e.g., a da Vinci sketch, a 19th-century diagram, a classical Greek sculpture). Present it on a simple, non-distracting background like aged parchment or a museum display.`,
         });
 
-        if (response.generatedImages && response.generatedImages.length > 0) {
-            const url = `data:image/jpeg;base64,${response.generatedImages[0].image.imageBytes}`;
+        const imageBytes = extractInlineImageData(response);
+        if (imageBytes) {
+            const url = `data:image/jpeg;base64,${imageBytes}`;
             setTranscript(prev => prev.map(turn => {
                 if (turn.artifact?.id === artifactId) {
                     return { ...turn, text: name, artifact: { ...turn.artifact, imageUrl: url, loading: false } };

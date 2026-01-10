@@ -1,5 +1,6 @@
 import React, { useMemo, useRef, useState } from 'react';
 import { GoogleGenAI, Type } from '@google/genai';
+import { extractInlineImageData } from '@/src/lib/geminiImage';
 import type { Character, PersonaData } from '../types';
 import { AMBIENCE_LIBRARY, AVAILABLE_VOICES } from '../constants';
 import { HISTORICAL_FIGURES_SUGGESTIONS } from '../suggestions';
@@ -190,18 +191,12 @@ If you are not at least 80% confident in their historicity, set verified to fals
       let portraitUrl = makeFallbackAvatar(clean, persona.title);
       try {
         setMsg('Painting portrait…');
-        const imgResp = await ai.models.generateImages({
-          model: 'gemini-2.5-flash-preview-image',
-          prompt: `A realistic, academic portrait of ${clean}, ${persona.title}. Dignified, historical lighting, 1:1, museum catalogue style.`,
-          config: { numberOfImages: 1, outputMimeType: 'image/jpeg', aspectRatio: '1:1' },
+        const imgResp = await ai.models.generateContent({
+          model: 'gemini-2.5-flash-image',
+          contents: `A realistic, academic portrait of ${clean}, ${persona.title}. Dignified, historical lighting, 1:1, museum catalogue style.`,
         });
 
-        const maybe = (imgResp as any)?.generatedImages?.[0];
-        const bytes =
-          maybe?.image?.imageBytes ??
-          (maybe as any)?.b64Json ??
-          (maybe as any)?.content?.image?.imageBytes;
-
+        const bytes = extractInlineImageData(imgResp);
         if (bytes) {
           portraitUrl = `data:image/jpeg;base64,${bytes}`;
         } else {
