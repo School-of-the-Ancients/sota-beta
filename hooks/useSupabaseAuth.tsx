@@ -12,7 +12,6 @@ interface SupabaseAuthContextValue {
   session: Session | null;
   loading: boolean;
   isConfigured: boolean;
-  isLocalAuth: boolean;
   signInWithGoogle: () => Promise<void>;
   signInWithPassword: (email: string, password: string) => Promise<EmailAuthResult>;
   signUpWithPassword: (email: string, password: string) => Promise<EmailAuthResult>;
@@ -22,26 +21,9 @@ interface SupabaseAuthContextValue {
 const SupabaseAuthContext = createContext<SupabaseAuthContextValue | undefined>(undefined);
 
 export const SupabaseAuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [isAvailable, setIsAvailable] = useState(true);
-  const isConfigured = Boolean(supabase) && isAvailable;
+  const isConfigured = Boolean(supabase);
   const [session, setSession] = useState<Session | null>(null);
-  const [localUser, setLocalUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    try {
-      const saved = localStorage.getItem('sota-local-auth-user');
-      if (!saved) {
-        return;
-      }
-      const parsed = JSON.parse(saved) as { id?: string; email?: string };
-      if (parsed?.id && parsed?.email) {
-        setLocalUser({ id: parsed.id, email: parsed.email } as User);
-      }
-    } catch (_error) {
-      // ignore malformed local auth payload
-    }
-  }, []);
 
   useEffect(() => {
     if (!supabase) {
@@ -51,25 +33,16 @@ export const SupabaseAuthProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
     let cancelled = false;
 
-    const getSessionWithTimeout = Promise.race([
-      supabase.auth.getSession(),
-      new Promise<never>((_, reject) => {
-        setTimeout(() => reject(new Error('Supabase auth request timed out.')), 3500);
-      }),
-    ]);
-
-    getSessionWithTimeout
+    supabase.auth
+      .getSession()
       .then(({ data }) => {
         if (!cancelled) {
           setSession(data.session ?? null);
-          setIsAvailable(true);
           setLoading(false);
         }
       })
       .catch(() => {
         if (!cancelled) {
-          setSession(null);
-          setIsAvailable(false);
           setLoading(false);
         }
       });
@@ -85,8 +58,8 @@ export const SupabaseAuthProvider: React.FC<{ children: React.ReactNode }> = ({ 
   }, []);
 
   const signInWithGoogle = useCallback(async () => {
-    if (!supabase || !isAvailable) {
-      throw new Error('Google sign in is unavailable while Supabase is offline. Use email sign in for local access.');
+    if (!supabase) {
+      throw new Error('Supabase is not configured. Provide VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY to enable authentication.');
     }
 
     const { error } = await supabase.auth.signInWithOAuth({
@@ -99,17 +72,11 @@ export const SupabaseAuthProvider: React.FC<{ children: React.ReactNode }> = ({ 
     if (error) {
       throw error;
     }
-  }, [isAvailable]);
+  }, []);
 
   const signInWithPassword = useCallback(async (email: string, password: string): Promise<EmailAuthResult> => {
-    if (!supabase || !isAvailable) {
-      const fallbackUser = { id: `local-${email.toLowerCase()}`, email: email.toLowerCase() } as User;
-      setLocalUser(fallbackUser);
-      localStorage.setItem('sota-local-auth-user', JSON.stringify({ id: fallbackUser.id, email: fallbackUser.email }));
-      return {
-        user: fallbackUser,
-        session: null,
-      };
+    if (!supabase) {
+      throw new Error('Supabase is not configured. Provide VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY to enable authentication.');
     }
 
     const { data, error } = await supabase.auth.signInWithPassword({
@@ -125,17 +92,11 @@ export const SupabaseAuthProvider: React.FC<{ children: React.ReactNode }> = ({ 
       user: data.user,
       session: data.session,
     };
-  }, [isAvailable]);
+  }, []);
 
   const signUpWithPassword = useCallback(async (email: string, password: string): Promise<EmailAuthResult> => {
-    if (!supabase || !isAvailable) {
-      const fallbackUser = { id: `local-${email.toLowerCase()}`, email: email.toLowerCase() } as User;
-      setLocalUser(fallbackUser);
-      localStorage.setItem('sota-local-auth-user', JSON.stringify({ id: fallbackUser.id, email: fallbackUser.email }));
-      return {
-        user: fallbackUser,
-        session: null,
-      };
+    if (!supabase) {
+      throw new Error('Supabase is not configured. Provide VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY to enable authentication.');
     }
 
     const { data, error } = await supabase.auth.signUp({
@@ -151,11 +112,9 @@ export const SupabaseAuthProvider: React.FC<{ children: React.ReactNode }> = ({ 
       user: data.user,
       session: data.session,
     };
-  }, [isAvailable]);
+  }, []);
 
   const signOut = useCallback(async () => {
-    setLocalUser(null);
-    localStorage.removeItem('sota-local-auth-user');
     if (!supabase) {
       return;
     }
@@ -168,17 +127,16 @@ export const SupabaseAuthProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
   const value = useMemo(
     () => ({
-      user: session?.user ?? localUser,
+      user: session?.user ?? null,
       session,
       loading,
       isConfigured,
-      isLocalAuth: !session?.user && Boolean(localUser),
       signInWithGoogle,
       signInWithPassword,
       signUpWithPassword,
       signOut,
     }),
-    [session, localUser, loading, isConfigured, signInWithGoogle, signInWithPassword, signUpWithPassword, signOut]
+    [session, loading, isConfigured, signInWithGoogle, signInWithPassword, signUpWithPassword, signOut]
   );
 
   return <SupabaseAuthContext.Provider value={value}>{children}</SupabaseAuthContext.Provider>;
