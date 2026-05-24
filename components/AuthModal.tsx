@@ -50,14 +50,10 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, prompt, onClose }) => {
     return null;
   }
 
-  const disabled = !isConfigured || isSubmitting;
+  const disabled = isSubmitting;
 
   const handleEmailSubmit: React.FormEventHandler<HTMLFormElement> = async (event) => {
     event.preventDefault();
-    if (!isConfigured) {
-      setError('Authentication is not configured. Provide Supabase credentials to enable sign in.');
-      return;
-    }
     if (!email.trim() || !password) {
       setError('Enter both email and password.');
       return;
@@ -87,7 +83,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, prompt, onClose }) => {
 
   const handleGoogleClick = async () => {
     if (!isConfigured) {
-      setError('Authentication is not configured. Provide Supabase credentials to enable sign in.');
+      setError('Authentication is currently unavailable. Check Supabase credentials and project status.');
       return;
     }
     setIsSubmitting(true);
@@ -129,7 +125,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, prompt, onClose }) => {
 
         {!isConfigured && (
           <p className="mt-4 rounded-md border border-red-500/40 bg-red-500/10 p-3 text-sm text-red-200">
-            Authentication is not configured. Provide VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY to enable sign in.
+            Supabase auth is unavailable. Email sign-in works in local-only mode (this browser only); Google sign-in is disabled.
           </p>
         )}
 
@@ -193,7 +189,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, prompt, onClose }) => {
           type="button"
           onClick={handleGoogleClick}
           className="mt-4 flex w-full items-center justify-center gap-2 rounded-md border border-amber-500/40 px-4 py-2 text-sm font-semibold text-amber-100 transition hover:bg-amber-500/10 disabled:cursor-not-allowed disabled:opacity-60"
-          disabled={disabled}
+          disabled={disabled || !isConfigured}
         >
           Continue with Google
         </button>
