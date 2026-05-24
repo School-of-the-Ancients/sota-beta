@@ -94,7 +94,7 @@ const clearLocalSnapshot = () => {
 };
 
 export const UserDataProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { user } = useSupabaseAuth();
+  const { user, isLocalAuth } = useSupabaseAuth();
   const [data, setData] = useState<UserData>({ ...DEFAULT_USER_DATA });
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -105,7 +105,7 @@ export const UserDataProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   const persist = useCallback(
     async (next: UserData) => {
-      if (!user) {
+      if (!user || isLocalAuth) {
         return;
       }
       setSaving(true);
@@ -119,7 +119,7 @@ export const UserDataProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         setSaving(false);
       }
     },
-    [user]
+    [isLocalAuth, user]
   );
 
   const flushPendingPersist = useCallback(async () => {
@@ -140,7 +140,7 @@ export const UserDataProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   const schedulePersist = useCallback(
     (next: UserData) => {
-      if (!user) {
+      if (!user || isLocalAuth) {
         pendingPersistRef.current = null;
         if (persistTimeoutRef.current) {
           clearTimeout(persistTimeoutRef.current);
@@ -159,7 +159,7 @@ export const UserDataProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         void flushPendingPersist();
       }, 1500);
     },
-    [flushPendingPersist, user]
+    [flushPendingPersist, isLocalAuth, user]
   );
 
   const migrateFromLocalStorage = useCallback(
@@ -198,7 +198,7 @@ export const UserDataProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   );
 
   const refresh = useCallback(async () => {
-    if (!user) {
+    if (!user || isLocalAuth) {
       setData({ ...DEFAULT_USER_DATA });
       setLoading(false);
       return;
@@ -217,7 +217,7 @@ export const UserDataProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     } finally {
       setLoading(false);
     }
-  }, [migrateFromLocalStorage, user]);
+  }, [isLocalAuth, migrateFromLocalStorage, user]);
 
   useEffect(() => {
     hasMigratedRef.current = false;
