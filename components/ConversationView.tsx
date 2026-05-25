@@ -1,8 +1,8 @@
 import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { GoogleGenAI, Type } from '@google/genai';
 import type { Character, ConversationTurn, SavedConversation, Quest } from '../types';
-import { useGeminiLive } from '../hooks/useGeminiLive';
 import { useAmbientAudio } from '../hooks/useAmbientAudio';
+import { useTextDialogue } from '../hooks/useTextDialogue';
 import { ConnectionState } from '../types';
 import { AMBIENCE_LIBRARY } from '../constants';
 import MicrophoneIcon from './icons/MicrophoneIcon';
@@ -407,15 +407,12 @@ const ConversationView: React.FC<ConversationViewProps> = ({
     isMicActive,
     toggleMicrophone,
     sendTextMessage
-  } = useGeminiLive(
-    character.systemInstruction,
-    character.voiceName,
-    character.voiceAccent,
-    handleTurnComplete,
-    handleEnvironmentChange,
-    handleArtifactDisplay,
+  } = useTextDialogue({
+    character,
     activeQuest,
-  );
+    transcript,
+    onTurnComplete: handleTurnComplete,
+  });
 
   const updateDynamicSuggestions = useCallback(async (currentTranscript: ConversationTurn[]) => {
     if (currentTranscript.length === 0) return;
@@ -565,7 +562,11 @@ ${contextTranscript}
                     <StatusIndicator state={connectionState} isMicActive={isMicActive} />
                 </div>
             </div>
-            {!apiKey && (
+              <div className="mt-4 w-full max-w-xs rounded-lg border border-teal-500/40 bg-teal-500/10 p-3 text-left text-sm text-teal-100">
+                <p className="font-semibold text-teal-200">Text-first Socratic dialogue</p>
+                <p className="mt-1 text-teal-100/80">Type to learn. Voice input and read-aloud controls will be layered on after the text loop is stable.</p>
+              </div>
+              {!apiKey && (
               <div className="mt-6 w-full max-w-xs rounded-lg border border-amber-500/60 bg-amber-500/10 p-3 text-sm text-amber-100">
                 Add your Gemini API key in Settings to enable live dialogue and visual generation.
               </div>
@@ -669,8 +670,10 @@ ${contextTranscript}
               <div className="flex items-center gap-2">
                 <button
                     onClick={() => toggleMicrophone()}
-                    aria-label={isMicActive ? "Mute microphone" : "Unmute microphone"}
-                    className={`p-2 rounded-full transition-colors duration-300 border ${isMicActive ? 'bg-blue-800/70 hover:bg-blue-700 border-blue-700' : 'bg-gray-700 hover:bg-gray-600 border-gray-600'}`}
+                    aria-label={isMicActive ? "Disable voice input" : "Enable voice input"}
+                    disabled
+                    title="Voice input will be rebuilt after the text-first dialogue loop is stable."
+                    className={`p-2 rounded-full transition-colors duration-300 border disabled:cursor-not-allowed disabled:opacity-50 ${isMicActive ? 'bg-blue-800/70 hover:bg-blue-700 border-blue-700' : 'bg-gray-700 hover:bg-gray-600 border-gray-600'}`}
                 >
                     {isMicActive ? <MicrophoneIcon className="w-6 h-6 text-white" /> : <MicrophoneOffIcon className="w-6 h-6 text-white" />}
                 </button>
@@ -735,7 +738,7 @@ ${contextTranscript}
                     onChange={(e) => setTextInput(e.target.value)}
                     placeholder={isMicActive ? placeholder : "Type a message..."}
                     className="flex-grow bg-gray-800 border border-gray-600 rounded-lg px-4 py-2 text-white focus:outline-none focus:ring-2 focus:ring-amber-400 disabled:opacity-50"
-                    disabled={connectionState === ConnectionState.CONNECTING || connectionState === ConnectionState.SPEAKING || connectionState === ConnectionState.THINKING }
+                    disabled={connectionState === ConnectionState.THINKING }
                 />
                 <button
                     type="submit"
