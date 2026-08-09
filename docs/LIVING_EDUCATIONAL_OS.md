@@ -40,7 +40,7 @@ It doesn’t have a fixed curriculum — it evolves based on each learner’s cu
 | **Quest Engine** | Converts goals into structured learning loops | `QuestCreator.tsx` |
 | **Dialogue Runtime** | Handles Socratic Q&A, speech, visuals, and artifacts | `ConversationView.tsx` + Gemini Live |
 | **Assessment Subsystem** | Evaluates mastery, generates quizzes, feedback | `QuestQuiz.tsx` + `App.tsx` end-conversation logic |
-| **Memory & Persistence** | Stores conversations, quests, and completions | Supabase + local encryption |
+| **Memory & Persistence** | Stores conversations, quests, and completions | Supabase; API keys remain session-only |
 | **Evolution Loop** | “Next steps → new quest → new mentor” | `HistoryView.tsx` next-quest button |
 
 So when you say “School of the Ancients creates mentors and quests dynamically,” you’re describing what an operating system does: spawning, executing, saving state, and looping.

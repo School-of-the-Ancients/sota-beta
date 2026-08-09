@@ -29,7 +29,6 @@ import ConversationRoute from './src/routes/Conversation';
 import HistoryRoute from './src/routes/History';
 import CharacterCreatorRoute from './src/routes/CharacterCreator';
 import { links } from './src/lib/links';
-import { decryptString, encryptString, getDeviceKeyIdentifier, isEncryptionAvailable } from './src/lib/encryption';
 
 const App: React.FC = () => {
   const navigate = useNavigate();
@@ -57,21 +56,14 @@ const App: React.FC = () => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [decryptedApiKey, setDecryptedApiKey] = useState<string | null>(null);
   const [apiKeyInput, setApiKeyInput] = useState('');
-  const [isDecryptingApiKey, setIsDecryptingApiKey] = useState(false);
-  const [isDerivingDeviceKeyId, setIsDerivingDeviceKeyId] = useState(false);
   const [apiKeyError, setApiKeyError] = useState<string | null>(null);
-  const [isSavingApiKey, setIsSavingApiKey] = useState(false);
-  const [apiKeyStatus, setApiKeyStatus] = useState<'idle' | 'saved' | 'cleared'>('idle');
-  const [deviceKeyId, setDeviceKeyId] = useState<string | null>(null);
-  const [activeApiKeyUpdatedAt, setActiveApiKeyUpdatedAt] = useState<string | null>(null);
-  const [encryptionSupported, setEncryptionSupported] = useState(isEncryptionAvailable());
+  const [apiKeyStatus, setApiKeyStatus] = useState<'idle' | 'active' | 'cleared'>('idle');
 
   const customCharacters = userData.customCharacters;
   const customQuests = userData.customQuests;
   const completedQuests = userData.completedQuestIds;
   const conversationHistory = userData.conversations;
   const lastQuizResult = userData.lastQuizResult;
-  const hasStoredApiKey = Boolean(userData.apiKey) || Object.keys(userData.apiKeys ?? {}).length > 0;
   const isSaving = isSavingConversation || dataSaving;
   const isAuthenticated = Boolean(user);
   const isAppLoading = authLoading || dataLoading;
@@ -125,151 +117,12 @@ const App: React.FC = () => {
   }, [isAuthenticated]);
 
   useEffect(() => {
-    setEncryptionSupported(isEncryptionAvailable());
+    try {
+      window.localStorage.removeItem('sota-device-secret');
+    } catch (error) {
+      console.warn('Unable to remove the legacy browser encryption key', error);
+    }
   }, []);
-
-  useEffect(() => {
-    if (!encryptionSupported) {
-      setDeviceKeyId(null);
-      setIsDerivingDeviceKeyId(false);
-      return;
-    }
-
-    let isMounted = true;
-    setIsDerivingDeviceKeyId(true);
-
-    getDeviceKeyIdentifier()
-      .then((identifier) => {
-        if (!isMounted) {
-          return;
-        }
-        setDeviceKeyId(identifier);
-      })
-      .catch((error) => {
-        console.error('Failed to determine the device identifier for API key encryption', error);
-        if (!isMounted) {
-          return;
-        }
-        setDeviceKeyId(null);
-        if (hasStoredApiKey) {
-          setDecryptedApiKey(null);
-          setApiKeyInput('');
-          setApiKeyError(
-            'We could not unlock your stored API key on this device. Update your browser settings or enter it again to continue.'
-          );
-          setApiKeyStatus('idle');
-          setActiveApiKeyUpdatedAt(null);
-        }
-        setIsDecryptingApiKey(false);
-      })
-      .finally(() => {
-        if (!isMounted) {
-          return;
-        }
-        setIsDerivingDeviceKeyId(false);
-      });
-
-    return () => {
-      isMounted = false;
-    };
-  }, [encryptionSupported, hasStoredApiKey]);
-
-  useEffect(() => {
-    if (!encryptionSupported) {
-      if (hasStoredApiKey) {
-        setApiKeyError('This browser does not support the encryption required to unlock your API key.');
-      } else {
-        setApiKeyError(null);
-      }
-      setDecryptedApiKey(null);
-      setApiKeyInput('');
-      setIsDecryptingApiKey(false);
-      setApiKeyStatus('idle');
-      setActiveApiKeyUpdatedAt(null);
-      return;
-    }
-
-    if (!hasStoredApiKey) {
-      setDecryptedApiKey(null);
-      setApiKeyInput('');
-      setApiKeyError(null);
-      setApiKeyStatus('idle');
-      setIsDecryptingApiKey(false);
-      setActiveApiKeyUpdatedAt(null);
-      return;
-    }
-
-    if (!deviceKeyId) {
-      setIsDecryptingApiKey(isDerivingDeviceKeyId && hasStoredApiKey);
-      return;
-    }
-
-    const entries = userData.apiKeys ?? {};
-    const entryForDevice = entries[deviceKeyId] ?? null;
-    const legacy = userData.apiKey;
-    const hasAnyEntries = Object.keys(entries).length > 0;
-    const legacyDeviceId = legacy?.deviceId ?? null;
-
-    let target = entryForDevice as typeof entryForDevice | typeof legacy | null;
-
-    if (!target && legacy) {
-      if (!hasAnyEntries || legacyDeviceId === null || legacyDeviceId === deviceKeyId) {
-        target = legacy;
-      }
-    }
-
-    if (!target) {
-      setDecryptedApiKey(null);
-      setApiKeyInput('');
-      setApiKeyError(hasAnyEntries ? 'Enter your API key to use it on this device.' : null);
-      setApiKeyStatus('idle');
-      setIsDecryptingApiKey(false);
-      setActiveApiKeyUpdatedAt(null);
-      return;
-    }
-
-    let isMounted = true;
-    setIsDecryptingApiKey(true);
-    setApiKeyStatus('idle');
-
-    decryptString(target.cipherText, target.iv)
-      .then((value) => {
-        if (!isMounted) {
-          return;
-        }
-        setDecryptedApiKey(value);
-        setApiKeyInput(value);
-        setApiKeyError(null);
-        setActiveApiKeyUpdatedAt(target?.updatedAt ?? null);
-      })
-      .catch((error) => {
-        console.error('Failed to decrypt API key', error);
-        if (!isMounted) {
-          return;
-        }
-        setDecryptedApiKey(null);
-        setApiKeyInput('');
-        setApiKeyError('We could not decrypt your stored API key on this device. Enter it again to continue.');
-        setActiveApiKeyUpdatedAt(null);
-      })
-      .finally(() => {
-        if (!isMounted) {
-          return;
-        }
-        setIsDecryptingApiKey(false);
-      });
-
-    return () => {
-      isMounted = false;
-    };
-  }, [
-    deviceKeyId,
-    encryptionSupported,
-    hasStoredApiKey,
-    isDerivingDeviceKeyId,
-    userData.apiKey,
-    userData.apiKeys,
-  ]);
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -277,7 +130,6 @@ const App: React.FC = () => {
       setDecryptedApiKey(null);
       setApiKeyError(null);
       setApiKeyStatus('idle');
-      setActiveApiKeyUpdatedAt(null);
     }
   }, [isAuthenticated]);
 
@@ -890,81 +742,26 @@ const App: React.FC = () => {
     navigate(links.quiz(questId));
   };
 
-  const handleSaveApiKey = useCallback(async () => {
+  const handleSaveApiKey = useCallback(() => {
     if (!isAuthenticated) {
-      setApiKeyError('Sign in to save your API key.');
-      return;
-    }
-
-    if (!encryptionSupported) {
-      setApiKeyError('This browser cannot encrypt your API key. Try a modern browser with Web Crypto support.');
-      return;
-    }
-
-    if (!deviceKeyId) {
-      setApiKeyError('Unable to secure your API key on this device. Refresh the page and try again.');
+      setApiKeyError('Sign in to use your API key.');
       return;
     }
 
     const trimmed = apiKeyInput.trim();
 
     if (!trimmed) {
-      setIsSavingApiKey(true);
-      try {
-        updateData((prev) => {
-          const nextApiKeys = { ...(prev.apiKeys ?? {}) };
-          delete nextApiKeys[deviceKeyId];
-          return {
-            ...prev,
-            apiKey: null,
-            apiKeys: nextApiKeys,
-          };
-        });
-        setDecryptedApiKey(null);
-        setApiKeyStatus('cleared');
-        setApiKeyError(null);
-        setActiveApiKeyUpdatedAt(null);
-      } finally {
-        setIsSavingApiKey(false);
-      }
+      setDecryptedApiKey(null);
+      setApiKeyStatus('cleared');
+      setApiKeyError(null);
       return;
     }
 
-    try {
-      setIsSavingApiKey(true);
-      const encrypted = await encryptString(trimmed);
-      const updatedAt = new Date().toISOString();
-      updateData((prev) => {
-        const nextApiKeys = { ...(prev.apiKeys ?? {}) };
-        nextApiKeys[deviceKeyId] = {
-          cipherText: encrypted.cipherText,
-          iv: encrypted.iv,
-          updatedAt,
-          deviceId: deviceKeyId,
-        };
-        return {
-          ...prev,
-          apiKey: {
-            cipherText: encrypted.cipherText,
-            iv: encrypted.iv,
-            updatedAt,
-            deviceId: deviceKeyId,
-          },
-          apiKeys: nextApiKeys,
-        };
-      });
-      setDecryptedApiKey(trimmed);
-      setActiveApiKeyUpdatedAt(updatedAt);
-      setApiKeyStatus('saved');
-      setApiKeyError(null);
-    } catch (error) {
-      console.error('Failed to encrypt API key before saving', error);
-      setApiKeyError('Unable to encrypt your API key on this device.');
-      setApiKeyStatus('idle');
-    } finally {
-      setIsSavingApiKey(false);
-    }
-  }, [apiKeyInput, deviceKeyId, encryptionSupported, isAuthenticated, updateData]);
+    setDecryptedApiKey(trimmed);
+    setApiKeyInput('');
+    setApiKeyStatus('active');
+    setApiKeyError(null);
+  }, [apiKeyInput, isAuthenticated]);
 
   const handleRemoveApiKey = useCallback(() => {
     if (!isAuthenticated) {
@@ -972,26 +769,11 @@ const App: React.FC = () => {
       return;
     }
 
-    if (!deviceKeyId) {
-      setApiKeyError('Unable to manage your API key on this device. Refresh the page and try again.');
-      return;
-    }
-
     setApiKeyInput('');
     setDecryptedApiKey(null);
     setApiKeyError(null);
     setApiKeyStatus('cleared');
-    setActiveApiKeyUpdatedAt(null);
-    updateData((prev) => {
-      const nextApiKeys = { ...(prev.apiKeys ?? {}) };
-      delete nextApiKeys[deviceKeyId];
-      return {
-        ...prev,
-        apiKey: null,
-        apiKeys: nextApiKeys,
-      };
-    });
-  }, [deviceKeyId, isAuthenticated, updateData]);
+  }, [isAuthenticated]);
 
   const handleEndConversation = async (transcript: ConversationTurn[], sessionId: string) => {
     if (!selectedCharacter) return;
@@ -1528,7 +1310,7 @@ const App: React.FC = () => {
                     <div>
                       <h2 className="text-3xl font-bold text-amber-200">User Settings</h2>
                       <p className="text-sm text-gray-400 mt-1">
-                        Securely manage how the School of the Ancients connects to Gemini.
+                        Use a Gemini API key for the current browser session.
                       </p>
                     </div>
                     {isAuthenticated ? (
@@ -1571,50 +1353,42 @@ const App: React.FC = () => {
                               }
                             }}
                             placeholder="Paste your AI Studio key"
-                            disabled={!encryptionSupported || isSavingApiKey || isDecryptingApiKey}
                           />
-                          {isDecryptingApiKey && <p className="text-xs text-amber-300">Decrypting your saved key…</p>}
-                          {activeApiKeyUpdatedAt && !isDecryptingApiKey && (
-                            <p className="text-xs text-gray-500">
-                              Saved {new Date(activeApiKeyUpdatedAt).toLocaleString()}
-                            </p>
-                          )}
                         </div>
                         <div className="flex flex-wrap gap-3">
                           <button
                             type="submit"
                             className="inline-flex items-center gap-2 rounded-md border border-amber-400/60 bg-amber-500/10 px-4 py-2 text-sm font-semibold text-amber-200 transition hover:bg-amber-500/20 disabled:opacity-50"
-                            disabled={!encryptionSupported || isSavingApiKey || isDecryptingApiKey}
+                            disabled={!apiKeyInput.trim()}
                           >
-                            {isSavingApiKey ? 'Saving…' : 'Save API Key'}
+                            Use API Key
                           </button>
                           <button
                             type="button"
                             onClick={handleRemoveApiKey}
                             className="inline-flex items-center gap-2 rounded-md border border-gray-600 bg-transparent px-4 py-2 text-sm font-semibold text-gray-300 transition hover:bg-gray-700/60 disabled:opacity-50"
-                            disabled={!hasStoredApiKey || isSavingApiKey || isDecryptingApiKey}
+                            disabled={!decryptedApiKey}
                           >
-                            Remove stored key
+                            Clear API Key
                           </button>
                         </div>
                         <p className="text-xs text-gray-400">
-                          {encryptionSupported
-                            ? 'Each device keeps its own encrypted copy of your key. Enter it once per device to have it ready.'
-                            : 'Secure storage is unavailable in this browser. Update your browser to store an API key.'}
+                          Your key stays only in memory for this page session. It is never stored in your browser or
+                          synced to your account.
                         </p>
                         {apiKeyError ? (
                           <p className="text-sm text-red-400">{apiKeyError}</p>
-                        ) : apiKeyStatus === 'saved' ? (
-                          <p className="text-sm text-emerald-400">API key encrypted and synced to your account.</p>
+                        ) : apiKeyStatus === 'active' ? (
+                          <p className="text-sm text-emerald-400">API key active for this session.</p>
                         ) : apiKeyStatus === 'cleared' ? (
-                          <p className="text-sm text-amber-300">Stored API key removed for this account.</p>
+                          <p className="text-sm text-amber-300">API key cleared from this session.</p>
                         ) : null}
                       </form>
                     ) : (
                       <div className="bg-gray-800/60 border border-gray-700 rounded-xl p-6 text-center">
                         <p className="text-lg text-amber-200 font-semibold mb-2">Sign in to add your API key.</p>
                         <p className="text-sm text-gray-300">
-                          Authenticate to encrypt your Gemini key and sync it with your explorer profile.
+                          Authenticate to use a Gemini key for this page session. The key will not be stored.
                         </p>
                       </div>
                     )}

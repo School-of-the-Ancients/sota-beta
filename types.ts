@@ -120,15 +120,6 @@ export interface Quest {
   focusPoints: string[];
 }
 
-export interface StoredApiKey {
-  cipherText: string;
-  iv: string;
-  updatedAt?: string | null;
-  deviceId?: string | null;
-}
-
-export type StoredApiKeyMap = Record<string, StoredApiKey>;
-
 export interface UserData {
   customCharacters: Character[];
   customQuests: Quest[];
@@ -137,6 +128,4 @@ export interface UserData {
   activeQuestId: string | null;
   lastQuizResult: QuizResult | null;
   migratedAt?: string | null;
-  apiKey: StoredApiKey | null;
-  apiKeys: StoredApiKeyMap;
 }

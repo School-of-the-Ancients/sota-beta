@@ -50,12 +50,15 @@ describe('fetchUserData', () => {
     updateEqMock.mockReset();
   });
 
-  it('coerces legacy string API keys to null', async () => {
+  it('removes legacy persisted API key fields and saves the cleanup', async () => {
     setupSupabaseResponse({
       data: {
         data: {
           ...DEFAULT_USER_DATA,
-          apiKey: 'plain-text-key',
+          apiKey: { cipherText: 'cipher', iv: 'iv-value' },
+          apiKeys: {
+            'device-a': { cipherText: 'cipher-a', iv: 'iv-a' },
+          },
         },
         migrated_at: null,
       },
@@ -64,29 +67,19 @@ describe('fetchUserData', () => {
 
     const result = await fetchUserData('user-1');
 
-    expect(result.apiKey).toBeNull();
-    expect(result.apiKeys).toEqual({});
-    expect(updateMock).toHaveBeenCalledWith({
-      data: expect.objectContaining({ apiKey: null, apiKeys: {} }),
-      migrated_at: null,
-    });
+    expect(result).not.toHaveProperty('apiKey');
+    expect(result).not.toHaveProperty('apiKeys');
+    expect(updateMock).toHaveBeenCalledOnce();
+    const persistedData = updateMock.mock.calls[0][0].data;
+    expect(persistedData).not.toHaveProperty('apiKey');
+    expect(persistedData).not.toHaveProperty('apiKeys');
     expect(updateEqMock).toHaveBeenCalledWith('user_id', 'user-1');
   });
 
-  it('preserves encrypted API keys with metadata', async () => {
-    const encrypted = {
-      cipherText: 'cipher',
-      iv: 'iv-value',
-      updatedAt: '2024-05-20T12:00:00Z',
-      deviceId: 'device-a',
-    } as const;
-
+  it('preserves clean user data without an unnecessary write', async () => {
     setupSupabaseResponse({
       data: {
-        data: {
-          ...DEFAULT_USER_DATA,
-          apiKey: encrypted,
-        },
+        data: DEFAULT_USER_DATA,
         migrated_at: '2024-05-21T09:00:00Z',
       },
       error: null,
@@ -94,81 +87,16 @@ describe('fetchUserData', () => {
 
     const result = await fetchUserData('user-2');
 
-    expect(result.apiKey).toEqual(encrypted);
-    expect(result.apiKeys).toEqual({});
     expect(result.migratedAt).toBe('2024-05-21T09:00:00Z');
     expect(updateMock).not.toHaveBeenCalled();
   });
 
-  it('drops malformed encrypted payloads', async () => {
-    setupSupabaseResponse({
-      data: {
-        data: {
-          ...DEFAULT_USER_DATA,
-          apiKey: { cipherText: 123, iv: null },
-        },
-        migrated_at: null,
-      },
-      error: null,
-    });
+  it('creates default data for a new account', async () => {
+    setupSupabaseResponse({ data: null, error: null });
 
     const result = await fetchUserData('user-3');
 
-    expect(result.apiKey).toBeNull();
-    expect(result.apiKeys).toEqual({});
-    expect(updateMock).toHaveBeenCalledWith({
-      data: expect.objectContaining({ apiKey: null, apiKeys: {} }),
-      migrated_at: null,
-    });
-    expect(updateEqMock).toHaveBeenCalledWith('user_id', 'user-3');
-  });
-
-  it('sanitizes multi-device API key entries', async () => {
-    setupSupabaseResponse({
-      data: {
-        data: {
-          ...DEFAULT_USER_DATA,
-          apiKeys: {
-            'device-a': { cipherText: 'cipher-a', iv: 'iv-a', updatedAt: '2024-06-01T00:00:00Z' },
-            'device-b': { cipherText: 'cipher-b', iv: 'iv-b', updatedAt: 'not-a-date', deviceId: 'device-b' },
-          },
-        },
-        migrated_at: null,
-      },
-      error: null,
-    });
-
-    const result = await fetchUserData('user-4');
-
-    expect(result.apiKeys).toEqual({
-      'device-a': { cipherText: 'cipher-a', iv: 'iv-a', updatedAt: '2024-06-01T00:00:00Z', deviceId: null },
-      'device-b': { cipherText: 'cipher-b', iv: 'iv-b', updatedAt: null, deviceId: 'device-b' },
-    });
-    expect(updateMock).not.toHaveBeenCalled();
-  });
-
-  it('drops malformed multi-device entries and persists the cleanup', async () => {
-    setupSupabaseResponse({
-      data: {
-        data: {
-          ...DEFAULT_USER_DATA,
-          apiKeys: {
-            'device-a': null,
-            'device-b': { cipherText: 123, iv: 'iv-b' },
-          },
-        },
-        migrated_at: null,
-      },
-      error: null,
-    });
-
-    const result = await fetchUserData('user-5');
-
-    expect(result.apiKeys).toEqual({});
-    expect(updateMock).toHaveBeenCalledWith({
-      data: expect.objectContaining({ apiKeys: {} }),
-      migrated_at: null,
-    });
-    expect(updateEqMock).toHaveBeenCalledWith('user_id', 'user-5');
+    expect(result).toEqual(DEFAULT_USER_DATA);
+    expect(insertMock).toHaveBeenCalledWith({ user_id: 'user-3', data: DEFAULT_USER_DATA });
   });
 });
