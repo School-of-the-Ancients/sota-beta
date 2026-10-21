@@ -1,0 +1,5 @@
+{
+  "configUrl": "https://sim.thetopham.com/sota-api/client-config",
+  "allowSignup": false,
+  "googleEnabled": false
+}
