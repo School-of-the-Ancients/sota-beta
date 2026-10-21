@@ -32,7 +32,9 @@ The renderer refuses to overwrite an existing instance. Preserve its secrets/vol
 
 ## Frontend and HTTPS
 
-Copy generated `frontend.env` privately into the beta checkout as `.env.production.local`, then run `npm ci` and `npm run build -- --base=/sota/`. Transfer only `dist/` into the instance's `dist/` directory. Start `web` with Compose. The router and OAuth return path respect Vite's base path; private deployment flags hide unsupported signup/Google UI without changing the defaults of other deployments.
+Production startup reads `public/sota-runtime.json`, which contains only the reviewed HTTPS configuration URL and UI capability flags. It then fetches the public anon configuration before mounting the app. Old Vercel build-time backend values are ignored in production, privileged keys are rejected, and failed/malformed configuration fails closed. Development can still use local Vite environment values. No provider credentials or service-role key are committed.
+
+Run `npm ci` and `npm run build -- --base=/sota/` for the secondary path deployment; Vercel uses the root build. Transfer only `dist/` into the instance's `dist/` directory. Start `web` with Compose. The router and OAuth return path respect Vite's base path; runtime capability flags hide unsupported signup/Google UI.
 
 At the existing HTTPS proxy, add these routes while preserving the existing configuration:
 
@@ -62,4 +64,4 @@ python3 verify.py --instance "$HOME/sota-backend" --base-url https://example.com
 
 The API verifier checks owner login, refresh, blocked signup, absent-key/anonymous denial, another signed identity's denial, row ownership, and owner save/read. It restores the previous owner row (or deletes the temporary test row) afterward. It deliberately does not create an unauthorized real user. Check browser load/navigation, correct backend origin, private login UI, and public TLS separately. Verify the original/shared database remains unchanged. Source changes require current-head review; deployment receipts must identify the deployed source.
 
-The first deployment can use a different URL from the old Vercel beta. Do not claim that Vercel's domain/configuration changed without verifying its actual deployed bundle.
+The secondary deployment can use a different URL from the old Vercel beta. The GitHub-linked Vercel deployment receives the runtime configuration change after reviewed merge. Verify both the live bundle and its runtime-config request before claiming the original beta has been restored.

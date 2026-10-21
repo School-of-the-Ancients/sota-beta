@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useSupabaseAuth } from '../hooks/useSupabaseAuth';
+import { authCapabilities } from '../supabaseClient';
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -51,8 +52,8 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, prompt, onClose }) => {
   }
 
   const disabled = !isConfigured || isSubmitting;
-  const allowSignup = import.meta.env.VITE_ALLOW_SIGNUP !== 'false';
-  const googleEnabled = import.meta.env.VITE_GOOGLE_AUTH_ENABLED !== 'false';
+  const allowSignup = authCapabilities.allowSignup && import.meta.env.VITE_ALLOW_SIGNUP !== 'false';
+  const googleEnabled = authCapabilities.googleEnabled && import.meta.env.VITE_GOOGLE_AUTH_ENABLED !== 'false';
 
   const handleEmailSubmit: React.FormEventHandler<HTMLFormElement> = async (event) => {
     event.preventDefault();
