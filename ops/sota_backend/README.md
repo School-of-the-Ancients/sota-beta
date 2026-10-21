@@ -53,6 +53,19 @@ example.com {
 
 Validate the full proxy candidate before reload, preserve a private rollback copy, and test unrelated routes afterward. No DNS/provider authorization is implied by SSH access; the operator must own and already route the chosen HTTPS hostname.
 
+If the public hostname actually uses a locally managed Cloudflare Tunnel, add path-specific ingress rules **before** its existing catch-all rules instead of changing an unused Caddy instance:
+
+```yaml
+- hostname: example.com
+  path: ^/sota-api(/.*)?$
+  service: http://192.168.1.10:8101
+- hostname: example.com
+  path: ^/sota(/.*)?$
+  service: http://192.168.1.10:8101
+```
+
+The web container handles both prefixes and forwards API traffic to the internal gateway. Preserve all other ingress entries verbatim, validate the candidate with `cloudflared tunnel --config PATH ingress validate`, then apply it with a rollback copy. Verify public HTTP behavior; a healthy unused proxy is not proof that traffic reaches it.
+
 ## Verification and review
 
 ```bash

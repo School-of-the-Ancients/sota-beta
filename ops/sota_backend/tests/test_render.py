@@ -36,6 +36,13 @@ class RenderTests(unittest.TestCase):
         self.assertIn('umask 077', compose['services']['gateway']['entrypoint'][2])
         self.assertNotIn('CREATE OR REPLACE FUNCTION auth.jwt()', (self.path / 'roles.sql').read_text())
 
+    def test_web_handles_cloudflare_tunnel_prefixes(self):
+        self.build()
+        config = (self.path / 'nginx.conf').read_text()
+        self.assertIn('location /sota-api/', config)
+        self.assertIn('proxy_pass http://gateway:8000/;', config)
+        self.assertIn('rewrite ^/sota/(.*)$ /$1 break;', config)
+
     def test_rls_restricts_identity_and_row_owner(self):
         self.build()
         sql = (self.path / 'schema.sql').read_text()

@@ -138,7 +138,28 @@ COMMIT;
             'volumes': ['./dist:/usr/share/nginx/html:ro', './nginx.conf:/etc/nginx/conf.d/default.conf:ro']}
     }, 'volumes': {'sota-db': {}, 'sota-db-config': {}}}
     write('compose.json', json.dumps(compose, indent=2) + '\n', 0o644)
-    write('nginx.conf', 'server {\n listen 80;\n server_name _;\n root /usr/share/nginx/html;\n add_header X-Content-Type-Options nosniff always;\n add_header Referrer-Policy strict-origin-when-cross-origin always;\n location / { try_files $uri $uri/ /index.html; add_header Cache-Control "no-cache"; }\n}\n', 0o644)
+    write('nginx.conf', '''server {
+ listen 80;
+ server_name _;
+ root /usr/share/nginx/html;
+ client_max_body_size 16m;
+ add_header X-Content-Type-Options nosniff always;
+ add_header Referrer-Policy strict-origin-when-cross-origin always;
+ location = /sota { return 308 /sota/; }
+ location /sota-api/ {
+   proxy_pass http://gateway:8000/;
+   proxy_set_header Host $http_host;
+   proxy_set_header X-Forwarded-Proto $http_x_forwarded_proto;
+   proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+ }
+ location /sota/ {
+   rewrite ^/sota/(.*)$ /$1 break;
+   try_files $uri $uri/ /index.html;
+   add_header Cache-Control "no-cache";
+ }
+ location / { try_files $uri $uri/ /index.html; add_header Cache-Control "no-cache"; }
+}
+''', 0o644)
     return output
 
 
