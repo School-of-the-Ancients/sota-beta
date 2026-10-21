@@ -51,6 +51,8 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, prompt, onClose }) => {
   }
 
   const disabled = !isConfigured || isSubmitting;
+  const allowSignup = import.meta.env.VITE_ALLOW_SIGNUP !== 'false';
+  const googleEnabled = import.meta.env.VITE_GOOGLE_AUTH_ENABLED !== 'false';
 
   const handleEmailSubmit: React.FormEventHandler<HTMLFormElement> = async (event) => {
     event.preventDefault();
@@ -183,6 +185,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, prompt, onClose }) => {
           </button>
         </form>
 
+        {googleEnabled && <>
         <div className="mt-6 flex items-center gap-3">
           <div className="h-px flex-1 bg-amber-500/30" />
           <span className="text-xs uppercase tracking-[0.2em] text-amber-300/70">or</span>
@@ -197,8 +200,9 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, prompt, onClose }) => {
         >
           Continue with Google
         </button>
+        </>}
 
-        <p className="mt-6 text-center text-sm text-amber-100/80">
+        {allowSignup && <p className="mt-6 text-center text-sm text-amber-100/80">
           {mode === 'sign-in' ? 'Need an account?' : 'Already have an account?'}{' '}
           <button
             type="button"
@@ -208,7 +212,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, prompt, onClose }) => {
           >
             {mode === 'sign-in' ? 'Switch to sign up.' : 'Switch to sign in.'}
           </button>
-        </p>
+        </p>}
       </div>
     </div>
   );

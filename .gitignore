@@ -1,3 +1,11 @@
+# Python deployment helpers
+__pycache__/
+*.py[cod]
+
+# Generated private deployment state
+/sota-backend/
+**/PRIVATE-LOGIN.txt
+
 # Dependencies
 node_modules/
 

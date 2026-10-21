@@ -5,6 +5,7 @@ import App from './App';
 import { SupabaseAuthProvider } from './hooks/useSupabaseAuth';
 import { UserDataProvider } from './hooks/useUserData';
 import './index.css';
+import { appBasePath } from './src/lib/deployment';
 
 const rootElement = document.getElementById('root');
 if (!rootElement) {
@@ -14,7 +15,7 @@ if (!rootElement) {
 const root = ReactDOM.createRoot(rootElement);
 root.render(
   <React.StrictMode>
-    <BrowserRouter>
+    <BrowserRouter basename={appBasePath()}>
       <SupabaseAuthProvider>
         <UserDataProvider>
           <App />
