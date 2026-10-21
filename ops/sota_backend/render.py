@@ -31,6 +31,8 @@ def render(output, public_url, site_url, email, bind_ip):
     if not re.fullmatch(r'[A-Za-z0-9_.+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}', email):
         raise ValueError('Invalid allowed email')
     address = ipaddress.ip_address(bind_ip)
+    if address.version != 4:
+        raise ValueError('This deployment currently requires an explicit IPv4 bind address')
     if address.is_unspecified or not (address.is_private or address.is_loopback):
         raise ValueError('Bind only to an explicit private interface')
     public_url = public_url.rstrip('/')
