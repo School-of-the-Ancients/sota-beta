@@ -141,6 +141,7 @@ COMMIT;
     write('nginx.conf', '''server {
  listen 80;
  server_name _;
+ absolute_redirect off;
  root /usr/share/nginx/html;
  client_max_body_size 16m;
  add_header X-Content-Type-Options nosniff always;

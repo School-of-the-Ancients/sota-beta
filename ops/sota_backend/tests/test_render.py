@@ -39,6 +39,7 @@ class RenderTests(unittest.TestCase):
     def test_web_handles_cloudflare_tunnel_prefixes(self):
         self.build()
         config = (self.path / 'nginx.conf').read_text()
+        self.assertIn('absolute_redirect off;', config)
         self.assertIn('location /sota-api/', config)
         self.assertIn('proxy_pass http://gateway:8000/;', config)
         self.assertIn('rewrite ^/sota/(.*)$ /$1 break;', config)
